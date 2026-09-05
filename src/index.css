@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+/* --- RÈGLES D'IMPRESSION / EXPORT PDF --- */
+@media print {
+  /* Masque tout le panneau latéral de gauche */
+  .w-80 {
+    display: none !important;
+  }
+  
+  /* Force le calendrier à occuper toute la largeur et la hauteur de la page */
+  body, html, #root {
+    width: 100% !important;
+    height: 100% !important;
+    background: white !important;
+    overflow: visible !important;
+  }
+
+  .flex-1 {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* S'assure que les couleurs de fond des barrettes s'impriment bien */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+.fc-timegrid-event {
+  width: 85% !important;
+}
