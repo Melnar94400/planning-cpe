@@ -51,7 +51,7 @@ jobs:
           name: windows-portable
           path: release/win-unpacked/
 
-  build-linux:
+build-linux:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -64,12 +64,12 @@ jobs:
         run: npm install
       - name: Build React App
         run: npm run build
-      - name: Build Linux
-        run: npx electron-builder --linux --publish never
+      - name: Build Linux AppImage
+        run: npx electron-builder --linux AppImage --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux-installer
-          path: release/*.tar.gz
+          name: linux-appimage
+          path: release/*.AppImage
