@@ -8,6 +8,9 @@ export default defineConfig({
     tailwindcss(),
   ],
   base: './', // <--- C'EST LA LIGNE MAGIQUE !
+  build: {
+    assetsDir: 'assets', // Assure que tous les assets vont dans ce dossier
+  },
   server: {
     port: 1420,
     strictPort: true,

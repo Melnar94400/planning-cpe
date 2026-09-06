@@ -1,25 +1,41 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs'); // Ajout du module de lecture de fichiers
 
 app.commandLine.appendSwitch('no-sandbox');
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
-    // On désactive nodeIntegration pour des raisons de sécurité
-    // vu que l'appli n'utilise que le localStorage du navigateur
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true
+      webSecurity: false // <--- AJOUTEZ CETTE LIGNE
     }
   });
-mainWindow.webContents.openDevTools();
-  // Chargement sécurisé du fichier HTML depuis l'archive
-  mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+
+  win.webContents.openDevTools();
+
+  // Construction du chemin
+  const indexPath = path.join(__dirname, 'dist/index.html');
+  
+  // TEST FATAL : On vérifie si electron-builder a bien empaqueté le fichier
+  if (!fs.existsSync(indexPath)) {
+    dialog.showErrorBox(
+      "Erreur d'empaquetage", 
+      `Le fichier est introuvable dans l'AppImage !\n\nChemin cherché :\n${indexPath}\n\nSolution : Vérifiez la section "build.files" de votre package.json.`
+    );
+  } else {
+    win.loadFile(indexPath);
+  }
+  
   win.setMenuBarVisibility(false); 
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

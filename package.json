@@ -1,16 +1,13 @@
 {
-  "name": "planning.cpe",
+  "name": "planning-cpe",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "main": "main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "tauri": "tauri",
-    "electron:start": "electron .",
-    "electron:pack": "electron-builder -w -l"
+    "deploy": "npm run build && gh-pages -d dist",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.21",
@@ -18,41 +15,16 @@
     "@fullcalendar/react": "^6.1.21",
     "@fullcalendar/timegrid": "^6.1.21",
     "@tailwindcss/vite": "^4.3.3",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
     "@vitejs/plugin-react-swc": "^4.3.3",
     "autoprefixer": "^10.5.5",
-    "electron": "^44.2.0",
-    "electron-builder": "^26.15.3",
+    "gh-pages": "^6.3.0",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
     "vite": "^6.0.3"
-  },
-  "build": {
-    "appId": "com.planningcpe.app",
-    "productName": "Planning CPE",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "main.cjs"
-    ],
-    "mac": {
-      "category": "public.app-category.productivity"
-    },
-    "win": {
-      "target": "nsis"
-    },
-"linux": {
-      "target": [
-        "tar.gz"
-      ]
-    }
   }
 }

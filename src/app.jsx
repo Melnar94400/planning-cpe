@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+
+const BASE_HEURES_PLEINES = 1607; // Base légale de calcul des heures
 
 // --- FONCTION DE RÉINITIALISATION GLOBALE ---
 const resetAllData = () => {
@@ -11,7 +13,251 @@ const resetAllData = () => {
   }
 };
 
-// --- ALGORITHME ANTI-CHEVAUCHEMENT POUR L'IMPRESSION DU PLANNING ---
+// --- FONCTIONS D'EXPORT ET D'IMPORT ---
+const exporterDonnees = () => {
+  const data = {
+    agents: localStorage.getItem('edt-agents'),
+    postes: localStorage.getItem('edt-postes'),
+    periodes: localStorage.getItem('edt-periodes'),
+    templateVersions: localStorage.getItem('edt-template-versions'),
+    customWeeks: localStorage.getItem('edt-custom-weeks'),
+    exceptions: localStorage.getItem('edt-exceptions'),
+    absencesRetards: localStorage.getItem('edt-absences-retards'),
+    setupDone: localStorage.getItem('edt-setup-done')
+  };
+  
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `sauvegarde_planning_cpe_${new Date().toISOString().split('T')[0]}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+const executeImport = (file) => {
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const data = JSON.parse(event.target.result);
+      if (data.agents) localStorage.setItem('edt-agents', data.agents);
+      if (data.postes) localStorage.setItem('edt-postes', data.postes);
+      if (data.periodes) localStorage.setItem('edt-periodes', data.periodes);
+      if (data.templateVersions) localStorage.setItem('edt-template-versions', data.templateVersions);
+      if (data.customWeeks) localStorage.setItem('edt-custom-weeks', data.customWeeks);
+      if (data.exceptions) localStorage.setItem('edt-exceptions', data.exceptions);
+      if (data.absencesRetards) localStorage.setItem('edt-absences-retards', data.absencesRetards);
+      localStorage.setItem('edt-setup-done', 'true');
+      
+      window.location.reload();
+    } catch (err) {
+      alert("Erreur : le fichier de sauvegarde est invalide ou corrompu.");
+    }
+  };
+  reader.readAsText(file);
+};
+
+const importerDonnees = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!window.confirm("⚠️ Attention : l'import va écraser vos données actuelles. Continuer ?")) {
+    e.target.value = null; // Reset l'input
+    return;
+  }
+  executeImport(file);
+};
+
+// --- MOTEUR DE CALCUL DES JOURS FÉRIÉS (Meeus/Jones/Butcher) ---
+const getJoursFerie = (year) => {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const monthPaques = Math.floor((h + l - 7 * m + 114) / 31);
+  const dayPaques = ((h + l - 7 * m + 114) % 31) + 1;
+
+  const paques = new Date(year, monthPaques - 1, dayPaques);
+  const lundiPaques = new Date(paques); lundiPaques.setDate(paques.getDate() + 1);
+  const ascension = new Date(paques); ascension.setDate(paques.getDate() + 39);
+  const pentecote = new Date(paques); pentecote.setDate(paques.getDate() + 50);
+
+  const pad = n => String(n).padStart(2, '0');
+  const formatDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+  return [
+    { nom: "Jour de l'An", date: `${year}-01-01` }, { nom: "Fête du Travail", date: `${year}-05-01` }, 
+    { nom: "Victoire 1945", date: `${year}-05-08` }, { nom: "Fête Nationale", date: `${year}-07-14` }, 
+    { nom: "Assomption", date: `${year}-08-15` }, { nom: "Toussaint", date: `${year}-11-01` }, 
+    { nom: "Armistice", date: `${year}-11-11` }, { nom: "Noël", date: `${year}-12-25` },
+    { nom: "Lundi de Pâques", date: formatDate(lundiPaques) }, 
+    { nom: "Jeudi de l'Ascension", date: formatDate(ascension) }, 
+    { nom: "Lundi de Pentecôte", date: formatDate(pentecote) }
+  ];
+};
+
+// ============================================================================
+// ASSISTANT DE PREMIÈRE CONFIGURATION (WIZARD)
+// ============================================================================
+const SetupWizard = ({ onComplete }) => {
+  const [step, setStep] = useState(1);
+  const [periodes, setPeriodes] = useState([]);
+  const [agents, setAgents] = useState([]);
+  const [postes, setPostes] = useState([{ id: 101, nom: 'Loge', couleur: '#EF4444' }, { id: 102, nom: 'Cantine', couleur: '#F59E0B' }, { id: 103, nom: 'Grille', couleur: '#8B5CF6' }]);
+
+  const [anneeScolaireDeBase, setAnneeScolaireDeBase] = useState(new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1);
+  const [zone, setZone] = useState("Zone C");
+  const [isFetchingDates, setIsFetchingDates] = useState(false);
+
+  const [formPeriode, setFormPeriode] = useState({ nom: '', debut: '', fin: '' });
+  const [formAgent, setFormAgent] = useState({ nom: '', quotite: '100', hContrat: BASE_HEURES_PLEINES, couleurFond: '#3B82F6' });
+  const [formPoste, setFormPoste] = useState({ nom: '', couleur: '#10B981' });
+
+  const handleAgentQuotiteChange = (val) => {
+    const q = parseFloat(val) || 0;
+    setFormAgent({ ...formAgent, quotite: val, hContrat: (BASE_HEURES_PLEINES * (q / 100)).toFixed(1) });
+  };
+
+  const autoGenerateDates = async () => {
+    setIsFetchingDates(true);
+    const year1 = anneeScolaireDeBase; const year2 = anneeScolaireDeBase + 1;
+    let nouvellesPeriodes = [];
+    
+    const feriesY1 = getJoursFerie(year1).filter(f => f.date >= `${year1}-08-15`);
+    const feriesY2 = getJoursFerie(year2).filter(f => f.date <= `${year2}-08-15`);
+    nouvellesPeriodes = [...feriesY1, ...feriesY2].map(f => ({ id: `ferie_${Date.now()}_${Math.random()}`, nom: f.nom, debut: f.date, fin: f.date }));
+
+    try {
+      const zoneEncoded = encodeURIComponent(zone);
+      const res = await fetch(`https://data.education.gouv.fr/api/records/1.0/search/?dataset=fr-en-calendrier-scolaire&q=population:%22%C3%89l%C3%A8ves%22&rows=100&refine.zones=${zoneEncoded}&refine.annee_scolaire=${year1}-${year2}`);
+      const data = await res.json();
+      const vacs = data.records.map(r => {
+         const endD = new Date(r.fields.end_date); endD.setDate(endD.getDate() - 1);
+         const pad = n => String(n).padStart(2, '0');
+         return { id: r.recordid, nom: r.fields.description, debut: r.fields.start_date.split('T')[0], fin: `${endD.getFullYear()}-${pad(endD.getMonth()+1)}-${pad(endD.getDate())}` };
+      });
+      nouvellesPeriodes = [...nouvellesPeriodes, ...vacs];
+    } catch (e) {
+      alert("L'API gouvernementale n'a pas répondu. Seuls les jours fériés fixes ont pu être ajoutés automatiquement.");
+    }
+    
+    setPeriodes(nouvellesPeriodes.sort((a,b) => a.debut.localeCompare(b.debut)));
+    setIsFetchingDates(false);
+  };
+
+  const finishSetup = () => {
+    localStorage.setItem('edt-periodes', JSON.stringify(periodes));
+    localStorage.setItem('edt-agents', JSON.stringify(agents));
+    localStorage.setItem('edt-postes', JSON.stringify(postes));
+    
+    const baseDate = new Date(`${anneeScolaireDeBase}-09-01`);
+    const day = baseDate.getDay() || 7; 
+    baseDate.setDate(baseDate.getDate() - (day - 1));
+    const pad = n => String(n).padStart(2, '0');
+    const startStr = `${baseDate.getFullYear()}-${pad(baseDate.getMonth()+1)}-${pad(baseDate.getDate())}`;
+
+    localStorage.setItem('edt-template-versions', JSON.stringify([{ id: 1, nom: "Modèle Initial", dateDebut: startStr, events: [], besoins: [], statut: 'brouillon' }]));
+    localStorage.setItem('edt-setup-done', 'true');
+    onComplete();
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center py-12 px-4">
+      <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl overflow-hidden">
+        <div className="bg-blue-900 p-6 text-white text-center">
+          <h1 className="text-3xl font-black tracking-wider">EDT CPE</h1><p className="opacity-80 mt-1">Configuration Initiale ({step}/4)</p>
+        </div>
+        
+        <div className="p-8">
+          {step === 1 && (
+            <div className="text-center space-y-6">
+              <h2 className="text-2xl font-bold text-gray-800">Bienvenue !</h2>
+              <p className="text-gray-600">Souhaitez-vous importer une sauvegarde existante ou paramétrer une nouvelle année scolaire ?</p>
+              <div className="grid grid-cols-2 gap-4 mt-8">
+                <button onClick={() => document.getElementById('import-init').click()} className="p-6 border-2 border-dashed border-emerald-500 rounded-xl hover:bg-emerald-50 transition group"><div className="text-4xl mb-2 group-hover:scale-110 transition">⬆️</div><div className="font-bold text-emerald-700">Importer JSON</div></button>
+                <input type="file" id="import-init" accept=".json" onChange={(e) => { if(e.target.files[0]) executeImport(e.target.files[0]); }} className="hidden" />
+                <button onClick={() => setStep(2)} className="p-6 border-2 border-blue-500 rounded-xl bg-blue-50 hover:bg-blue-100 transition group"><div className="text-4xl mb-2 group-hover:scale-110 transition">✨</div><div className="font-bold text-blue-800">Nouvelle Année</div></button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-6 animate-in fade-in">
+              <h2 className="text-xl font-bold text-gray-800 border-b pb-2">1. Vacances & Jours Fériés</h2>
+              <p className="text-sm text-gray-600">Générez automatiquement toutes les dates de fermeture en choisissant votre zone et l'année de rentrée.</p>
+              
+              <div className="flex gap-4 p-4 bg-blue-50 border border-blue-200 rounded-xl items-end shadow-inner">
+                <div className="w-1/4"><label className="text-xs font-bold text-blue-900 block mb-1">Année Rentrée</label><input type="number" value={anneeScolaireDeBase} onChange={e=>setAnneeScolaireDeBase(Number(e.target.value))} className="w-full p-2 rounded border bg-white" /></div>
+                <div className="flex-1"><label className="text-xs font-bold text-blue-900 block mb-1">Zone Académique</label><select value={zone} onChange={e=>setZone(e.target.value)} className="w-full p-2 rounded border bg-white"><option value="Zone A">Zone A</option><option value="Zone B">Zone B</option><option value="Zone C">Zone C (Créteil, Paris...)</option><option value="Corse">Corse</option></select></div>
+                <div><button onClick={autoGenerateDates} disabled={isFetchingDates} className="bg-blue-600 text-white px-4 py-2 rounded font-bold shadow hover:bg-blue-700 disabled:opacity-50">{isFetchingDates ? '⏳ Calcul...' : '⚡ Générer'}</button></div>
+              </div>
+              
+              <ul className="space-y-2 max-h-48 overflow-y-auto bg-gray-50 p-2 rounded border border-gray-300">
+                {periodes.length === 0 && <p className="text-xs text-gray-500 italic text-center py-4">Aucune date. Cliquez sur Générer ou ajoutez à la main.</p>}
+                {periodes.map(p => ( <li key={p.id} className="flex justify-between items-center bg-white p-2 rounded shadow-sm text-sm border border-gray-200"><span className="font-bold text-gray-700">{p.nom} <span className="font-normal text-gray-400 text-xs ml-2">({p.debut}{p.debut !== p.fin ? ` au ${p.fin}` : ''})</span></span><button onClick={() => setPeriodes(periodes.filter(x => x.id !== p.id))} className="text-red-500 hover:text-red-700 font-bold px-2">✖</button></li> ))}
+              </ul>
+
+              <div className="flex gap-2 border-t pt-4">
+                <input type="text" placeholder="Ajout manuel..." value={formPeriode.nom} onChange={e=>setFormPeriode({...formPeriode, nom: e.target.value})} className="flex-1 border p-2 rounded text-sm" />
+                <input type="date" value={formPeriode.debut} onChange={e=>setFormPeriode({...formPeriode, debut: e.target.value})} className="border p-2 rounded text-sm w-32" />
+                <input type="date" value={formPeriode.fin} onChange={e=>setFormPeriode({...formPeriode, fin: e.target.value})} className="border p-2 rounded text-sm w-32" />
+                <button onClick={() => { if(formPeriode.nom && formPeriode.debut) { setPeriodes([...periodes, {id: Date.now(), ...formPeriode}].sort((a,b) => a.debut.localeCompare(b.debut))); setFormPeriode({nom:'', debut:'', fin:''}); } }} className="bg-gray-800 text-white px-3 rounded font-bold hover:bg-gray-700">+</button>
+              </div>
+
+              <div className="flex justify-between pt-4 mt-4 border-t"><button onClick={() => setStep(1)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => setStep(3)} className="bg-gray-800 text-white px-6 py-2 rounded-lg font-bold shadow">Suivant ➔</button></div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-6 animate-in fade-in">
+              <h2 className="text-xl font-bold text-gray-800 border-b pb-2">2. Équipe AED</h2>
+              <p className="text-sm text-gray-600">Saisissez les membres de votre équipe. Le contrat est <strong>calculé automatiquement</strong> d'après la base légale de {BASE_HEURES_PLEINES}h.</p>
+              
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 grid grid-cols-12 gap-3 items-end">
+                <div className="col-span-5"><label className="text-[10px] font-bold text-blue-900 uppercase">Nom</label><input type="text" value={formAgent.nom} onChange={e=>setFormAgent({...formAgent, nom: e.target.value})} className="w-full p-2 text-sm rounded border" placeholder="Ex: Célia" /></div>
+                <div className="col-span-3"><label className="text-[10px] font-bold text-blue-900 uppercase">Quotité (%)</label><input type="number" step="0.1" value={formAgent.quotite} onChange={e=>handleAgentQuotiteChange(e.target.value)} className="w-full p-2 text-sm rounded border font-bold text-center" /></div>
+                <div className="col-span-3"><label className="text-[10px] font-bold text-blue-900 uppercase">H. Contrat</label><input type="number" step="0.1" value={formAgent.hContrat} onChange={e=>setFormAgent({...formAgent, hContrat: e.target.value})} className="w-full p-2 text-sm rounded border font-mono text-center bg-white" /></div>
+                <div className="col-span-1"><label className="text-[10px] font-bold text-blue-900 uppercase">Coul.</label><input type="color" value={formAgent.couleurFond} onChange={e=>setFormAgent({...formAgent, couleurFond: e.target.value})} className="w-full h-9 rounded cursor-pointer p-0 border-0" /></div>
+                <div className="col-span-12 mt-1"><button onClick={() => { if(formAgent.nom) { setAgents([...agents, {id: Date.now(), nom: formAgent.nom, quotite: parseFloat(formAgent.quotite), hContrat: parseFloat(formAgent.hContrat), couleurFond: formAgent.couleurFond}]); setFormAgent({...formAgent, nom: ''}); } }} className="w-full bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold shadow hover:bg-blue-700">Ajouter cet agent</button></div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {agents.map(a => <span key={a.id} className="text-sm text-white px-3 py-1 rounded-full flex items-center gap-2 shadow-sm" style={{backgroundColor: a.couleurFond}}>{a.nom} ({a.quotite}%) <button onClick={()=>setAgents(agents.filter(x=>x.id!==a.id))} className="text-white hover:text-red-200">✖</button></span>)}
+              </div>
+
+              <div className="flex justify-between pt-4 mt-8 border-t"><button onClick={() => setStep(2)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => { if(agents.length === 0 && !window.confirm("Aucun agent ajouté. Continuer ?")) return; setStep(4); }} className="bg-gray-800 text-white px-6 py-2 rounded-lg font-bold shadow">Suivant ➔</button></div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-6 animate-in fade-in">
+              <h2 className="text-xl font-bold text-gray-800 border-b pb-2">3. Postes / Lieux</h2>
+              <p className="text-sm text-gray-600">Définissez les postes clés du planning de l'établissement.</p>
+              
+              <div className="flex gap-2">
+                <input type="text" placeholder="Nom du poste..." value={formPoste.nom} onChange={e=>setFormPoste({...formPoste, nom: e.target.value})} className="flex-1 border p-2 rounded text-sm bg-gray-50" />
+                <input type="color" value={formPoste.couleur} onChange={e=>setFormPoste({...formPoste, couleur: e.target.value})} className="w-10 h-10 rounded cursor-pointer p-0 border-0" />
+                <button onClick={() => { if(formPoste.nom) { setPostes([...postes, {id: Date.now(), nom: formPoste.nom, couleur: formPoste.couleur}]); setFormPoste({...formPoste, nom: ''}); } }} className="bg-blue-600 text-white px-4 rounded font-bold">+</button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {postes.map(p => <span key={p.id} className="text-sm text-white px-3 py-1 rounded-full flex items-center gap-2 shadow-sm" style={{backgroundColor: p.couleur}}>{p.nom} <button onClick={()=>setPostes(postes.filter(x=>x.id!==p.id))} className="text-white hover:text-red-200">✖</button></span>)}
+              </div>
+
+              <div className="flex justify-between pt-4 mt-8 border-t">
+                <button onClick={() => setStep(3)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button>
+                <button onClick={finishSetup} className="bg-green-600 text-white px-8 py-3 rounded-lg font-black hover:bg-green-700 shadow-lg text-lg animate-pulse">Lancer l'Application 🚀</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// ALGORITHME ANTI-CHEVAUCHEMENT POUR L'IMPRESSION DU PLANNING
+// ============================================================================
 const layoutDayEvents = (dayEvents) => {
   const items = dayEvents.map(evt => {
     const startD = new Date(evt.start);
@@ -63,7 +309,9 @@ const layoutDayEvents = (dayEvents) => {
   return layouted;
 };
 
-// --- GRILLE HORAIRE VISUELLE POUR IMPRESSION (SEMAINE) ---
+// ============================================================================
+// GRILLES D'IMPRESSION
+// ============================================================================
 const PrintTimeGridView = ({ events, titre }) => {
   const planningEvents = events.filter(e => !e.extendedProps?.isBesoin);
   const nomsJours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
@@ -163,8 +411,7 @@ const PrintTimeGridView = ({ events, titre }) => {
   );
 };
 
-// --- COMPOSANT D'IMPRESSION POUR CALENDRIER ANNUEL (2 PAGES / RECTO-VERSO) ---
-const PrintAgentYearlyView = ({ agent, anneeScolaire, getMondayStr, getInfoJourFerie, customWeeks, gabarits, exceptions, formatHeureTableau, absences }) => {
+const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, getInfoJourFerie, customWeeks, gabarits, exceptions, formatHeureTableau, absences }) => {
   const semestre1 = anneeScolaire.slice(0, 6); 
   const semestre2 = anneeScolaire.slice(6);    
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
@@ -172,7 +419,7 @@ const PrintAgentYearlyView = ({ agent, anneeScolaire, getMondayStr, getInfoJourF
   const renderTable = (moisList, title, pageNum) => (
     <div className="print-agent-page flex flex-col justify-between p-4 bg-white">
       <div className="text-center font-black text-lg uppercase mb-3 text-black border-b-2 border-black pb-2 shrink-0">
-        Bilan Annuel : {agent?.nom} — {title} (2026-2027)
+        Bilan Annuel : {agent?.nom} — {title} ({baseYear}-{baseYear+1})
       </div>
       <div className="flex-1 flex flex-col justify-center">
         <table className="w-full text-center border-collapse text-black border-2 border-black table-fixed">
@@ -254,56 +501,27 @@ const PrintAgentYearlyView = ({ agent, anneeScolaire, getMondayStr, getInfoJourF
 
   return (
     <div className="w-full bg-white print-agent-container">
-      {renderTable(semestre1, "Semestre 1 (Septembre - Février)", 1)}
-      {renderTable(semestre2, "Semestre 2 (Mars - Juillet)", 2)}
+      {renderTable(semestre1, "Semestre 1", 1)}
+      {renderTable(semestre2, "Semestre 2", 2)}
     </div>
   );
 };
 
-export default function App() {
+// ============================================================================
+// COMPOSANT PRINCIPAL DE L'APPLICATION GESTION
+// ============================================================================
+const MainApp = () => {
   const [vueActive, setVueActive] = useState('template'); 
   const [agentConsulte, setAgentConsulte] = useState(null); 
 
-  // --- 1. SAUVEGARDES LOCALES ---
-  const [agents, setAgents] = useState(() => {
-    const s = localStorage.getItem('edt-agents');
-    return s ? JSON.parse(s) : [
-      { id: 1, nom: 'Célia', quotite: 100, hContrat: 1607, couleurFond: '#10B981' },
-      { id: 2, nom: 'Marc', quotite: 80, hContrat: 1285, couleurFond: '#3B82F6' },
-      { id: 3, nom: 'Yasmine', quotite: 100, hContrat: 1393, couleurFond: '#F59E0B' }
-    ];
-  });
-
-  const [postes, setPostes] = useState(() => {
-    const s = localStorage.getItem('edt-postes');
-    return s ? JSON.parse(s) : [
-      { id: 101, nom: 'Loge', couleur: '#EF4444' },
-      { id: 102, nom: 'Cantine', couleur: '#F59E0B' },
-      { id: 103, nom: 'Grille', couleur: '#8B5CF6' }
-    ];
-  });
-
-  const [periodesFeriees, setPeriodesFeriees] = useState(() => {
-    const s = localStorage.getItem('edt-periodes');
-    return s ? JSON.parse(s) : [
-      { id: 1, nom: 'Toussaint', debut: '2026-10-17', fin: '2026-11-01' },
-      { id: 2, nom: 'Noël', debut: '2026-12-19', fin: '2027-01-03' },
-      { id: 3, nom: 'Hiver (C)', debut: '2027-02-20', fin: '2027-03-07' },
-      { id: 4, nom: 'Printemps (C)', debut: '2027-04-17', fin: '2027-05-02' },
-      { id: 5, nom: 'Vac. Été', debut: '2027-07-07', fin: '2028-08-31' },
-      { id: 6, nom: 'Armistice', debut: '2026-11-11', fin: '2026-11-11' }
-    ];
-  });
+  const [agents, setAgents] = useState(() => JSON.parse(localStorage.getItem('edt-agents') || '[]'));
+  const [postes, setPostes] = useState(() => JSON.parse(localStorage.getItem('edt-postes') || '[]'));
+  const [periodesFeriees, setPeriodesFeriees] = useState(() => JSON.parse(localStorage.getItem('edt-periodes') || '[]'));
 
   const [templateVersions, setTemplateVersions] = useState(() => {
     const s = localStorage.getItem('edt-template-versions');
-    if (s) return JSON.parse(s).map(p => ({ ...p, statut: p.statut || 'valide' }));
-    
-    const oldEvts = JSON.parse(localStorage.getItem('edt-template-events') || '[]');
-    const oldBes = JSON.parse(localStorage.getItem('edt-besoins') || '[]');
-    return [{ id: 1, nom: "Modèle Initial", dateDebut: "2026-08-25", events: oldEvts, besoins: oldBes, statut: 'brouillon' }];
+    return s ? JSON.parse(s).map(p => ({ ...p, statut: p.statut || 'valide' })) : [];
   });
-
   window.__templateVersions__ = templateVersions;
 
   const [activeTemplateId, setActiveTemplateId] = useState(() => {
@@ -311,24 +529,33 @@ export default function App() {
     return s ? JSON.parse(s)[0].id : 1;
   });
 
-  const [customWeeks, setCustomWeeks] = useState(() => {
-    const s = localStorage.getItem('edt-custom-weeks');
-    return s ? JSON.parse(s) : {}; 
-  });
+  const [customWeeks, setCustomWeeks] = useState(() => JSON.parse(localStorage.getItem('edt-custom-weeks') || '{}'));
+  const [exceptions, setExceptions] = useState(() => JSON.parse(localStorage.getItem('edt-exceptions') || '{}'));
 
-  const [exceptions, setExceptions] = useState(() => {
-    const s = localStorage.getItem('edt-exceptions');
-    return s ? JSON.parse(s) : {}; 
-  });
+  // Détermination de l'année scolaire de référence dynamique
+  const getSchoolYearBase = () => {
+     if (templateVersions.length > 0 && templateVersions[0].dateDebut) {
+        const d = new Date(templateVersions[0].dateDebut);
+        return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1;
+     }
+     const now = new Date(); return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  };
+  const baseYear = getSchoolYearBase();
+  const anneeScolaire = [
+    { m: 8, y: baseYear, nom: 'SEPTEMBRE' }, { m: 9, y: baseYear, nom: 'OCTOBRE' },
+    { m: 10, y: baseYear, nom: 'NOVEMBRE' }, { m: 11, y: baseYear, nom: 'DECEMBRE' },
+    { m: 0, y: baseYear+1, nom: 'JANVIER' }, { m: 1, y: baseYear+1, nom: 'FEVRIER' },
+    { m: 2, y: baseYear+1, nom: 'MARS' }, { m: 3, y: baseYear+1, nom: 'AVRIL' },
+    { m: 4, y: baseYear+1, nom: 'MAI' }, { m: 5, y: baseYear+1, nom: 'JUIN' },
+    { m: 6, y: baseYear+1, nom: 'JUILLET' }
+  ];
 
-  // MIGRATION ET SAUVEGARDE DES ABSENCES
   const [absences, setAbsences] = useState(() => {
     const s = localStorage.getItem('edt-absences-retards');
     if (!s) return [];
     const parsed = JSON.parse(s);
     return parsed.map(a => {
       if (a.start && a.end) return a;
-      // Migration des anciennes sauvegardes
       const h = a.heures || Math.floor(a.dureeTotale || a.duree || 0);
       const m = a.minutes || Math.round(((a.dureeTotale || a.duree || 0) - h) * 60);
       const startD = new Date(`${a.date}T08:00:00`);
@@ -352,7 +579,6 @@ export default function App() {
 
   const currentTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0];
 
-  // --- ÉTATS & MODALES ---
   const [modalCreation, setModalCreation] = useState({ isOpen: false, eventId: null, start: null, end: null });
   const [formTypeEvent, setFormTypeEvent] = useState('affectation'); 
   const [formTypeAbsence, setFormTypeAbsence] = useState('absence'); 
@@ -360,6 +586,10 @@ export default function App() {
   const [formAgent, setFormAgent] = useState('');
   const [formPoste, setFormPoste] = useState('');
   const [formNote, setFormNote] = useState('');
+
+  const [modalNewVersion, setModalNewVersion] = useState({ isOpen: false, dateDebut: `${baseYear+1}-01-04`, nom: 'Évolution Hiver' });
+  const [modalNewPoste, setModalNewPoste] = useState({ isOpen: false, nom: '' });
+  const [modalException, setModalException] = useState({ isOpen: false, agentId: null, dateStr: null, h: '0', note: '' });
 
   const [formAbsence, setFormAbsence] = useState({
     agentId: '',
@@ -373,13 +603,9 @@ export default function App() {
     motif: 'Maladie'
   });
 
-  const [modalBesoinMulti, setModalBesoinMulti] = useState({
-    isOpen: false, posteId: '', qte: 1,
-    slots: []
-  });
-
+  const [modalBesoinMulti, setModalBesoinMulti] = useState({ isOpen: false, posteId: '', qte: 1, slots: [] });
   const [modalEditBesoin, setModalEditBesoin] = useState({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' });
-  const [modalAgent, setModalAgent] = useState({ isOpen: false, id: null, nom: '', quotite: 100, hContrat: 1607, couleurFond: '#10B981' });
+  const [modalAgent, setModalAgent] = useState({ isOpen: false, id: null, nom: '', quotite: 100, hContrat: BASE_HEURES_PLEINES, couleurFond: '#10B981' });
   const [modalParametres, setModalParametres] = useState(false);
   const [formPeriode, setFormPeriode] = useState({ nom: '', debut: '', fin: '' });
 
@@ -393,6 +619,36 @@ export default function App() {
   const [posteActif, setPosteActif] = useState(null);
   const [currentViewMonday, setCurrentViewMonday] = useState(null);
 
+  // --- DÉTECTION DES CHANGEMENTS NON EXPORTÉS ---
+  const isInitialMount = useRef(true);
+  const [needsBackup, setNeedsBackup] = useState(false);
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+    } else {
+      setNeedsBackup(true); // Toute modification active l'alerte
+    }
+  }, [agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences]);
+
+  // Alerte du navigateur si l'utilisateur tente de fermer l'onglet
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (needsBackup) {
+        e.preventDefault();
+        e.returnValue = ''; // Requis par Chrome pour afficher son message natif
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [needsBackup]);
+
+  // Nouveau gestionnaire d'export qui réinitialise l'alerte
+  const handleExport = () => {
+    exporterDonnees();
+    setNeedsBackup(false);
+  };
+
   useEffect(() => { localStorage.setItem('edt-agents', JSON.stringify(agents)); }, [agents]);
   useEffect(() => { localStorage.setItem('edt-postes', JSON.stringify(postes)); }, [postes]);
   useEffect(() => { localStorage.setItem('edt-periodes', JSON.stringify(periodesFeriees)); }, [periodesFeriees]);
@@ -403,7 +659,6 @@ export default function App() {
 
   useEffect(() => { if (vueActive === 'planning') setModeEdition('agents'); }, [vueActive]);
 
-  // --- 2. GESTION DES DATES & ROBUSTESSE ---
   const formatHeureTableau = (decimal) => {
     if (!decimal || decimal === 0) return "";
     const h = Math.floor(Math.abs(decimal));
@@ -461,14 +716,6 @@ export default function App() {
     return { ...evt, start: formatLocal(newStart), end: formatLocal(newEnd), id: String(evt.id).includes('_') ? evt.id : evt.id + '_' + targetMondayStr };
   };
 
-  const anneeScolaire = [
-    { m: 8, y: 2026, nom: 'SEPTEMBRE' }, { m: 9, y: 2026, nom: 'OCTOBRE' },
-    { m: 10, y: 2026, nom: 'NOVEMBRE' }, { m: 11, y: 2026, nom: 'DECEMBRE' },
-    { m: 0, y: 2027, nom: 'JANVIER' }, { m: 1, y: 2027, nom: 'FEVRIER' },
-    { m: 2, y: 2027, nom: 'MARS' }, { m: 3, y: 2027, nom: 'AVRIL' },
-    { m: 4, y: 2027, nom: 'MAI' }, { m: 5, y: 2027, nom: 'JUIN' },
-    { m: 6, y: 2027, nom: 'JUILLET' }
-  ];
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
 
   const getInfoJourFerie = (date) => {
@@ -480,7 +727,6 @@ export default function App() {
     return null;
   };
 
-  // --- 3. MOTEUR ANNUEL (SOUSTRACTION INTELLIGENTE DES ABSENCES) ---
   const gabarits = (() => {
     const g = {};
     templateVersions.forEach(tv => {
@@ -502,7 +748,7 @@ export default function App() {
   const statsAgents = agents.map(agent => {
     let heuresConsommees = 0;
     for (let m = 8; m < 20; m++) {
-      const year = 2026 + Math.floor(m / 12);
+      const year = baseYear + Math.floor(m / 12);
       const month = m % 12;
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       for (let d = 1; d <= daysInMonth; d++) {
@@ -515,7 +761,6 @@ export default function App() {
         const exc = exceptions[`${agent.id}_${dateStr}`];
         const applicableTemplate = [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || templateVersions[0];
 
-        // 1. Calcul du temps de travail théorique du jour
         let hJour = 0;
         if (customWeeks[mondayStr]) {
           const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin && e.start.startsWith(dateStr));
@@ -524,12 +769,10 @@ export default function App() {
           hJour = gabarits[applicableTemplate.id]?.[agent.id]?.[dateObj.getDay()] || 0;
         }
 
-        // 2. Remplacement manuel par le module "Exceptions" (clic sur grille annuelle)
         if (exc) {
           hJour = exc.h;
         }
 
-        // 3. Soustraction des absences si l'option "Déduire" est activée
         const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr) && a.deduire);
         const hDeduct = absDuJour.reduce((tot, a) => tot + ((new Date(a.end) - new Date(a.start)) / 3600000), 0);
 
@@ -539,14 +782,12 @@ export default function App() {
     return { ...agent, heuresConsommees, soldeGlobal: agent.hContrat - heuresConsommees };
   });
 
-  // --- 4. ANALYSE DES BESOINS ET ALERTES (Exclut les agents absents) ---
   const checkCoverage = (besoin, realEventsForWeek, weekAbsences) => {
     let minCount = Infinity;
     const tStart = new Date(besoin.start).getTime();
     const tEnd = new Date(besoin.end).getTime();
-    const step = 15 * 60 * 1000; // Contrôle tous les quarts d'heure
+    const step = 15 * 60 * 1000; 
     
-    // Tous les créneaux affectés à ce poste
     const posteShifts = realEventsForWeek.filter(e => e.extendedProps?.posteId === besoin.extendedProps.posteId && !e.extendedProps?.isBesoin && !e.extendedProps?.isAbsence);
 
     let missingAgents = new Set();
@@ -556,7 +797,6 @@ export default function App() {
       
       let presentCount = 0;
       shiftsAtT.forEach(shift => {
-        // L'agent affecté est-il absent à ce moment précis ?
         const isAbsentAtT = weekAbsences.some(abs => 
           abs.agentId === shift.extendedProps.agentId && 
           new Date(abs.start).getTime() <= t && 
@@ -583,7 +823,7 @@ export default function App() {
     return applicableTemplate.events.map(e => shiftEventToWeek(e, mondayStr)).filter(e => !getInfoJourFerie(new Date(e.start.split('T')[0])));
   };
 
-  const targetMonday = currentViewMonday || '2026-09-07'; 
+  const targetMonday = currentViewMonday || getMondayStr(currentTemplate?.dateDebut || new Date()); 
   let currentRealEvents;
   let currentBesoins;
 
@@ -643,7 +883,6 @@ export default function App() {
     }, 800);
   };
 
-  // --- 5. GESTION DES EVENEMENTS ---
   const updateCurrentTemplate = (newEvents, newBesoins) => {
     const newVersions = templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, events: newEvents || tv.events, besoins: newBesoins || tv.besoins } : tv);
     setTemplateVersions(newVersions);
@@ -655,15 +894,15 @@ export default function App() {
       setTemplateVersions(templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, statut: 'brouillon' } : tv));
     }
   };
-  const creerNouvelleVersion = () => {
-    const dateDebut = prompt("À partir de quelle date l'emploi du temps change-t-il ? (YYYY-MM-DD)", "2027-01-04");
-    if (!dateDebut) return;
-    const nom = prompt("Nom court pour identifier ce nouveau modèle :", "Évolution Hiver");
-    if (!nom) return;
-    const newVersion = { id: Date.now(), nom, dateDebut, statut: 'brouillon', events: [...currentTemplate.events], besoins: [...currentTemplate.besoins] };
+
+  const validerCreationVersionModal = (e) => {
+    e.preventDefault();
+    if (!modalNewVersion.dateDebut || !modalNewVersion.nom.trim()) return;
+    const newVersion = { id: Date.now(), nom: modalNewVersion.nom.trim(), dateDebut: modalNewVersion.dateDebut, statut: 'brouillon', events: [...currentTemplate.events], besoins: [...currentTemplate.besoins] };
     const newArr = [...templateVersions, newVersion].sort((a,b) => b.dateDebut.localeCompare(a.dateDebut)); 
     setTemplateVersions(newArr);
     setActiveTemplateId(newVersion.id);
+    setModalNewVersion({ isOpen: false, dateDebut: `${baseYear+1}-01-04`, nom: 'Évolution Hiver' });
   };
 
   const applyAction = (action, info) => {
@@ -686,7 +925,6 @@ export default function App() {
     }
   };
 
-  // --- NOUVEAU : MULTI-JOURS, DEB/FIN ET DÉDUCTION OPTIONNELLE ---
   const ajouterAbsenceRetard = (e) => {
     e.preventDefault();
     if (!formAbsence.agentId || !formAbsence.dateDebut) return alert("Sélectionnez un agent et une date.");
@@ -751,7 +989,6 @@ export default function App() {
     setAbsences(absences.map(a => String(a.id) === String(id) ? { ...a, rattrape: !a.rattrape } : a));
   };
 
-  // --- STATS POUR LE BILAN DES ABSENCES ---
   const bilanAbsences = agents.map(ag => {
     const agAbs = absences.filter(a => a.agentId === ag.id);
     const abs = agAbs.filter(a => a.type === 'absence');
@@ -776,12 +1013,18 @@ export default function App() {
     if (!modalBesoinMulti.posteId) return alert('Sélectionnez un poste.');
     const poste = postes.find(p => p.id === Number(modalBesoinMulti.posteId));
     const newBesoins = [];
+    
+    const baseMonday = new Date(getMondayStr(currentTemplate.dateDebut));
+
     modalBesoinMulti.slots.forEach(slot => {
       if (slot.start && slot.end) {
         [1, 2, 3, 4, 5].forEach(dayIndex => {
           if (slot.days[dayIndex]) {
-            const dateDay = 6 + Number(dayIndex); 
-            const dateStr = `2026-09-${String(dateDay).padStart(2, '0')}`;
+            const d = new Date(baseMonday);
+            d.setDate(d.getDate() + dayIndex - 1);
+            const pad = n => String(n).padStart(2, '0');
+            const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
             newBesoins.push({
               id: String(Date.now() + Math.random()),
               start: `${dateStr}T${slot.start}:00`,
@@ -865,7 +1108,7 @@ export default function App() {
 
   const ouvrirEditionBesoin = (evt) => {
     if (vueActive !== 'template') return alert("Passez en vue 'Modèle' pour modifier les besoins structurels.");
-    setModalEditBesoin({ isOpen: true, id: String(evt.id).split('_')[0], posteId: evt.extendedProps.posteId, qte: evt.extendedProps.qte, start: extractTime(evt.start), end: extractTime(evt.end) });
+    setModalEditBesoin({ isOpen: true, id: String(evt.id).split('_')[0], posteId: evt.extendedProps.posteId, qte: evt.extendedProps.qte, start: extractTimeStr(evt.start), end: extractTimeStr(evt.end) });
   };
 
   const ouvrirEdition = (evt) => {
@@ -986,12 +1229,16 @@ export default function App() {
     );
   };
 
-  // --- ACTIONS GLOBALES ---
+  const handleEditAgentQuotiteChange = (val) => {
+    const q = parseFloat(val) || 0;
+    setModalAgent({ ...modalAgent, quotite: val, hContrat: (BASE_HEURES_PLEINES * (q / 100)).toFixed(1) });
+  };
+
   const validerAgentModal = (e) => {
     e.preventDefault();
     if (!modalAgent.nom.trim()) return alert('Obligatoire.');
     const q = parseFloat(String(modalAgent.quotite).replace(',', '.')) || 100;
-    const h = parseFloat(String(modalAgent.hContrat).replace(',', '.')) || 1607;
+    const h = parseFloat(String(modalAgent.hContrat).replace(',', '.')) || BASE_HEURES_PLEINES;
     if (modalAgent.id) {
       setAgents(agents.map(a => a.id === modalAgent.id ? { ...a, nom: modalAgent.nom, quotite: q, hContrat: h, couleurFond: modalAgent.couleurFond } : a));
       updateCurrentTemplate(currentTemplate.events.map(evt => evt.extendedProps?.agentId === modalAgent.id ? { ...evt, extendedProps: { ...evt.extendedProps, agentNom: modalAgent.nom }, backgroundColor: modalAgent.couleurFond, borderColor: modalAgent.couleurFond } : evt), null);
@@ -1000,19 +1247,36 @@ export default function App() {
     }
     setModalAgent({ ...modalAgent, isOpen: false });
   };
+
   const supprimerAgent = (id, n, e) => { e.stopPropagation(); if(confirm(`Supprimer l'agent ${n} ?`)) { setAgents(agents.filter(a => a.id !== id)); updateCurrentTemplate(currentTemplate.events.filter(e => e.extendedProps?.agentId !== id), null); if (agentActif === id) setAgentActif(null); } };
-  const ajouterPoste = () => { const n = prompt("Nom du poste :"); if(n) setPostes([...postes, { id: Date.now(), nom: n, couleur: '#8B5CF6' }]); };
+  
+  const validerNouveauPoste = (e) => {
+    e.preventDefault();
+    if (modalNewPoste.nom.trim()) {
+      setPostes([...postes, { id: Date.now(), nom: modalNewPoste.nom.trim(), couleur: '#8B5CF6' }]);
+      setModalNewPoste({ isOpen: false, nom: '' });
+    }
+  };
+
   const supprimerPoste = (id, e) => { e.stopPropagation(); setPostes(postes.filter(p => p.id !== id)); };
 
   const gererClicJourAgent = (agentId, dateStr, hActuel, noteActuelle) => {
-    const inputHeures = prompt(`Heures travaillées le ${dateStr} (ex: 8:45 ou 0) :`, formatHeureTableau(hActuel) || '0');
-    if (inputHeures === null) return; 
-    const hDecimal = parseHeureSaisie(inputHeures);
-    const note = prompt(`Motif (ex: Toussaint, Stage) :`, noteActuelle || '');
-    if (note === null && hDecimal === hActuel) return; 
+    setModalException({
+      isOpen: true,
+      agentId,
+      dateStr,
+      h: formatHeureTableau(hActuel) || '0',
+      note: noteActuelle || ''
+    });
+  };
+
+  const validerExceptionJourModal = (e) => {
+    e.preventDefault();
+    const hDecimal = parseHeureSaisie(modalException.h);
     const newExceptions = { ...exceptions };
-    newExceptions[`${agentId}_${dateStr}`] = { h: hDecimal, note: note || '' };
+    newExceptions[`${modalException.agentId}_${modalException.dateStr}`] = { h: hDecimal, note: modalException.note || '' };
     setExceptions(newExceptions);
+    setModalException({ isOpen: false, agentId: null, dateStr: null, h: '0', note: '' });
   };
 
   const reinitialiserSemaineReelle = () => {
@@ -1103,6 +1367,77 @@ export default function App() {
         }
       `}</style>
 
+      {/* --- MODALE NOUVELLE VERSION --- */}
+      {modalNewVersion.isOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+            <div className="bg-blue-900 text-white p-4"><h3 className="font-bold text-lg">➕ Créer une évolution</h3></div>
+            <form onSubmit={validerCreationVersionModal}>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Date de début (YYYY-MM-DD)</label>
+                  <input type="date" required value={modalNewVersion.dateDebut} onChange={e => setModalNewVersion({...modalNewVersion, dateDebut: e.target.value})} className="w-full border rounded p-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Nom court du modèle</label>
+                  <input type="text" required value={modalNewVersion.nom} onChange={e => setModalNewVersion({...modalNewVersion, nom: e.target.value})} className="w-full border rounded p-2 text-sm" />
+                </div>
+              </div>
+              <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
+                <button type="button" onClick={() => setModalNewVersion({...modalNewVersion, isOpen: false})} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded font-medium">Annuler</button>
+                <button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded font-medium">Créer</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODALE NOUVEAU POSTE --- */}
+      {modalNewPoste.isOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+            <div className="bg-blue-900 text-white p-4"><h3 className="font-bold text-lg">➕ Ajouter un poste</h3></div>
+            <form onSubmit={validerNouveauPoste}>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Nom du poste</label>
+                  <input type="text" required value={modalNewPoste.nom} onChange={e => setModalNewPoste({isOpen: true, nom: e.target.value})} className="w-full border rounded p-2 text-sm" autoFocus />
+                </div>
+              </div>
+              <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
+                <button type="button" onClick={() => setModalNewPoste({isOpen: false, nom: ''})} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded font-medium">Annuler</button>
+                <button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded font-medium">Ajouter</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODALE EXCEPTION JOUR AGENT --- */}
+      {modalException.isOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
+            <div className="bg-blue-900 text-white p-4"><h3 className="font-bold text-lg">Modifier le jour ({modalException.dateStr})</h3></div>
+            <form onSubmit={validerExceptionJourModal}>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Heures travaillées (ex: 8:45 ou 0)</label>
+                  <input type="text" required value={modalException.h} onChange={e => setModalException({...modalException, h: e.target.value})} className="w-full border rounded p-2 text-sm" autoFocus />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Motif / Note (ex: Toussaint, Stage)</label>
+                  <input type="text" value={modalException.note} onChange={e => setModalException({...modalException, note: e.target.value})} className="w-full border rounded p-2 text-sm" />
+                </div>
+              </div>
+              <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
+                <button type="button" onClick={() => setModalException({isOpen: false, agentId: null, dateStr: null, h: '0', note: ''})} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded font-medium">Annuler</button>
+                <button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded font-medium">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODALES PARAMETRES ET IMPRESSION */}
       {modalParametres && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 no-print">
@@ -1119,7 +1454,7 @@ export default function App() {
                 ))}
               </ul>
               <form onSubmit={ajouterPeriodeFeriee} className="bg-white p-4 rounded border border-gray-300 shadow-inner">
-                <h4 className="font-bold text-sm text-gray-700 mb-3">➕ Ajouter une période</h4>
+                <h4 className="font-bold text-sm text-gray-700 mb-3">➕ Ajouter une période manuellement</h4>
                 <div className="space-y-3">
                   <input type="text" required placeholder="Nom (ex: Pont Ascension)" value={formPeriode.nom} onChange={e => setFormPeriode({...formPeriode, nom: e.target.value})} className="w-full border rounded p-2 text-sm" />
                   <div className="flex gap-3">
@@ -1280,7 +1615,7 @@ export default function App() {
             <form onSubmit={validerAgentModal}>
               <div className="p-5 space-y-4">
                 <div><label className="block text-sm font-semibold mb-1">Nom complet</label><input type="text" required value={modalAgent.nom} onChange={e => setModalAgent({...modalAgent, nom: e.target.value})} className="w-full border rounded p-2" autoFocus /></div>
-                <div className="flex gap-4"><div className="flex-1"><label className="block text-sm font-semibold mb-1">Quotité (%)</label><input type="number" step="0.1" required value={modalAgent.quotite} onChange={e => setModalAgent({...modalAgent, quotite: e.target.value})} className="w-full border rounded p-2" /></div><div className="flex-1"><label className="block text-sm font-semibold mb-1">Contrat (Heures)</label><input type="number" step="0.1" required value={modalAgent.hContrat} onChange={e => setModalAgent({...modalAgent, hContrat: e.target.value})} className="w-full border rounded p-2" /></div></div>
+                <div className="flex gap-4"><div className="flex-1"><label className="block text-sm font-semibold mb-1">Quotité (%)</label><input type="number" step="0.1" required value={modalAgent.quotite} onChange={e => handleEditAgentQuotiteChange(e.target.value)} className="w-full border rounded p-2 font-bold text-center" /></div><div className="flex-1"><label className="block text-sm font-semibold mb-1">Contrat (Calculé)</label><input type="number" step="0.1" required value={modalAgent.hContrat} onChange={e => setModalAgent({...modalAgent, hContrat: e.target.value})} className="w-full border rounded p-2 font-mono text-center bg-white" /></div></div>
                 <div><label className="block text-sm font-semibold mb-1">Couleur</label><div className="flex items-center gap-3"><input type="color" value={modalAgent.couleurFond} onChange={e => setModalAgent({...modalAgent, couleurFond: e.target.value})} className="w-12 h-12 p-1 border rounded cursor-pointer" /><span className="text-sm uppercase">{modalAgent.couleurFond}</span></div></div>
               </div>
               <div className="p-4 bg-gray-50 border-t flex justify-end gap-3"><button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded">Annuler</button><button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded">{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button></div>
@@ -1294,9 +1629,19 @@ export default function App() {
         <div className="p-4 bg-blue-900 text-white flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold tracking-wider">EDT CPE</h1>
-            <div className="flex gap-1">
+            <div className="flex gap-1 flex-wrap justify-end max-w-[140px]">
+              <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
+              
+              <button onClick={() => document.getElementById('import-file').click()} className="bg-emerald-700 hover:bg-emerald-600 px-2 py-1.5 rounded text-xs shadow border border-emerald-600" title="Restaurer une sauvegarde">⬆️</button>
+              
+              {/* Le bouton d'export avec l'indicateur visuel s'il y a des modifications */}
+              <button onClick={handleExport} className={`relative px-2 py-1.5 rounded text-xs shadow border transition-colors ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500' : 'bg-emerald-700 hover:bg-emerald-600 border-emerald-600'}`} title="Sauvegarder les données (Fichier JSON)">
+                ⬇️
+                {needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
+              </button>
+
               <button onClick={() => setModalParametres(true)} className="bg-gray-800 hover:bg-gray-700 px-2 py-1.5 rounded text-xs shadow border border-gray-600" title="Paramétrer les Vacances">⚙️</button>
-              <button onClick={() => setModalPrint(true)} className="bg-blue-700 hover:bg-blue-600 px-3 py-1.5 rounded text-xs font-bold border border-blue-500">🖨️ IMPRIMER</button>
+              <button onClick={() => setModalPrint(true)} className="bg-blue-700 hover:bg-blue-600 px-3 py-1.5 rounded text-xs font-bold border border-blue-500">🖨️</button>
               <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 px-2 py-1.5 rounded text-xs font-bold border border-red-500 text-white text-center" title="Tout réinitialiser">🗑️</button>
             </div>
           </div>
@@ -1324,7 +1669,7 @@ export default function App() {
                 <span className="text-2xl block mb-1">🔒</span>
                 <p className="text-sm font-bold text-gray-700">Modèle Validé</p>
                 <p className="text-xs text-gray-500 mt-1">Structure verrouillée pour protéger le compte d'heures passé.</p>
-                <button onClick={creerNouvelleVersion} className="mt-3 bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded shadow hover:bg-blue-700 w-full flex items-center justify-center gap-1">➕ Créer une évolution</button>
+                <button onClick={() => setModalNewVersion({ isOpen: true, dateDebut: `${baseYear+1}-01-04`, nom: 'Évolution Hiver' })} className="mt-3 bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded shadow hover:bg-blue-700 w-full flex items-center justify-center gap-1">➕ Créer une évolution</button>
                 <button onClick={deverrouillerModele} className="mt-2 text-xs text-gray-400 hover:text-gray-800 underline">🔓 Déverrouiller (Corriger erreur)</button>
               </div>
             )}
@@ -1332,7 +1677,7 @@ export default function App() {
             {(vueActive === 'planning' || (vueActive === 'template' && currentTemplate.statut === 'brouillon')) && modeEdition === 'agents' && (
               <div className="animate-in fade-in">
                 <div>
-                  <div className="flex justify-between items-center mb-2"><h2 className="font-bold text-gray-700 text-sm">Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, hContrat: 1607, couleurFond: '#3B82F6'})} className="bg-gray-200 w-5 h-5 rounded-full text-xs font-bold">+</button></div>
+                  <div className="flex justify-between items-center mb-2"><h2 className="font-bold text-gray-700 text-sm">Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, hContrat: BASE_HEURES_PLEINES, couleurFond: '#3B82F6'})} className="bg-gray-200 w-5 h-5 rounded-full text-xs font-bold">+</button></div>
                   <ul className="space-y-1">
                     {agents.map((agent) => (
                       <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${agentActif === agent.id ? 'bg-blue-50 border-blue-600 font-bold' : 'bg-gray-50 hover:bg-gray-100'}`} style={{ borderLeftColor: agent.couleurFond }}>
@@ -1343,7 +1688,7 @@ export default function App() {
                   </ul>
                 </div>
                 <div className="mt-4">
-                  <div className="flex justify-between items-center mb-2"><h2 className="font-bold text-gray-700 text-sm">Postes</h2><button onClick={ajouterPoste} className="bg-gray-200 w-5 h-5 rounded-full text-xs font-bold">+</button></div>
+                  <div className="flex justify-between items-center mb-2"><h2 className="font-bold text-gray-700 text-sm">Postes</h2><button onClick={() => setModalNewPoste({ isOpen: true, nom: '' })} className="bg-gray-200 w-5 h-5 rounded-full text-xs font-bold">+</button></div>
                   <ul className="space-y-1">
                     {postes.map((poste) => (
                       <li key={poste.id} onClick={() => setPosteActif(posteActif === poste.id ? null : poste.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${posteActif === poste.id ? 'bg-indigo-50 border-indigo-600 font-bold' : 'bg-gray-50 hover:bg-gray-100'}`} style={{ borderLeftColor: poste.couleur }}>
@@ -1408,7 +1753,7 @@ export default function App() {
                     initialView="timeGridWeek"
                     locale="fr"
                     firstDay={1} 
-                    initialDate="2026-09-07"
+                    initialDate={currentTemplate.dateDebut}
                     headerToolbar={false} 
                     dayHeaderFormat={{ weekday: 'long' }} 
                     allDaySlot={false}
@@ -1462,6 +1807,7 @@ export default function App() {
                     initialView="timeGridWeek"
                     locale="fr"
                     firstDay={1}
+                    initialDate={currentTemplate.dateDebut}
                     datesSet={(arg) => setCurrentViewMonday(getMondayStr(arg.start))}
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
                     allDaySlot={false}
@@ -1489,7 +1835,7 @@ export default function App() {
 
         {vueActive === 'dashboard' && (
           <div className="flex-1 p-8 overflow-auto bg-gray-50 print-dashboard-table">
-            <h2 className="text-2xl font-bold text-blue-900 mb-6">Bilan Annuel Global de l'Équipe (2026-2027)</h2>
+            <h2 className="text-2xl font-bold text-blue-900 mb-6">Bilan Annuel Global de l'Équipe ({baseYear}-{baseYear+1})</h2>
             <div className="bg-white rounded-xl shadow border border-gray-300 overflow-hidden">
               <table className="w-full text-sm text-left">
                 <thead className="bg-blue-900 text-white font-medium uppercase text-xs">
@@ -1526,7 +1872,6 @@ export default function App() {
           <div className="flex-1 p-6 overflow-auto bg-gray-50">
             <h2 className="text-2xl font-bold text-blue-900 mb-6">Gestion des Absences et Retards</h2>
             
-            {/* RÉCAPITULATIF (BILAN) PAR AGENT */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               {bilanAbsences.map(b => (
                 <div key={b.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 border-l-4" style={{ borderLeftColor: b.couleur }}>
@@ -1556,7 +1901,6 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Formulaire de déclaration */}
               <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow border border-gray-200 h-fit">
                 <h3 className="font-bold text-md text-blue-900 mb-4 pb-2 border-b">Déclarer un événement</h3>
                 <form onSubmit={ajouterAbsenceRetard} className="space-y-4">
@@ -1619,7 +1963,6 @@ export default function App() {
                 </form>
               </div>
 
-              {/* Tableau de l'historique */}
               <div className="lg:col-span-2 bg-white rounded-xl shadow border border-gray-200 overflow-hidden flex flex-col">
                 <div className="bg-blue-900 text-white p-4 font-bold text-sm">Historique complet des événements</div>
                 <div className="overflow-x-auto flex-1">
@@ -1698,9 +2041,9 @@ export default function App() {
                 <select value={agentConsulte} onChange={(e) => setAgentConsulte(Number(e.target.value))} className="bg-white text-blue-900 font-bold p-2 rounded shadow outline-none">
                   {agents.map(a => <option key={a.id} value={a.id}>{a.nom} ({a.quotite}%)</option>)}
                 </select>
-                <span className="text-sm font-medium text-gray-300">Année Scolaire 2026-2027</span>
+                <span className="text-sm font-medium text-gray-300">Année Scolaire {baseYear}-{baseYear+1}</span>
               </div>
-              <div className="hidden print:block text-xl font-bold">Bilan Annuel : {agents.find(a=>a.id===agentConsulte)?.nom} (2026-2027)</div>
+              <div className="hidden print:block text-xl font-bold">Bilan Annuel : {agents.find(a=>a.id===agentConsulte)?.nom} ({baseYear}-{baseYear+1})</div>
               <div className="flex gap-6 bg-[#173b5c] p-2 rounded border border-gray-600 print:border-none">
                 <div className="flex flex-col items-center"><span className="text-xs text-gray-400 print:text-black">H. Contrat</span><span className="font-mono font-bold">{statsAgents.find(a=>a.id===agentConsulte)?.hContrat}</span></div>
                 <div className="flex flex-col items-center"><span className="text-xs text-gray-400 print:text-black">H. Consommées</span><span className="font-mono font-bold text-blue-300 print:text-black">{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.heuresConsommees)}</span></div>
@@ -1711,7 +2054,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* VUE ÉCRAN : 11 COLONNES COMPLÈTES AVEC DÉFILEMENT */}
             <div className="flex-1 overflow-auto p-2 bg-white print:hidden">
               <table className="w-full text-center border-collapse text-xs table-fixed min-w-[1200px] text-black">
                 <thead><tr>{anneeScolaire.map((mois, i) => (<th key={i} className="border-2 border-black bg-yellow-400 py-1 uppercase">{mois.nom}</th>))}</tr></thead>
@@ -1760,9 +2102,15 @@ export default function App() {
                         return (
                           <td key={idx} className="border border-black p-0 hover:outline hover:outline-2 hover:outline-blue-500 cursor-pointer relative" onClick={() => gererClicJourAgent(agentConsulte, dateStr, hFinal, noteAffichage)}>
                             <div className="flex h-6 items-stretch">
-                              <div className={`w-8 flex-shrink-0 flex items-center justify-center border-r border-gray-300 text-[10px] ${bgJour}`}><span className="rotate-[-90deg] mr-1 text-[8px] opacity-70">{nomJour[0]}</span>{jourNum}</div>
-                              <div className={`w-10 flex-shrink-0 flex items-center justify-center font-bold font-mono border-r border-gray-300 ${exc || absDuJour.length > 0 ? 'bg-orange-100 text-orange-900' : ''}`}>{formatHeureTableau(hFinal)}</div>
-                              <div className={`flex-1 flex items-center px-1 truncate text-[10px] ${exc || absDuJour.length > 0 ? 'bg-orange-50 font-bold text-orange-800' : 'text-gray-500'}`}>{noteAffichage}</div>
+                              <div className={`w-8 flex-shrink-0 flex items-center justify-center border-r border-gray-300 text-[10px] ${bgJour}`}>
+                                <span className="rotate-[-90deg] mr-1 text-[8px] opacity-70">{nomJour[0]}</span>{jourNum}
+                              </div>
+                              <div className={`w-10 flex-shrink-0 flex items-center justify-center font-bold font-mono border-r border-gray-300 ${exc || absDuJour.length > 0 ? 'bg-orange-100 text-orange-900' : ''}`}>
+                                {formatHeureTableau(hFinal)}
+                              </div>
+                              <div className={`flex-1 flex items-center px-1 truncate text-[10px] ${exc || absDuJour.length > 0 ? 'bg-orange-50 font-bold text-orange-800' : 'text-gray-500'}`}>
+                                {noteAffichage}
+                              </div>
                             </div>
                           </td>
                         );
@@ -1776,6 +2124,7 @@ export default function App() {
             <div className="hidden print:block w-full">
               <PrintAgentYearlyView 
                 agent={agents.find(a=>a.id===agentConsulte)} 
+                baseYear={baseYear}
                 anneeScolaire={anneeScolaire}
                 getMondayStr={getMondayStr}
                 getInfoJourFerie={getInfoJourFerie}
@@ -1790,5 +2139,14 @@ export default function App() {
         )}
       </div>
     </div>
-  )
+  );
+};
+
+export default function App() {
+  const [isSetupComplete, setIsSetupComplete] = useState(() => localStorage.getItem('edt-setup-done') === 'true');
+  
+  if (!isSetupComplete) {
+    return <SetupWizard onComplete={() => setIsSetupComplete(true)} />;
+  }
+  return <MainApp />;
 }
