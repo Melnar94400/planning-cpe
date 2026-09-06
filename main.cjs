@@ -13,9 +13,9 @@ function createWindow() {
       contextIsolation: true
     }
   });
-
+mainWindow.webContents.openDevTools();
   // Chargement sécurisé du fichier HTML depuis l'archive
-  win.loadFile(path.join(__dirname, 'dist', 'index.html'));
+  mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   win.setMenuBarVisibility(false); 
 }
 
