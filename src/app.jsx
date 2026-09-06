@@ -164,7 +164,7 @@ const SetupWizard = ({ onComplete }) => {
     <div className="min-h-screen bg-gray-100 flex flex-col items-center py-12 px-4">
       <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl overflow-hidden">
         <div className="bg-blue-900 p-6 text-white text-center">
-          <h1 className="text-3xl font-black tracking-wider">EDT CPE</h1><p className="opacity-80 mt-1">Configuration Initiale ({step}/4)</p>
+          <h1 className="text-3xl font-black tracking-wider">Planning CPE</h1><p className="opacity-80 mt-1">Configuration Initiale ({step}/4)</p>
         </div>
         
         <div className="p-8">
@@ -1628,7 +1628,7 @@ const MainApp = () => {
       <div className="w-80 bg-white shadow-lg flex flex-col z-20 border-r border-gray-200 no-print shrink-0">
         <div className="p-4 bg-blue-900 text-white flex flex-col gap-3">
           <div className="flex justify-between items-center">
-            <h1 className="text-xl font-bold tracking-wider">EDT CPE</h1>
+            <h1 className="text-xl font-bold tracking-wider">Planning CPE</h1>
             <div className="flex gap-1 flex-wrap justify-end max-w-[140px]">
               <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
               
