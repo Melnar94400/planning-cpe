@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  base: './', // <--- C'EST LA LIGNE MAGIQUE !
+  base: '/planning-cpe/', // <--- C'EST LA LIGNE MAGIQUE !
   build: {
     assetsDir: 'assets', // Assure que tous les assets vont dans ce dossier
   },
