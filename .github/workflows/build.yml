@@ -51,7 +51,7 @@ jobs:
           name: windows-portable
           path: release/win-unpacked/
 
-build-linux:
+  build-linux:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
