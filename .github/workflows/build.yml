@@ -48,8 +48,8 @@ jobs:
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
-          path: release/*.exe
+          name: windows-portable
+          path: release/win-unpacked/
 
   build-linux:
     runs-on: ubuntu-latest
