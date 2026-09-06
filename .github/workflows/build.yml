@@ -12,13 +12,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: Install dependencies
         run: npm install
       - name: Build React App
         run: npm run build
       - name: Build Mac DMG
         run: npx electron-builder --mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
       - name: Upload Mac Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -33,7 +35,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: Install dependencies
         run: npm install
       - name: Build React App
