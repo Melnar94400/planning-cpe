@@ -8,19 +8,11 @@ const BASE_HEURES_PLEINES = 1607;
 // --- CALCULATRICE BETTY ---
 const calculerContratBetty = (quotite, estEtudiant) => {
   const q = (parseFloat(String(quotite).replace(',', '.')) || 100) / 100;
-  
-  // Base légale : 1607h - 14h de fractionnement = 1593h
   const baseLegale = BASE_HEURES_PLEINES - 14; 
-  
-  // Application du prorata de la quotité
   let hDecimale = baseLegale * q;
-  
-  // Déduction étudiante également au prorata de la quotité
   if (estEtudiant) {
     hDecimale -= (200 * q);
   }
-  
-  // Conversion en sexagésimal avec arrondi aux 5 minutes inférieures
   const h = Math.floor(hDecimale);
   const m = Math.floor((hDecimale - h) * 60);
   const mArrondi = m - (m % 5); 
@@ -91,7 +83,7 @@ const importerDonnees = (e) => {
   executeImport(file);
 };
 
-// --- MOTEUR DE CALCUL DES JOURS FÉRIÉS (Meeus/Jones/Butcher) ---
+// --- MOTEUR DE CALCUL DES JOURS FÉRIÉS ---
 const getJoursFerie = (year) => {
   const a = year % 19, b = Math.floor(year / 100), c = year % 100;
   const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
@@ -133,7 +125,7 @@ const SetupWizard = ({ onComplete }) => {
   const [isFetchingDates, setIsFetchingDates] = useState(false);
   const [dotation, setDotation] = useState(0);
 
-  const [formPeriode, setFormPeriode] = useState({ nom: '', debut: '', fin: '' });
+  const [formPeriode, setFormPeriode] = useState({ nom: '', debut: '', fin: '', type: 'vacances' });
   const [formAgent, setFormAgent] = useState({ nom: '', quotite: '100', estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6' });
   const [formPoste, setFormPoste] = useState({ nom: '', couleur: '#10B981' });
 
@@ -154,7 +146,7 @@ const SetupWizard = ({ onComplete }) => {
     const feriesY1 = getJoursFerie(year1).filter(f => f.date >= `${year1}-08-15`);
     const feriesY2 = getJoursFerie(year2).filter(f => f.date <= `${year2}-08-15`);
     nouvellesPeriodes = [...feriesY1, ...feriesY2].map(f => ({ 
-      id: `ferie_${Date.now()}_${Math.random()}`, nom: f.nom, debut: f.date, fin: f.date 
+      id: `ferie_${Date.now()}_${Math.random()}`, nom: f.nom, debut: f.date, fin: f.date, type: 'ferie'
     }));
 
     try {
@@ -171,7 +163,7 @@ const SetupWizard = ({ onComplete }) => {
            endD.setDate(endD.getDate() - 1);
            const pad = n => String(n).padStart(2, '0');
            return { 
-             id: `vac_${Date.now()}_${Math.random()}`, nom: r.description, debut: r.start_date.split('T')[0], fin: `${endD.getFullYear()}-${pad(endD.getMonth()+1)}-${pad(endD.getDate())}` 
+             id: `vac_${Date.now()}_${Math.random()}`, nom: r.description, debut: r.start_date.split('T')[0], fin: `${endD.getFullYear()}-${pad(endD.getMonth()+1)}-${pad(endD.getDate())}`, type: 'vacances'
            };
         });
 
@@ -185,7 +177,7 @@ const SetupWizard = ({ onComplete }) => {
            { nom: "Vacances de Printemps", debut: zone.includes("A") ? "2027-04-10" : (zone.includes("B") ? "2027-04-17" : "2027-04-24"), fin: zone.includes("A") ? "2027-04-25" : (zone.includes("B") ? "2027-05-02" : "2027-05-09") },
            { nom: "Vacances d'Été", debut: "2027-07-07", fin: "2027-08-31" }
          ];
-         vacs = fallback.map(f => ({ id: `fallback_${Date.now()}_${Math.random()}`, nom: f.nom, debut: f.debut, fin: f.fin }));
+         vacs = fallback.map(f => ({ id: `fallback_${Date.now()}_${Math.random()}`, nom: f.nom, debut: f.debut, fin: f.fin, type: 'vacances' }));
       } else if (vacs.length === 0) {
          alert(`⚠️ Les vacances scolaires de ${year1}-${year2} ne sont pas encore disponibles sur l'API ou la zone est invalide.`);
       }
@@ -249,14 +241,28 @@ const SetupWizard = ({ onComplete }) => {
               
               <ul className="space-y-2 max-h-48 overflow-y-auto bg-gray-50 p-2 rounded border border-gray-300">
                 {periodes.length === 0 && <p className="text-xs text-gray-500 italic text-center py-4">Aucune date configurée.</p>}
-                {periodes.map(p => ( <li key={p.id} className="flex justify-between items-center bg-white p-2 rounded shadow-sm text-sm border border-gray-200"><span className="font-bold text-gray-700">{p.nom} <span className="font-normal text-gray-400 text-xs ml-2">({p.debut}{p.debut !== p.fin ? ` au ${p.fin}` : ''})</span></span><button onClick={() => setPeriodes(periodes.filter(x => x.id !== p.id))} className="text-red-500 hover:text-red-700 font-bold px-2">✖</button></li> ))}
+                {periodes.map(p => ( 
+                  <li key={p.id} className="flex justify-between items-center bg-white p-2 rounded shadow-sm text-sm border border-gray-200">
+                    <span className="font-bold text-gray-700">{p.nom} 
+                      <span className={`ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-white ${p.type === 'ferie' ? 'bg-green-600' : 'bg-blue-600'}`}>
+                        {p.type === 'ferie' ? 'Férié (Payé)' : 'Vacances (0h)'}
+                      </span>
+                      <span className="font-normal text-gray-400 text-xs ml-2">({p.debut}{p.debut !== p.fin ? ` au ${p.fin}` : ''})</span>
+                    </span>
+                    <button onClick={() => setPeriodes(periodes.filter(x => x.id !== p.id))} className="text-red-500 hover:text-red-700 font-bold px-2">✖</button>
+                  </li> 
+                ))}
               </ul>
 
-              <div className="flex gap-2 border-t pt-4">
-                <input type="text" placeholder="Ajout manuel..." value={formPeriode.nom} onChange={e=>setFormPeriode({...formPeriode, nom: e.target.value})} className="flex-1 border p-2 rounded text-sm" />
+              <div className="flex gap-2 border-t pt-4 flex-wrap">
+                <input type="text" placeholder="Ajout manuel..." value={formPeriode.nom} onChange={e=>setFormPeriode({...formPeriode, nom: e.target.value})} className="flex-1 border p-2 rounded text-sm min-w-[150px]" />
+                <select value={formPeriode.type} onChange={e=>setFormPeriode({...formPeriode, type: e.target.value})} className="border p-2 rounded text-sm w-32">
+                  <option value="vacances">Vacances</option>
+                  <option value="ferie">Férié</option>
+                </select>
                 <input type="date" value={formPeriode.debut} onChange={e=>setFormPeriode({...formPeriode, debut: e.target.value})} className="border p-2 rounded text-sm w-32" />
                 <input type="date" value={formPeriode.fin} onChange={e=>setFormPeriode({...formPeriode, fin: e.target.value})} className="border p-2 rounded text-sm w-32" />
-                <button onClick={() => { if(formPeriode.nom && formPeriode.debut) { setPeriodes([...periodes, {id: Date.now(), ...formPeriode}].sort((a,b) => a.debut.localeCompare(b.debut))); setFormPeriode({nom:'', debut:'', fin:''}); } }} className="bg-gray-800 text-white px-3 rounded font-bold hover:bg-gray-700">+</button>
+                <button onClick={() => { if(formPeriode.nom && formPeriode.debut) { setPeriodes([...periodes, {id: Date.now(), ...formPeriode}].sort((a,b) => a.debut.localeCompare(b.debut))); setFormPeriode({nom:'', debut:'', fin:'', type:'vacances'}); } }} className="bg-gray-800 text-white px-3 rounded font-bold hover:bg-gray-700">+</button>
               </div>
 
               <div className="flex justify-between pt-4 mt-4 border-t"><button onClick={() => setStep(1)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => setStep(3)} className="bg-gray-800 text-white px-6 py-2 rounded-lg font-bold shadow">Suivant ➔</button></div>
@@ -473,7 +479,7 @@ const PrintTimeGridView = ({ events, titre }) => {
   );
 };
 
-const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, getInfoJourFerie, customWeeks, gabarits, exceptions, formatHeureTableau, absences }) => {
+const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, getInfosPeriode, customWeeks, gabarits, exceptions, formatHeureTableau, absences }) => {
   const semestre1 = anneeScolaire.slice(0, 6); 
   const semestre2 = anneeScolaire.slice(6);    
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
@@ -506,17 +512,29 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
                   const dayOfWeek = dateObj.getDay();
                   const nomJour = nomsJours[dayOfWeek];
                   const estWeekEnd = dayOfWeek === 0 || dayOfWeek === 6;
-                  const infoFerie = getInfoJourFerie(dateObj);
+                  const infoPeriode = getInfosPeriode(dateObj);
 
                   let hDefaut = 0;
-                  // Les jours fériés créditent toujours les heures de la semaine type
-                  if (infoFerie) {
-                    const applicableTemplate = [...window.__templateVersions__].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || window.__templateVersions__[0];
-                    hDefaut = gabarits[applicableTemplate?.id]?.[agent.id]?.[dayOfWeek] || 0;
-                  } else if (!estWeekEnd) {
-                    const applicableTemplate = [...window.__templateVersions__].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || window.__templateVersions__[0];
-                    if (customWeeks[mondayStr]) hDefaut = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(dateStr) && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin).reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0);
-                    else hDefaut = gabarits[applicableTemplate?.id]?.[agent.id]?.[dayOfWeek] || 0;
+                  let aDesEvenementsReels = false;
+
+                  const applicableTemplate = [...window.__templateVersions__].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || window.__templateVersions__[0];
+
+                  if (customWeeks[mondayStr]) {
+                    const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(dateStr) && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin);
+                    if (evtsJour.length > 0) {
+                      hDefaut = evtsJour.reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0);
+                      aDesEvenementsReels = true;
+                    }
+                  }
+
+                  if (!aDesEvenementsReels) {
+                    if (infoPeriode) {
+                      if (infoPeriode.type === 'ferie') hDefaut = gabarits[applicableTemplate?.id]?.[agent.id]?.[dayOfWeek] || 0;
+                      else hDefaut = 0; // Vacances
+                    } else {
+                      if (customWeeks[mondayStr]) hDefaut = 0; 
+                      else if (!estWeekEnd) hDefaut = gabarits[applicableTemplate?.id]?.[agent.id]?.[dayOfWeek] || 0;
+                    }
                   }
                   
                   const exc = exceptions[`${agent.id}_${dateStr}`];
@@ -526,7 +544,7 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
                   const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + ((new Date(a.end) - new Date(a.start))/3600000), 0);
                   hFinal = Math.max(0, hFinal - hDeduct);
 
-                  let noteAffichage = infoFerie ? infoFerie : (exc ? exc.note : '');
+                  let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : '');
                   if (absDuJour.length > 0) {
                     const txtAbs = absDuJour.map(a => `${a.type.toUpperCase()}${a.deduire?' (-h)':''}`).join(', ');
                     noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs;
@@ -535,7 +553,12 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
                   let bgJour = "bg-[#c6f6d5]"; 
                   if (dayOfWeek === 0) bgJour = "bg-yellow-200"; 
                   if (dayOfWeek === 6) bgJour = "bg-yellow-50";  
-                  if (infoFerie) bgJour = "bg-green-100 text-green-900 font-bold";
+                  
+                  if (infoPeriode) {
+                    if (infoPeriode.type === 'ferie') bgJour = "bg-green-200 text-green-900 font-bold";
+                    else bgJour = "bg-blue-100 text-blue-900"; // Vacances
+                  }
+
                   if (absDuJour.length > 0) bgJour = "bg-red-200 text-red-900 font-bold";
 
                   return (
@@ -582,7 +605,16 @@ const MainApp = () => {
 
   const [agents, setAgents] = useState(() => JSON.parse(localStorage.getItem('edt-agents') || '[]'));
   const [postes, setPostes] = useState(() => JSON.parse(localStorage.getItem('edt-postes') || '[]'));
-  const [periodesFeriees, setPeriodesFeriees] = useState(() => JSON.parse(localStorage.getItem('edt-periodes') || '[]'));
+  
+  const [periodesFeriees, setPeriodesFeriees] = useState(() => {
+    const s = localStorage.getItem('edt-periodes');
+    if (!s) return [];
+    return JSON.parse(s).map(p => ({
+      ...p,
+      type: p.type || (p.nom.toLowerCase().includes('vacance') ? 'vacances' : 'ferie')
+    }));
+  });
+  
   const [dotation, setDotation] = useState(() => parseFloat(localStorage.getItem('edt-dotation')) || 0);
 
   const [templateVersions, setTemplateVersions] = useState(() => {
@@ -644,7 +676,7 @@ const MainApp = () => {
     });
   });
 
-  const currentTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0];
+  const currentTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0] || {id:1, events:[], besoins:[]};
 
   const [modalCreation, setModalCreation] = useState({ isOpen: false, eventId: null, start: null, end: null });
   const [formTypeEvent, setFormTypeEvent] = useState('affectation'); 
@@ -674,7 +706,7 @@ const MainApp = () => {
   const [modalEditBesoin, setModalEditBesoin] = useState({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' });
   const [modalAgent, setModalAgent] = useState({ isOpen: false, id: null, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#10B981' });
   const [modalParametres, setModalParametres] = useState(false);
-  const [formPeriode, setFormPeriode] = useState({ nom: '', debut: '', fin: '' });
+  const [formPeriode, setFormPeriode] = useState({ nom: '', debut: '', fin: '', type: 'vacances' });
 
   const [modalPrint, setModalPrint] = useState(false);
   const [printFilter, setPrintFilter] = useState({ type: 'all', id: null });
@@ -725,7 +757,7 @@ const MainApp = () => {
 
   useEffect(() => { if (vueActive === 'planning') setModeEdition('agents'); }, [vueActive]);
 
-  // FONCTION MAGIQUE DE FORMATAGE EN BASE 60 (Nettoie les floats JS)
+  // FONCTION MAGIQUE DE FORMATAGE EN BASE 60
   const formatHeureTableau = (decimal, showZero = false) => {
     if (decimal === undefined || decimal === null || Number.isNaN(decimal)) return "";
     const arrondi = Math.round(decimal * 60) / 60; 
@@ -789,12 +821,22 @@ const MainApp = () => {
 
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
 
-  const getInfoJourFerie = (date) => {
+  // Fonction centrale pour évaluer la priorité Vacances / Férié sur un jour donné
+  const getInfosPeriode = (date) => {
     const pad = n => String(n).padStart(2, '0');
     const str = `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+    let vacs = null;
+    let ferie = null;
+
     for (const v of periodesFeriees) {
-      if (str >= v.debut && str <= v.fin) return v.nom;
+      if (str >= v.debut && str <= v.fin) {
+        if (v.type === 'vacances') vacs = v;
+        else if (v.type === 'ferie') ferie = v;
+      }
     }
+
+    if (vacs) return { type: 'vacances', nom: ferie ? `${vacs.nom} (${ferie.nom})` : vacs.nom };
+    if (ferie) return { type: 'ferie', nom: ferie.nom };
     return null;
   };
 
@@ -828,23 +870,39 @@ const MainApp = () => {
         const mondayStr = getMondayStr(dateObj);
         
         const estWeekEnd = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-        const infoFerie = getInfoJourFerie(dateObj);
+        const infoPeriode = getInfosPeriode(dateObj);
         const exc = exceptions[`${agent.id}_${dateStr}`];
         const applicableTemplate = [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || templateVersions[0];
 
         let hJour = 0;
         
-        if (infoFerie) {
-          hJour = gabarits[applicableTemplate?.id]?.[agent.id]?.[dateObj.getDay()] || 0;
-        } else if (customWeeks[mondayStr]) {
-          const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin && e.start.startsWith(dateStr));
-          hJour = evtsJour.reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0);
-        } else if (!estWeekEnd) {
-          hJour = gabarits[applicableTemplate?.id]?.[agent.id]?.[dateObj.getDay()] || 0;
-        }
-
         if (exc) {
           hJour = exc.h;
+        } else {
+          let aDesEvenementsReels = false;
+          if (customWeeks[mondayStr]) {
+            const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin && e.start.startsWith(dateStr));
+            if (evtsJour.length > 0) {
+              hJour = evtsJour.reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0);
+              aDesEvenementsReels = true;
+            }
+          }
+
+          if (!aDesEvenementsReels) {
+            if (infoPeriode) {
+              if (infoPeriode.type === 'ferie') {
+                hJour = gabarits[applicableTemplate?.id]?.[agent.id]?.[dateObj.getDay()] || 0;
+              } else {
+                hJour = 0; // Vacances = 0h par défaut
+              }
+            } else {
+              if (customWeeks[mondayStr]) {
+                hJour = 0;
+              } else if (!estWeekEnd) {
+                hJour = gabarits[applicableTemplate?.id]?.[agent.id]?.[dateObj.getDay()] || 0;
+              }
+            }
+          }
         }
 
         const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr) && a.deduire);
@@ -856,6 +914,7 @@ const MainApp = () => {
     
     const soldeGlobalBrut = agent.hContrat - heuresConsommees;
     const soldeGlobal = Math.round(soldeGlobalBrut * 60) / 60;
+    
     const applicableTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0];
     const hHebdoType = gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0;
 
@@ -900,7 +959,7 @@ const MainApp = () => {
     if (!mondayStr) return [];
     if (customWeeks[mondayStr]) return customWeeks[mondayStr]; 
     const applicableTemplate = [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= mondayStr) || templateVersions[0];
-    return applicableTemplate.events.map(e => shiftEventToWeek(e, mondayStr)); 
+    return applicableTemplate.events.map(e => shiftEventToWeek(e, mondayStr)).filter(e => !getInfosPeriode(new Date(e.start.split('T')[0]))); 
   };
 
   const targetMonday = currentViewMonday || getMondayStr(currentTemplate?.dateDebut || new Date()); 
@@ -910,7 +969,7 @@ const MainApp = () => {
   if (vueActive === 'planning' && currentViewMonday) {
     currentRealEvents = getEventsForWeek(currentViewMonday);
     const applicableTemplate = [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= currentViewMonday) || templateVersions[0];
-    currentBesoins = applicableTemplate.besoins.map(b => shiftEventToWeek(b, currentViewMonday)); 
+    currentBesoins = applicableTemplate.besoins.map(b => shiftEventToWeek(b, currentViewMonday)).filter(b => !getInfosPeriode(new Date(b.start.split('T')[0]))); 
   } else {
     currentRealEvents = currentTemplate.events.map(e => shiftEventToWeek(e, targetMonday));
     currentBesoins = currentTemplate.besoins.map(b => shiftEventToWeek(b, targetMonday));
@@ -1375,8 +1434,8 @@ const MainApp = () => {
     if (!formPeriode.nom || !formPeriode.debut) return;
     const dateFin = formPeriode.fin || formPeriode.debut;
     if (dateFin < formPeriode.debut) return alert("La date de fin doit être après le début.");
-    setPeriodesFeriees([...periodesFeriees, { id: Date.now(), nom: formPeriode.nom, debut: formPeriode.debut, fin: dateFin }].sort((a,b) => a.debut.localeCompare(b.debut)));
-    setFormPeriode({ nom: '', debut: '', fin: '' });
+    setPeriodesFeriees([...periodesFeriees, { id: Date.now(), nom: formPeriode.nom, debut: formPeriode.debut, fin: dateFin, type: formPeriode.type }].sort((a,b) => a.debut.localeCompare(b.debut)));
+    setFormPeriode({ nom: '', debut: '', fin: '', type: 'vacances' });
   };
   const supprimerPeriodeFeriee = (id) => setPeriodesFeriees(periodesFeriees.filter(p => p.id !== id));
 
@@ -1531,7 +1590,13 @@ const MainApp = () => {
               <ul className="space-y-2 mb-6">
                 {periodesFeriees.map(p => (
                   <li key={p.id} className="bg-white p-2 rounded border border-gray-200 flex justify-between items-center text-sm shadow-sm">
-                    <div><span className="font-bold text-gray-800">{p.nom}</span> <span className="text-gray-500 ml-2 text-xs">({p.debut === p.fin ? p.debut : `Du ${p.debut} au ${p.fin}`})</span></div>
+                    <div>
+                      <span className="font-bold text-gray-800">{p.nom}</span> 
+                      <span className={`ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-white ${p.type === 'ferie' ? 'bg-green-600' : 'bg-blue-600'}`}>
+                        {p.type === 'ferie' ? 'Férié (Payé)' : 'Vacances (0h)'}
+                      </span>
+                      <br/><span className="text-gray-500 text-xs">({p.debut === p.fin ? p.debut : `Du ${p.debut} au ${p.fin}`})</span>
+                    </div>
                     <button onClick={() => supprimerPeriodeFeriee(p.id)} className="text-red-500 hover:bg-red-50 px-2 py-1 rounded">✖</button>
                   </li>
                 ))}
@@ -1540,6 +1605,10 @@ const MainApp = () => {
                 <h4 className="font-bold text-sm text-gray-700 mb-3">➕ Ajouter une période manuellement</h4>
                 <div className="space-y-3">
                   <input type="text" required placeholder="Nom (ex: Pont Ascension)" value={formPeriode.nom} onChange={e => setFormPeriode({...formPeriode, nom: e.target.value})} className="w-full border rounded p-2 text-sm" />
+                  <select value={formPeriode.type} onChange={e => setFormPeriode({...formPeriode, type: e.target.value})} className="w-full border rounded p-2 text-sm bg-white">
+                    <option value="vacances">Période de Vacances (Compteur bloqué à 0h)</option>
+                    <option value="ferie">Jour Férié / Pont (Valide les heures de l'agent)</option>
+                  </select>
                   <div className="flex gap-3">
                     <div className="flex-1"><label className="text-xs font-bold text-gray-600">Début</label><input type="date" required value={formPeriode.debut} onChange={e => setFormPeriode({...formPeriode, debut: e.target.value})} className="w-full border rounded p-2 text-sm" /></div>
                     <div className="flex-1"><label className="text-xs font-bold text-gray-600">Fin (Optionnel)</label><input type="date" value={formPeriode.fin} onChange={e => setFormPeriode({...formPeriode, fin: e.target.value})} className="w-full border rounded p-2 text-sm" /></div>
@@ -1707,7 +1776,7 @@ const MainApp = () => {
                   <div className="flex-1"><label className="block text-sm font-semibold mb-1">Couleur</label><div className="flex items-center gap-3"><input type="color" value={modalAgent.couleurFond} onChange={e => setModalAgent({...modalAgent, couleurFond: e.target.value})} className="w-10 h-10 p-1 border rounded cursor-pointer" /><span className="text-sm uppercase">{modalAgent.couleurFond}</span></div></div>
                 </div>
               </div>
-              <div className="p-4 bg-gray-50 border-t flex justify-end gap-3"><button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded">Annuler</button><button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded">{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button></div>
+              <div className="p-4 bg-gray-50 border-t flex justify-end gap-3"><button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-600 hover:bg-gray-200">Annuler</button><button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded">{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button></div>
             </form>
           </div>
         </div>
@@ -2184,17 +2253,32 @@ const MainApp = () => {
                         const dayOfWeek = dateObj.getDay();
                         const nomJour = nomsJours[dayOfWeek];
                         const estWeekEnd = dayOfWeek === 0 || dayOfWeek === 6;
-                        const infoFerie = getInfoJourFerie(dateObj);
+                        const infoPeriode = getInfosPeriode(dateObj);
 
                         let hDefaut = 0;
-                        // Si c'est un jour férié, on accorde TOUJOURS les heures du gabarit, sinon on regarde s'il y a une modif dans customWeeks
-                        if (infoFerie) {
-                          const applicableTemplate = [...window.__templateVersions__].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || window.__templateVersions__[0];
-                          hDefaut = gabarits[applicableTemplate?.id]?.[agentConsulte]?.[dayOfWeek] || 0;
-                        } else if (!estWeekEnd) {
-                          const applicableTemplate = [...window.__templateVersions__].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || window.__templateVersions__[0];
-                          if (customWeeks[mondayStr]) hDefaut = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agentConsulte && e.start.startsWith(dateStr) && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin).reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0);
-                          else hDefaut = gabarits[applicableTemplate?.id]?.[agentConsulte]?.[dayOfWeek] || 0;
+                        let aDesEvenementsReels = false;
+
+                        const applicableTemplate = [...window.__templateVersions__].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || window.__templateVersions__[0];
+
+                        // Si la semaine a été modifiée à la main pour CE jour
+                        if (customWeeks[mondayStr]) {
+                          const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agentConsulte && e.start.startsWith(dateStr) && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin);
+                          if (evtsJour.length > 0) {
+                            hDefaut = evtsJour.reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0);
+                            aDesEvenementsReels = true;
+                          }
+                        }
+
+                        // Si aucune "Permanence" ou heure modifiée sur ce jour précis
+                        if (!aDesEvenementsReels) {
+                          if (infoPeriode) {
+                            // C'est Férié : on offre les heures, C'est Vacances : ça reste à 0h
+                            if (infoPeriode.type === 'ferie') hDefaut = gabarits[applicableTemplate?.id]?.[agentConsulte]?.[dayOfWeek] || 0;
+                            else hDefaut = 0;
+                          } else {
+                            if (customWeeks[mondayStr]) hDefaut = 0; 
+                            else if (!estWeekEnd) hDefaut = gabarits[applicableTemplate?.id]?.[agentConsulte]?.[dayOfWeek] || 0;
+                          }
                         }
                         
                         const exc = exceptions[`${agentConsulte}_${dateStr}`];
@@ -2204,7 +2288,7 @@ const MainApp = () => {
                         const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + ((new Date(a.end) - new Date(a.start))/3600000), 0);
                         hFinal = Math.max(0, hFinal - hDeduct);
 
-                        let noteAffichage = infoFerie ? infoFerie : (exc ? exc.note : '');
+                        let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : '');
                         if (absDuJour.length > 0) {
                           const txtAbs = absDuJour.map(a => `${a.type.toUpperCase()}${a.deduire?' (-h)':''}`).join(', ');
                           noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs;
@@ -2213,7 +2297,12 @@ const MainApp = () => {
                         let bgJour = "bg-[#c6f6d5]"; 
                         if (dayOfWeek === 0) bgJour = "bg-yellow-200"; 
                         if (dayOfWeek === 6) bgJour = "bg-yellow-50";  
-                        if (infoFerie) bgJour = "bg-green-100 text-green-900 font-bold";
+                        
+                        if (infoPeriode) {
+                          if (infoPeriode.type === 'ferie') bgJour = "bg-green-200 text-green-900 font-bold";
+                          else bgJour = "bg-blue-100 text-blue-900";
+                        }
+
                         if (absDuJour.length > 0) bgJour = "bg-red-200 text-red-900 font-bold";
 
                         return (
@@ -2223,7 +2312,6 @@ const MainApp = () => {
                                 <span className="rotate-[-90deg] mr-1 text-[8px] opacity-70">{nomJour[0]}</span>{jourNum}
                               </div>
                               <div className={`w-10 flex-shrink-0 flex items-center justify-center font-bold font-mono border-r border-gray-300 ${exc || absDuJour.length > 0 ? 'bg-orange-100 text-orange-900' : ''}`}>
-                                {/* S'il n'y a pas d'heures (0), ça n'imprime rien pour garder le calendrier clair */}
                                 {formatHeureTableau(hFinal)}
                               </div>
                               <div className={`flex-1 flex items-center px-1 truncate text-[10px] ${exc || absDuJour.length > 0 ? 'bg-orange-50 font-bold text-orange-800' : 'text-gray-500'}`}>
@@ -2245,7 +2333,7 @@ const MainApp = () => {
                 baseYear={baseYear}
                 anneeScolaire={anneeScolaire}
                 getMondayStr={getMondayStr}
-                getInfoJourFerie={getInfoJourFerie}
+                getInfosPeriode={getInfosPeriode}
                 customWeeks={customWeeks}
                 gabarits={gabarits}
                 exceptions={exceptions}
