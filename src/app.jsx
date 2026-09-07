@@ -572,35 +572,32 @@ const layoutDayEvents = (dayEvents) => {
 
   return layouted;
 };
+
 // ============================================================================
-// NOUVEAU : MOTEUR DE GRILLE (Anti-collision + Pointillés 15m / Pleins Sonneries)
+// MOTEUR DE GRILLE ÉPURÉ
 // ============================================================================
 const generateGrid = (limitesHeures, sonneries) => {
   const gridLines = [];
-  const gridLabels = [];
+  const gridLabelsWeekly = []; // Uniquement les sonneries pour le planning hebdo
+  const gridLabelsDaily = []; // Uniquement les heures pleines pour la vue quotidienne
+  
   for (let i = limitesHeures.baseMins; i <= limitesHeures.baseMins + limitesHeures.span; i += 5) {
      const h = String(Math.floor(i/60)).padStart(2,'0');
      const m = String(i%60).padStart(2,'0');
      const timeStr = `${h}:${m}`;
      const isSonnerie = sonneries.includes(timeStr);
      const is15Min = i % 15 === 0;
+     const isHeurePleine = i % 60 === 0;
      
      if (isSonnerie || is15Min) {
          const topPercent = ((i - limitesHeures.baseMins) / limitesHeures.span) * 100;
-         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent });
+         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent, isHeurePleine, is15Min });
          
-         // Anti-collision: cache l'étiquette 15m si une sonnerie est à moins de 7 minutes
-         const tooCloseToSonnerie = !isSonnerie && sonneries.some(s => {
-             const [sh, sm] = s.split(':').map(Number);
-             return Math.abs((sh*60+sm) - i) < 7;
-         });
-         
-         if (!tooCloseToSonnerie) {
-             gridLabels.push({ timeStr, mins: i, isSonnerie, topPercent });
-         }
+         if (isSonnerie) gridLabelsWeekly.push({ timeStr, mins: i, topPercent });
+         if (isHeurePleine) gridLabelsDaily.push({ timeStr, mins: i, topPercent });
      }
   }
-  return { gridLines, gridLabels };
+  return { gridLines, gridLabelsWeekly, gridLabelsDaily };
 };
 
 // ============================================================================
@@ -609,7 +606,7 @@ const generateGrid = (limitesHeures, sonneries) => {
 const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { baseMins: 460, span: 620 } }) => {
   const planningEvents = events.filter(e => !e.extendedProps?.isBesoin);
   const nomsJours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
-  const { gridLines, gridLabels } = generateGrid(limitesHeures, sonneries);
+  const { gridLines, gridLabelsWeekly } = generateGrid(limitesHeures, sonneries);
 
   return (
     <div className="print-weekly-page flex flex-col bg-white p-2">
@@ -620,9 +617,9 @@ const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { ba
 
       <div className="flex flex-1 border border-black relative overflow-hidden bg-white">
         <div className="w-14 flex flex-col border-r border-black bg-gray-100 text-[10px] font-bold text-gray-600 shrink-0 relative">
-          {gridLabels.map(lbl => (
+          {gridLabelsWeekly.map(lbl => (
             <div key={lbl.timeStr} className="absolute w-full pr-2 text-right" style={{ top: `${lbl.topPercent}%`, transform: 'translateY(-50%)' }}>
-               <span className={lbl.isSonnerie ? 'text-black font-black bg-black/10 px-1 rounded border-b-2 border-black' : 'opacity-60 text-[8px]'}>{lbl.timeStr}</span>
+               <span className="text-black font-black bg-black/10 px-1 rounded border-b-2 border-black">{lbl.timeStr}</span>
             </div>
           ))}
         </div>
@@ -638,25 +635,21 @@ const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { ba
                 <div className="flex-1 relative bg-white">
                   {gridLines.map(line => (
                     <div key={line.timeStr} className="absolute w-full pointer-events-none z-0" 
-                      style={{ top: `${line.topPercent}%`, borderBottom: line.isSonnerie ? '2px solid rgba(0,0,0,0.5)' : '1px dashed rgba(0,0,0,0.2)' }}></div>
+                      style={{ top: `${line.topPercent}%`, borderBottom: line.isHeurePleine || line.isSonnerie ? '2px solid rgba(0,0,0,0.3)' : '1px dashed rgba(0,0,0,0.15)' }}></div>
                   ))}
 
                   {layoutedEvents.map(item => {
                     const { evt, startMins, endMins, col, totalCols } = item;
-                    const startD = new Date(evt.start);
-                    const endD = new Date(evt.end);
+                    const startD = new Date(evt.start); const endD = new Date(evt.end);
                     const top = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
                     const height = Math.min(100 - top, ((endMins - startMins) / limitesHeures.span) * 100);
-                    
                     const isAbs = evt.extendedProps?.isAbsence;
                     const couleur = isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? '#ef4444' : '#f59e0b') : (evt.borderColor || '#3b82f6');
                     const bgClass = isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? 'bg-red-50 text-red-900' : 'bg-orange-50 text-orange-900') : 'bg-blue-50 text-blue-900';
-                    const widthPercent = 100 / totalCols;
-                    const leftPercent = col * widthPercent;
 
                     return (
                       <div key={evt.id} className={`absolute rounded p-1 border overflow-hidden shadow-xs ${bgClass}`}
-                        style={{ top: `${top}%`, height: `${Math.max(height, 3)}%`, left: `${leftPercent}%`, width: `${widthPercent}%`, borderLeftColor: couleur, borderLeftWidth: '4px', fontSize: '9px', lineHeight: '1.1', boxSizing: 'border-box', zIndex: 10 }}
+                        style={{ top: `${top}%`, height: `${Math.max(height, 3)}%`, left: `${(col * 100) / totalCols}%`, width: `${100 / totalCols}%`, borderLeftColor: couleur, borderLeftWidth: '4px', fontSize: '9px', lineHeight: '1.1', zIndex: 10 }}
                       >
                         <div className="font-black truncate text-[9px]" style={{ color: couleur }}>{isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? 'ABSENCE' : 'RETARD') : evt.extendedProps?.posteNom}</div>
                         <div className="font-bold truncate text-[8px] text-gray-800">{evt.extendedProps?.agentName || evt.extendedProps?.agentNom}</div>
@@ -678,7 +671,7 @@ const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absences, sonn
   const mondayStr = getMondayStr(jourConsulte);
   const allEvents = getEventsForWeek(mondayStr);
   const extTime = (iso) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
-  const { gridLines, gridLabels } = generateGrid(limitesHeures, sonneries);
+  const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
 
   return (
     <div className="print-weekly-page flex flex-col bg-white p-2">
@@ -690,17 +683,15 @@ const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absences, sonn
 
       <div className="flex flex-wrap gap-2 mb-3 justify-center shrink-0">
         <span className="text-[10px] font-bold text-gray-500 self-center uppercase mr-2">Légende :</span>
-        {postes.map(p => (
-          <span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur), border: '1px solid rgba(0,0,0,0.2)' }}>{p.nom}</span>
-        ))}
+        {postes.map(p => (<span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur), border: '1px solid rgba(0,0,0,0.2)' }}>{p.nom}</span>))}
         <span className="px-2 py-1 rounded text-[10px] font-bold bg-red-100 text-red-800 border border-red-300">🚫 ABSENCE</span>
         <span className="px-2 py-1 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-300">⏰ RETARD</span>
       </div>
 
       <div className="flex-1 border border-black relative bg-white flex flex-col overflow-hidden">
-        <div className="flex border-b border-black bg-gray-100 shrink-0 h-7 relative ml-28">
-           {gridLabels.map(lbl => (
-              <div key={lbl.timeStr} className={`absolute text-[9px] ${lbl.isSonnerie ? 'font-black text-black bg-black/10 px-1 rounded border-b-2 border-black z-10' : 'text-gray-500 opacity-60 text-[8px]'}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)', top: lbl.isSonnerie ? '2px' : '6px' }}>
+        <div className="flex border-b border-black bg-gray-100 shrink-0 h-6 relative ml-28">
+           {gridLabelsDaily.map(lbl => (
+              <div key={lbl.timeStr} className="absolute text-[11px] font-black text-black top-1" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
                  {lbl.timeStr}
               </div>
            ))}
@@ -709,7 +700,7 @@ const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absences, sonn
         <div className="flex-1 relative overflow-hidden">
           <div className="absolute top-0 bottom-0 left-28 right-0 pointer-events-none z-0">
             {gridLines.map(line => (
-               <div key={line.timeStr} className="absolute top-0 bottom-0" style={{ left: `${line.topPercent}%`, borderLeft: line.isSonnerie ? '2px solid rgba(0,0,0,0.4)' : '1px dashed rgba(0,0,0,0.15)' }}></div>
+               <div key={line.timeStr} className="absolute top-0 bottom-0" style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid rgba(0,0,0,0.3)' : '1px dashed rgba(0,0,0,0.15)' }}></div>
             ))}
           </div>
 
@@ -726,33 +717,16 @@ const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absences, sonn
                   
                   <div className="flex-1 relative my-1">
                     {eventsDuJour.map(evt => {
-                      const startD = new Date(evt.start);
-                      const endD = new Date(evt.end);
-                      const startMins = startD.getHours() * 60 + startD.getMinutes();
-                      const endMins = endD.getHours() * 60 + endD.getMinutes();
-                      const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                      const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
-                      const isShort = (endMins - startMins) <= 20;
-
-                      return (
-                        <div key={evt.id} className="absolute top-0 bottom-0 rounded shadow-sm flex flex-col justify-center px-1 overflow-hidden border border-black/20"
-                          style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evt.extendedProps?.posteCouleur || '#3b82f6', color: getContrastYIQ(evt.extendedProps?.posteCouleur || '#3b82f6') }}>
-                          <span className="font-bold text-[8px] truncate leading-tight">{evt.extendedProps?.posteNom}</span>
-                          {!isShort && <span className="text-[7px] opacity-90 truncate leading-tight">{extTime(evt.start)}-{extTime(evt.end)}</span>}
-                        </div>
-                      );
-                    })}
-                    {absDuJour.map(abs => {
-                      const startD = new Date(abs.start);
-                      const endD = new Date(abs.end);
-                      const startMins = startD.getHours() * 60 + startD.getMinutes();
-                      const endMins = endD.getHours() * 60 + endD.getMinutes();
+                      const startD = new Date(evt.start); const endD = new Date(evt.end);
+                      const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
                       const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
                       const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
                       
                       return (
-                        <div key={abs.id} className={`absolute top-0 bottom-0 rounded shadow-sm flex flex-col justify-center px-1 overflow-hidden border ${abs.type === 'absence' ? 'bg-red-100 border-red-500 text-red-800' : 'bg-orange-100 border-orange-500 text-orange-800'}`} style={{ left: `${left}%`, width: `${width}%` }}>
-                          <span className="font-bold text-[8px] truncate leading-tight">{abs.type === 'absence' ? 'ABSENCE' : 'RETARD'}</span>
+                        <div key={evt.id} className="absolute top-0 bottom-0 rounded shadow-sm flex flex-col justify-center px-1 overflow-hidden border border-black/20"
+                          style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evt.extendedProps?.posteCouleur || '#3b82f6', color: getContrastYIQ(evt.extendedProps?.posteCouleur || '#3b82f6') }}>
+                          <span className="font-bold text-[8px] truncate leading-tight">{evt.extendedProps?.posteNom}</span>
+                          {((endMins - startMins) > 15) && <span className="text-[7px] opacity-90 truncate leading-tight">{extTime(evt.start)}-{extTime(evt.end)}</span>}
                         </div>
                       );
                     })}
@@ -935,24 +909,19 @@ const [amplitude, setAmplitude] = useState(() => {
     return { minStr: format(baseMins), maxStr: format(maxMins), baseMins, span };
   })();
   
-  const renderSlotLabel = (arg) => {
+const renderSlotLabel = (arg) => {
     const h = String(arg.date.getHours()).padStart(2,'0');
     const m = String(arg.date.getMinutes()).padStart(2,'0');
     const timeStr = `${h}:${m}`;
-    const mins = arg.date.getHours()*60 + arg.date.getMinutes();
-    
-    const isSonnerie = sonneries.includes(timeStr);
-    const is15Min = ['00', '15', '30', '45'].includes(m);
 
-    if (isSonnerie) {
+    // Le planning Hebdo / Modèle n'affiche QUE les horaires explicitement configurés
+    if (sonneries.includes(timeStr)) {
       return { html: `<div class="font-bold text-black dark:text-white text-[11px] bg-black/10 dark:bg-white/10 px-1 rounded mx-auto" style="border-bottom: 2px solid currentColor">${timeStr}</div>` };
-    } else if (is15Min) {
-       const tooClose = sonneries.some(s => { const [sh, sm] = s.split(':').map(Number); return Math.abs((sh*60+sm) - mins) < 7; });
-       if (!tooClose) return { html: `<div class="opacity-40 text-[9px]">${timeStr}</div>` };
     }
+    
     return { html: '' };
   };
-  
+
   // Détermination de l'année scolaire de référence dynamique
   const getSchoolYearBase = () => {
      if (templateVersions.length > 0 && templateVersions[0].dateDebut) {
@@ -2414,7 +2383,7 @@ const renderEventContent = (arg) => {
       <div id="print-area" className={`flex-1 flex flex-col h-full overflow-hidden ${t.cardBg}`}>
         
 {vueActive === 'journee' && (() => {
-          const { gridLines, gridLabels } = generateGrid(limitesHeures, sonneries);
+const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
           return (
             <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
               <div className="p-4 pb-2 no-print shrink-0">
@@ -2439,10 +2408,10 @@ const renderEventContent = (arg) => {
                     </div>
 
                     <div className="flex-1 overflow-x-auto overflow-y-auto">
-                      <div className="min-w-[800px] flex flex-col min-h-full relative">
+<div className="min-w-[800px] flex flex-col min-h-full relative">
                         <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8`}>
-                          {gridLabels.map(lbl => (
-                            <div key={lbl.timeStr} className={`absolute text-[10px] ${lbl.isSonnerie ? `font-black text-black dark:text-white bg-black/10 dark:bg-white/10 px-1 rounded border-b-2 border-black dark:border-white z-10 top-1.5` : `font-medium text-gray-500 opacity-60 text-[8px] top-2.5`}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
+                          {gridLabelsDaily.map(lbl => (
+                            <div key={lbl.timeStr} className="absolute text-[12px] font-bold text-gray-700 dark:text-gray-200 top-1.5" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
                               {lbl.timeStr}
                             </div>
                           ))}
@@ -2451,7 +2420,7 @@ const renderEventContent = (arg) => {
                         <div className="flex-1 relative z-10">
                           <div className="absolute top-0 bottom-0 left-32 right-0 pointer-events-none z-0">
                             {gridLines.map(line => (
-                              <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
+                              <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
                             ))}
                           </div>
 
@@ -2466,8 +2435,29 @@ const renderEventContent = (arg) => {
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 ${t.cardBg} group-hover:bg-transparent transition-colors`}>
                                   <span className={`text-xs font-bold ${t.header} text-right leading-tight`}>{agent.nom}</span>
                                 </div>
-                                <div className="flex-1 relative my-1">
-                                  {eventsDuJour.map(evt => {
+<div className="flex-1 relative my-1 cursor-pointer group/timeline" onClick={(e) => {
+                                  if (e.target === e.currentTarget) {
+                                    // Calcul mathématique de l'heure selon la position de la souris
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const percent = (e.clientX - rect.left) / rect.width;
+                                    const clickedMins = Math.floor(limitesHeures.baseMins + (percent * limitesHeures.span));
+                                    
+                                    // Arrondi au quart d'heure précédent
+                                    const startMins = clickedMins - (clickedMins % 15);
+                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                    
+                                    setFormTypeEvent('affectation');
+                                    setFormTypeAbsence('absence');
+                                    setFormAbsenceDeduire(false);
+                                    setFormAgent(agent.id);
+                                    setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
+                                    setFormNote('');
+                                    // Ouvre le créneau pour 1h par défaut
+                                    setModalCreation({ isOpen: true, eventId: null, date: jourConsulte, start: formatTime(startMins), end: formatTime(startMins + 60) });
+                                  }
+                                }}>
+                                  {/* Feedback visuel discret au survol pour indiquer la zone cliquable */}
+                                  <div className="absolute inset-0 hidden group-hover/timeline:block bg-blue-500/5 z-0 rounded pointer-events-none border border-dashed border-blue-500/30"></div>                                  {eventsDuJour.map(evt => {
                                     const startD = new Date(evt.start); const endD = new Date(evt.end);
                                     const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
                                     const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
@@ -2483,24 +2473,6 @@ const renderEventContent = (arg) => {
                                           {isShort && <span className="text-[7px] opacity-90 truncate ml-1 shrink-0">{extractTimeStr(evt.start)}-{extractTimeStr(evt.end)}</span>}
                                         </div>
                                         {!isShort && <span className="text-[8px] opacity-80 truncate leading-none mt-0.5">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>}
-                                      </div>
-                                    );
-                                  })}
-                                  {absDuJour.map(abs => {
-                                    const startD = new Date(abs.start); const endD = new Date(abs.end);
-                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
-                                    const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                                    const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
-                                    const isAbs = abs.type === 'absence'; const isShort = (endMins - startMins) <= 20;
-                                    
-                                    return (
-                                      <div key={abs.id} className={`absolute top-0.5 bottom-0.5 rounded shadow-sm flex flex-col justify-center px-1 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-20 ${isAbs ? 'bg-red-500/20 border-red-500 text-red-600' : 'bg-orange-500/20 border-orange-500 text-orange-600'}`}
-                                        style={{ left: `${left}%`, width: `${width}%` }} title={`${isAbs ? 'ABSENCE' : 'RETARD'} - ${abs.motif}`}>
-                                        <div className="flex justify-between items-center w-full">
-                                          <span className="font-bold truncate text-[9px]">{isAbs ? '🚫 ABS' : '⏰ RET'}</span>
-                                          {isShort && <span className="text-[7px] opacity-90 truncate ml-1 shrink-0">{extractTimeStr(abs.start)}-{extractTimeStr(abs.end)}</span>}
-                                        </div>
-                                        {!isShort && <span className="text-[8px] opacity-80 truncate leading-none mt-0.5">{extractTimeStr(abs.start)} - {extractTimeStr(abs.end)}</span>}
                                       </div>
                                     );
                                   })}
