@@ -572,14 +572,12 @@ const layoutDayEvents = (dayEvents) => {
 
   return layouted;
 };
-
 // ============================================================================
 // GRILLES D'IMPRESSION
 // ============================================================================
-const PrintTimeGridView = ({ events, titre }) => {
+const PrintTimeGridView = ({ events, titre, sonneries }) => {
   const planningEvents = events.filter(e => !e.extendedProps?.isBesoin);
   const nomsJours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
-  const hours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
   const BASE_MINS = 460;
   const TOTAL_SPAN = 600;
 
@@ -592,14 +590,12 @@ const PrintTimeGridView = ({ events, titre }) => {
 
       <div className="flex flex-1 border border-black relative overflow-hidden bg-white">
         <div className="w-14 flex flex-col border-r border-black bg-gray-100 text-[10px] font-bold text-gray-600 shrink-0 relative">
-          {hours.map(h => {
-            const hMins = h * 60;
-            const topPercent = ((hMins - BASE_MINS) / TOTAL_SPAN) * 100;
+          {sonneries.map(s => {
+            const [h, m] = s.split(':').map(Number);
+            const topPercent = (((h * 60 + m) - BASE_MINS) / TOTAL_SPAN) * 100;
             if (topPercent < 0 || topPercent > 100) return null;
             return (
-              <div key={h} className="absolute w-full pr-2 text-right" style={{ top: `${topPercent}%`, transform: 'translateY(-50%)' }}>
-                {h}:00
-              </div>
+              <div key={s} className="absolute w-full pr-2 text-right" style={{ top: `${topPercent}%`, transform: 'translateY(-50%)' }}>{s}</div>
             );
           })}
         </div>
@@ -611,25 +607,19 @@ const PrintTimeGridView = ({ events, titre }) => {
 
             return (
               <div key={day} className="flex flex-col border-r border-black last:border-r-0 relative">
-                <div className="bg-gray-200 font-black text-center py-1 border-b border-black uppercase text-xs text-gray-800 shrink-0">
-                  {nomsJours[day - 1]}
-                </div>
-                
+                <div className="bg-gray-200 font-black text-center py-1 border-b border-black uppercase text-xs text-gray-800 shrink-0">{nomsJours[day - 1]}</div>
                 <div className="flex-1 relative bg-white">
-                  {hours.map(h => {
-                    const hMins = h * 60;
-                    const topPercent = ((hMins - BASE_MINS) / TOTAL_SPAN) * 100;
+                  {sonneries.map(s => {
+                    const [h, m] = s.split(':').map(Number);
+                    const topPercent = (((h * 60 + m) - BASE_MINS) / TOTAL_SPAN) * 100;
                     if (topPercent < 0 || topPercent > 100) return null;
-                    return (
-                      <div key={h} className="absolute w-full border-b border-gray-100 pointer-events-none" style={{ top: `${topPercent}%` }}></div>
-                    );
+                    return (<div key={s} className="absolute w-full border-b border-gray-200 pointer-events-none" style={{ top: `${topPercent}%` }}></div>);
                   })}
 
                   {layoutedEvents.map(item => {
                     const { evt, startMins, endMins, col, totalCols } = item;
                     const startD = new Date(evt.start);
                     const endD = new Date(evt.end);
-                    
                     const top = Math.max(0, ((startMins - BASE_MINS) / TOTAL_SPAN) * 100);
                     const height = Math.min(100 - top, ((endMins - startMins) / TOTAL_SPAN) * 100);
                     
@@ -641,27 +631,12 @@ const PrintTimeGridView = ({ events, titre }) => {
                     const leftPercent = col * widthPercent;
 
                     return (
-                      <div 
-                        key={evt.id} 
-                        className={`absolute rounded p-1 border overflow-hidden shadow-xs ${bgClass}`}
-                        style={{
-                          top: `${top}%`,
-                          height: `${Math.max(height, 4)}%`,
-                          left: `${leftPercent}%`,
-                          width: `${widthPercent}%`,
-                          borderLeftColor: couleur,
-                          borderLeftWidth: '4px',
-                          fontSize: '9px',
-                          lineHeight: '1.1',
-                          boxSizing: 'border-box'
-                        }}
+                      <div key={evt.id} className={`absolute rounded p-1 border overflow-hidden shadow-xs ${bgClass}`}
+                        style={{ top: `${top}%`, height: `${Math.max(height, 4)}%`, left: `${leftPercent}%`, width: `${widthPercent}%`, borderLeftColor: couleur, borderLeftWidth: '4px', fontSize: '9px', lineHeight: '1.1', boxSizing: 'border-box' }}
                       >
-                        <div className="font-black truncate text-[9px]" style={{ color: couleur }}>
-                          {isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? 'ABSENCE' : 'RETARD') : evt.extendedProps?.posteNom}
-                        </div>
+                        <div className="font-black truncate text-[9px]" style={{ color: couleur }}>{isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? 'ABSENCE' : 'RETARD') : evt.extendedProps?.posteNom}</div>
                         <div className="font-bold truncate text-[8px] text-gray-800">{evt.extendedProps?.agentName || evt.extendedProps?.agentNom}</div>
                         <div className="text-[7px] opacity-75 font-mono">{startD.getHours()}h{String(startD.getMinutes()).padStart(2,'0')}-{endD.getHours()}h{String(endD.getMinutes()).padStart(2,'0')}</div>
-                        {isAbs && <div className="italic text-[7px] text-gray-600 truncate">{evt.extendedProps?.motif}</div>}
                       </div>
                     );
                   })}
@@ -807,7 +782,30 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const [customWeeks, setCustomWeeks] = useState(() => JSON.parse(localStorage.getItem('edt-custom-weeks') || '{}'));
   const [exceptions, setExceptions] = useState(() => JSON.parse(localStorage.getItem('edt-exceptions') || '{}'));
-
+const [sonneries, setSonneries] = useState(() => {
+    const s = localStorage.getItem('edt-sonneries');
+    return s ? JSON.parse(s) : ['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40'];
+  });
+  const [sonneriesText, setSonneriesText] = useState(() => sonneries.join(', '));
+  
+  const handleSonneriesBlur = () => {
+    const arr = sonneriesText.split(',')
+      .map(s => s.trim().replace('h', ':'))
+      .filter(s => /^\d{1,2}:\d{2}$/.test(s))
+      .map(s => { let [h, m] = s.split(':'); return `${h.padStart(2,'0')}:${m.padStart(2,'0')}`; })
+      .sort();
+    if(arr.length === 0) arr.push('08:00'); // Failsafe
+    setSonneries(arr); setSonneriesText(arr.join(', '));
+    localStorage.setItem('edt-sonneries', JSON.stringify(arr));
+  };
+  
+  const renderSlotLabel = (arg) => {
+    const timeStr = `${String(arg.date.getHours()).padStart(2,'0')}:${String(arg.date.getMinutes()).padStart(2,'0')}`;
+    if (sonneries.includes(timeStr)) {
+      return { html: `<span class="font-bold opacity-80" style="font-size:11px;">${timeStr}</span>` };
+    }
+    return { html: '' };
+  };
   // Détermination de l'année scolaire de référence dynamique
   const getSchoolYearBase = () => {
      if (templateVersions.length > 0 && templateVersions[0].dateDebut) {
@@ -1589,12 +1587,21 @@ const renderEventContent = (arg) => {
     const timeStr = (tS && tE) ? `${tS.getHours()}h${String(tS.getMinutes()).padStart(2,'0')}-${tE.getHours()}h${String(tE.getMinutes()).padStart(2,'0')}` : '';
     
     const isLocked = vueActive === 'template' && currentTemplate.statut === 'valide';
-    
-    // Le secret de la lisibilité : on contrecarre le blanc forcé de FullCalendar
     const textColor = t.isDark ? '#e5e7eb' : '#111827';
+    
+    // Détection des événements ultra-courts
+    const durationMins = tS && tE ? (tE - tS) / 60000 : 60;
+    const isShort = durationMins <= 15;
 
     if (arg.event.extendedProps.isBesoin) {
       const isSous = arg.event.extendedProps.isSousEffectif;
+      if (isShort) {
+        return (
+          <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className="flex items-center w-full h-full overflow-hidden rounded text-[9px] shadow-sm relative group" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a', color: '#ffffff' }}>
+            <span className="px-1 truncate font-bold">🎯 {arg.event.extendedProps.posteNom} ({arg.event.extendedProps.minCount}/{arg.event.extendedProps.qte})</span>
+          </div>
+        );
+      }
       return (
         <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-red-400' : ''}`} style={{ color: textColor }}>
           <div className="px-1 py-0.5 font-bold flex justify-between items-center" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a', color: '#ffffff' }}>
@@ -1612,6 +1619,13 @@ const renderEventContent = (arg) => {
       const typeAbs = arg.event.extendedProps.typeAbsence;
       const isAbs = typeAbs === 'absence';
       const ded = arg.event.extendedProps.deduire;
+      if (isShort) {
+        return (
+          <div onClick={() => ouvrirEdition(arg.event)} className={`flex items-center w-full h-full overflow-hidden rounded text-[9px] font-bold shadow-md relative group cursor-pointer ${isAbs ? 'bg-red-500' : 'bg-orange-500'}`} style={{ color: '#ffffff' }}>
+            <span className="px-1 truncate">{isAbs ? '🚫 ABS' : '⏰ RET'} : {arg.event.extendedProps.agentNom}</span>
+          </div>
+        );
+      }
       return (
         <div onClick={() => ouvrirEdition(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] border border-black/10 shadow-md relative group cursor-pointer hover:ring-2 transition-all z-50 opacity-90 ${isAbs ? 'bg-red-500/20 border-red-500' : 'bg-orange-500/20 border-orange-500'}`} style={{ color: textColor }}>
           <div className={`px-1 py-0.5 font-bold flex justify-between items-center ${isAbs ? 'bg-red-500' : 'bg-orange-500'}`} style={{ color: '#ffffff' }}>
@@ -1626,23 +1640,33 @@ const renderEventContent = (arg) => {
       );
     }
     
-    // Opacité remontée à 40% (valeur hexa '66')
     const agentColor = arg.event.backgroundColor || '#3b82f6';
     const bgColorWithOpacity = agentColor + '66';
+    const headerColor = arg.event.extendedProps.posteCouleur || '#3b82f6';
+    const headerTextColor = getContrastYIQ(headerColor);
+
+    if (isShort) {
+      return (
+        <div onClick={() => !isLocked && ouvrirEdition(arg.event)} 
+             className={`flex items-center w-full h-full overflow-hidden rounded text-[9px] shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
+             style={{ backgroundColor: headerColor, color: headerTextColor, border: `1px solid ${agentColor}` }}>
+          <div className="flex-1 truncate px-1">
+            <strong>{arg.event.extendedProps.posteNom}</strong> <span className="opacity-80">({arg.event.extendedProps.agentNom})</span>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div onClick={() => !isLocked && ouvrirEdition(arg.event)} 
            className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] border border-black/10 shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
-           style={{ backgroundColor: bgColorWithOpacity, border: `1px solid ${agentColor}`, color: textColor }}
-      >
-        <div className="px-1 py-0.5 font-bold flex justify-between items-center" style={{ backgroundColor: arg.event.extendedProps.posteCouleur, color: '#ffffff' }}>
+           style={{ backgroundColor: bgColorWithOpacity, border: `1px solid ${agentColor}`, color: textColor }}>
+        <div className="px-1 py-0.5 font-bold flex justify-between items-center" style={{ backgroundColor: headerColor, color: headerTextColor }}>
           <span className="truncate">{arg.event.extendedProps.posteNom} <span className="text-[9px] font-normal opacity-90 ml-1">({timeStr})</span></span>
-          {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-red-500 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✖</button>}
+          {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print bg-black/20 hover:bg-red-500 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: headerTextColor }}>✖</button>}
         </div>
         <div className="p-1 flex flex-col flex-1 leading-tight">
-          <div className="flex justify-between items-start">
-            <span className="font-semibold truncate pr-1">{arg.event.extendedProps.agentNom}</span>
-          </div>
+          <div className="flex justify-between items-start"><span className="font-semibold truncate pr-1">{arg.event.extendedProps.agentNom}</span></div>
           {arg.event.extendedProps.note && <span className="text-[10px] opacity-80 truncate italic mt-1 bg-black/5 dark:bg-white/10 rounded px-1">{arg.event.extendedProps.note}</span>}
         </div>
       </div>
@@ -1825,93 +1849,121 @@ const renderEventContent = (arg) => {
       )}
 
       {/* MODALES PARAMETRES ET IMPRESSION */}
+{/* MODALES PARAMETRES ET IMPRESSION */}
       {modalParametres && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-5 flex justify-between items-center`}>
+          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh] border ${t.borderLight}`}>
+            <div className={`${t.headerBg} ${t.headerText} p-5 flex justify-between items-center shrink-0`}>
               <h3 className="font-bold text-xl">⚙️ Paramètres Généraux</h3>
               <button onClick={() => setModalParametres(false)} className="hover:opacity-50 font-bold text-xl transition-opacity">✖</button>
             </div>
             
             <div className={`p-6 overflow-y-auto flex-1 ${t.bgMain}`}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 
-                {/* COLONNE 1 : VACANCES */}
-                <div>
-                  <h4 className={`font-bold text-base ${t.header} mb-4`}>🏖️ Périodes de Vacances & Fériés</h4>
-                  <ul className="space-y-2 mb-6">
-                    {periodesFeriees.map(p => (
-                      <li key={p.id} className={`${t.cardBg} p-3 rounded-lg border ${t.borderLight} flex justify-between items-center text-sm shadow-sm`}>
-                        <div>
-                          <span className={`font-bold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{p.nom}</span> 
-                          <span className={`ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-white ${p.type === 'ferie' ? 'bg-green-600' : 'bg-blue-600'}`}>
-                            {p.type === 'ferie' ? 'Férié (Payé)' : 'Vacances (0h)'}
-                          </span>
-                          <br/><span className="text-gray-500 text-xs">({p.debut === p.fin ? p.debut : `Du ${p.debut} au ${p.fin}`})</span>
+                {/* COLONNE GAUCHE (7/12) : DATES & SONNERIES */}
+                <div className="lg:col-span-7 flex flex-col gap-6">
+                  
+                  {/* SONNERIES EN HAUT */}
+                  <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm`}>
+                    <h4 className={`font-bold text-lg ${t.header} mb-1`}>🔔 Horaires des Sonneries</h4>
+                    <p className="text-xs text-gray-500 mb-3">Personnalisez les heures affichées à gauche du planning (séparez par des virgules).</p>
+                    <textarea 
+                      value={sonneriesText} 
+                      onChange={(e) => setSonneriesText(e.target.value)}
+                      onBlur={handleSonneriesBlur}
+                      className={`w-full border ${t.borderLight} rounded-lg p-3 text-sm bg-transparent font-mono shadow-inner`}
+                      rows="2"
+                      placeholder="Ex: 08:00, 08:55, 10:05..."
+                    />
+                  </div>
+
+                  {/* GESTION DES VACANCES ET FÉRIÉS */}
+                  <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm flex-1 flex flex-col`}>
+                    <h4 className={`font-bold text-lg ${t.header} mb-4`}>🏖️ Périodes de Vacances & Fériés</h4>
+                    
+                    {/* FORMULAIRE D'AJOUT JUSTE EN DESSOUS */}
+                    <form onSubmit={ajouterPeriodeFeriee} className={`p-4 rounded-lg border ${t.borderLight} ${t.bgLight} mb-6`}>
+                      <h5 className="font-bold text-xs text-gray-500 uppercase mb-3">➕ Ajouter une nouvelle période</h5>
+                      <div className="space-y-3">
+                        <div className="flex gap-3">
+                          <input type="text" required placeholder="Nom (ex: Pont Ascension)" value={formPeriode.nom} onChange={e => setFormPeriode({...formPeriode, nom: e.target.value})} className="flex-[2] border rounded p-2 text-sm bg-transparent" />
+                          <select value={formPeriode.type} onChange={e => setFormPeriode({...formPeriode, type: e.target.value})} className="flex-1 border rounded p-2 text-sm bg-transparent">
+                            <option value="vacances">Vacances (0h)</option>
+                            <option value="ferie">Jour Férié / Pont</option>
+                          </select>
                         </div>
-                        <button onClick={() => supprimerPeriodeFeriee(p.id)} className="text-red-500 hover:bg-red-500/20 px-2 py-1 rounded transition-colors">✖</button>
-                      </li>
-                    ))}
-                  </ul>
-                  <form onSubmit={ajouterPeriodeFeriee} className={`${t.cardBg} p-4 rounded-lg border ${t.borderLight} shadow-inner`}>
-                    <h4 className="font-bold text-xs text-gray-500 uppercase mb-3">➕ Ajouter une période</h4>
-                    <div className="space-y-3">
-                      <input type="text" required placeholder="Nom (ex: Pont Ascension)" value={formPeriode.nom} onChange={e => setFormPeriode({...formPeriode, nom: e.target.value})} className="w-full border rounded p-2 text-sm bg-transparent" />
-                      <select value={formPeriode.type} onChange={e => setFormPeriode({...formPeriode, type: e.target.value})} className="w-full border rounded p-2 text-sm bg-transparent">
-                        <option value="vacances">Période de Vacances (Compteur bloqué à 0h)</option>
-                        <option value="ferie">Jour Férié / Pont (Valide les heures de l'agent)</option>
-                      </select>
-                      <div className="flex gap-3">
-                        <div className="flex-1"><label className="text-xs font-bold text-gray-500">Début</label><input type="date" required value={formPeriode.debut} onChange={e => setFormPeriode({...formPeriode, debut: e.target.value})} className="w-full border rounded p-2 text-sm bg-transparent" /></div>
-                        <div className="flex-1"><label className="text-xs font-bold text-gray-500">Fin (Optionnel)</label><input type="date" value={formPeriode.fin} onChange={e => setFormPeriode({...formPeriode, fin: e.target.value})} className="w-full border rounded p-2 text-sm bg-transparent" /></div>
+                        <div className="flex gap-3">
+                          <div className="flex-1"><label className="text-xs font-bold text-gray-500">Début</label><input type="date" required value={formPeriode.debut} onChange={e => setFormPeriode({...formPeriode, debut: e.target.value})} className="w-full border rounded p-2 text-sm bg-transparent" /></div>
+                          <div className="flex-1"><label className="text-xs font-bold text-gray-500">Fin (Optionnel)</label><input type="date" value={formPeriode.fin} onChange={e => setFormPeriode({...formPeriode, fin: e.target.value})} className="w-full border rounded p-2 text-sm bg-transparent" /></div>
+                          <div className="flex items-end"><button type="submit" className={`h-9 px-5 ${t.btnPrimary} rounded text-sm font-bold shadow`}>Ajouter</button></div>
+                        </div>
                       </div>
-                      <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2 text-sm font-bold shadow mt-2`}>Enregistrer la date</button>
-                    </div>
-                  </form>
+                    </form>
+
+                    {/* LISTE DES PÉRIODES RELÉGUÉE EN BAS */}
+                    <h5 className="font-bold text-xs text-gray-500 uppercase mb-2">Périodes enregistrées</h5>
+                    <ul className="space-y-2 overflow-y-auto pr-2 flex-1 max-h-[250px]">
+                      {periodesFeriees.length === 0 && <p className="text-sm italic text-gray-500 text-center py-4">Aucune période configurée.</p>}
+                      {periodesFeriees.map(p => (
+                        <li key={p.id} className={`${t.bgMain} p-3 rounded-lg border ${t.borderLight} flex justify-between items-center text-sm shadow-sm`}>
+                          <div>
+                            <span className={`font-bold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{p.nom}</span> 
+                            <span className={`ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-white ${p.type === 'ferie' ? 'bg-green-600' : 'bg-blue-600'}`}>
+                              {p.type === 'ferie' ? 'Férié (Payé)' : 'Vacances (0h)'}
+                            </span>
+                            <br/><span className="text-gray-500 text-xs">({p.debut === p.fin ? p.debut : `Du ${p.debut} au ${p.fin}`})</span>
+                          </div>
+                          <button onClick={() => supprimerPeriodeFeriee(p.id)} className="text-red-500 hover:bg-red-500/20 px-2 py-1 rounded transition-colors font-bold">✖</button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
 
-                {/* COLONNE 2 : THEMES */}
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <h4 className={`font-bold text-base ${t.header}`}>🎨 Thème visuel</h4>
-                    <button type="button" onClick={toggleDarkMode} className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${isDarkMode ? 'bg-gray-700 text-yellow-300 border border-gray-600' : 'bg-gray-200 text-gray-800 border border-gray-300'}`}>
-                      {isDarkMode ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
-                    </button>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 gap-3 mb-4">
-                    {Object.entries(THEMES).filter(([id]) => id !== 'personnalise').map(([id, theme]) => {
-                      const currentMode = isDarkMode ? theme.dark : theme.light;
-                      return (
-                        <button type="button" key={id} onClick={() => changeTheme(id)} className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all ${themeId === id ? `border-[${theme.fcPrimary}] shadow-md ${currentMode.cardBg}` : `border-transparent hover:border-black/5 dark:hover:border-white/5 ${t.cardBg}`}`}>
-                          <div className={`flex shrink-0 overflow-hidden rounded-full w-10 h-10 border border-black/10 dark:border-white/10 shadow-inner ${currentMode.cardBg}`}>
-                            <div className={`w-1/2 h-full ${currentMode.sidebar.split(' ')[0]}`}></div>
-                            <div className={`w-1/2 h-full ${theme.btnPrimary.split(' ')[0]}`}></div>
-                          </div>
-                          <span className={`text-sm font-bold text-left leading-tight ${t.header}`}>{theme.nom}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* THÈME PERSONNALISÉ */}
-                  <div className={`mt-4 pt-4 border-t ${t.borderLight}`}>
-                    <h5 className={`font-bold text-sm mb-3 ${t.header}`}>✨ Thème Personnalisé</h5>
-                    <div className="flex items-end gap-3">
-                      <label className={`flex flex-col text-[10px] font-bold uppercase ${t.textMenuMuted}`}>
-                        Dominante
-                        <input type="color" value={customColors.primary} onChange={(e) => updateCustomColor('primary', e.target.value)} className="w-10 h-10 mt-1 cursor-pointer border-0 rounded p-0 bg-transparent" />
-                      </label>
-                      <label className={`flex flex-col text-[10px] font-bold uppercase ${t.textMenuMuted}`}>
-                        Accent
-                        <input type="color" value={customColors.accent} onChange={(e) => updateCustomColor('accent', e.target.value)} className="w-10 h-10 mt-1 cursor-pointer border-0 rounded p-0 bg-transparent" />
-                      </label>
-                      <button type="button" onClick={() => changeTheme('personnalise')} className={`flex-1 px-3 py-2 text-xs font-bold rounded shadow transition-all ${themeId === 'personnalise' ? 'bg-blue-600 text-white' : `${t.bgLight} ${t.header} hover:opacity-80`}`}>
-                        {themeId === 'personnalise' ? '✅ Actif' : 'Activer'}
+                {/* COLONNE DROITE (5/12) : THEMES */}
+                <div className="lg:col-span-5 flex flex-col gap-6">
+                  <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm`}>
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className={`font-bold text-lg ${t.header}`}>🎨 Thème visuel</h4>
+                      <button type="button" onClick={toggleDarkMode} className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all ${isDarkMode ? 'bg-gray-700 text-yellow-300 border border-gray-600' : 'bg-white text-gray-800 border border-gray-300'}`}>
+                        {isDarkMode ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
                       </button>
                     </div>
-                  </div>
+                    
+                    <div className="grid grid-cols-1 gap-3 mb-6">
+                      {Object.entries(THEMES).filter(([id]) => id !== 'personnalise').map(([id, theme]) => {
+                        const currentMode = isDarkMode ? theme.dark : theme.light;
+                        return (
+                          <button type="button" key={id} onClick={() => changeTheme(id)} className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all ${themeId === id ? `border-[${theme.fcPrimary}] shadow-md ${currentMode.cardBg}` : `border-transparent hover:border-black/5 dark:hover:border-white/5 ${t.bgMain}`}`}>
+                            <div className={`flex shrink-0 overflow-hidden rounded-full w-10 h-10 border border-black/10 dark:border-white/10 shadow-inner ${currentMode.cardBg}`}>
+                              <div className={`w-1/2 h-full ${currentMode.sidebar.split(' ')[0]}`}></div>
+                              <div className={`w-1/2 h-full ${theme.btnPrimary.split(' ')[0]}`}></div>
+                            </div>
+                            <span className={`text-sm font-bold text-left leading-tight ${t.header}`}>{theme.nom}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
 
+                    {/* THÈME PERSONNALISÉ */}
+                    <div className={`pt-5 border-t ${t.borderLight}`}>
+                      <h5 className={`font-bold text-sm mb-3 ${t.header}`}>✨ Thème Personnalisé</h5>
+                      <div className="flex items-end gap-3">
+                        <label className={`flex flex-col text-[10px] font-bold uppercase ${t.textMenuMuted}`}>
+                          Dominante
+                          <input type="color" value={customColors.primary} onChange={(e) => updateCustomColor('primary', e.target.value)} className="w-12 h-10 mt-1 cursor-pointer border-0 rounded p-0 bg-transparent" />
+                        </label>
+                        <label className={`flex flex-col text-[10px] font-bold uppercase ${t.textMenuMuted}`}>
+                          Accent
+                          <input type="color" value={customColors.accent} onChange={(e) => updateCustomColor('accent', e.target.value)} className="w-12 h-10 mt-1 cursor-pointer border-0 rounded p-0 bg-transparent" />
+                        </label>
+                        <button type="button" onClick={() => changeTheme('personnalise')} className={`flex-1 px-3 h-10 text-xs font-bold rounded shadow transition-all ${themeId === 'personnalise' ? 'bg-blue-600 text-white' : `${t.bgLight} ${t.header} hover:opacity-80`}`}>
+                          {themeId === 'personnalise' ? '✅ Actif' : 'Activer'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
               </div>
@@ -2181,24 +2233,29 @@ const renderEventContent = (arg) => {
             
             <div className="flex-1 overflow-auto px-4 pb-4">
               <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} min-w-[800px] flex flex-col h-full`}>
-                {/* En-tête des heures */}
+{/* En-tête des heures */}
                 <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 rounded-t-xl`}>
-                  {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map(h => (
-                    <div key={h} className={`absolute text-[10px] font-bold ${t.header} top-2`} style={{ left: `${((h * 60 - 460) / 600) * 100}%`, transform: 'translateX(-50%)' }}>
-                      {h}h00
-                    </div>
-                  ))}
+                  {sonneries.map(s => {
+                    const [h, m] = s.split(':').map(Number);
+                    const topPercent = (((h * 60 + m) - 460) / 600) * 100;
+                    if (topPercent < 0 || topPercent > 100) return null;
+                    return (
+                      <div key={s} className={`absolute text-[10px] font-bold ${t.header} top-2`} style={{ left: `${topPercent}%`, transform: 'translateX(-50%)' }}>{s}</div>
+                    )
+                  })}
                 </div>
                 
                 {/* Grille des agents */}
                 <div className="flex-1 overflow-y-auto relative">
-                  {/* Lignes verticales de fond */}
-                  <div className="absolute top-0 bottom-0 left-32 right-0 pointer-events-none">
-                    {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map(h => (
-                      <div key={h} className={`absolute top-0 bottom-0 border-l ${t.borderLight} opacity-50`} style={{ left: `${((h * 60 - 460) / 600) * 100}%` }}></div>
-                    ))}
-                  </div>
-
+{/* Lignes verticales de fond */}
+                <div className="absolute top-0 bottom-0 left-32 right-0 pointer-events-none">
+                  {sonneries.map(s => {
+                    const [h, m] = s.split(':').map(Number);
+                    const topPercent = (((h * 60 + m) - 460) / 600) * 100;
+                    if (topPercent < 0 || topPercent > 100) return null;
+                    return (<div key={s} className={`absolute top-0 bottom-0 border-l ${t.borderLight} opacity-50`} style={{ left: `${topPercent}%` }}></div>)
+                  })}
+                </div>
                   {agents.map(agent => {
                     const mondayStr = getMondayStr(jourConsulte);
                     const allEvents = getEventsForWeek(mondayStr);
@@ -2309,7 +2366,9 @@ const renderEventContent = (arg) => {
                       allDaySlot={false}
                       slotMinTime="07:40:00"
                       slotMaxTime="17:40:00"
-                      slotDuration="00:15:00"
+                      slotDuration="00:05:00"
+                      slotLabelInterval="00:05:00"
+                      slotLabelContent={renderSlotLabel}
                       snapDuration="00:05:00"
                       hiddenDays={[0, 6]}
                       editable={currentTemplate.statut === 'brouillon'} 
@@ -2322,6 +2381,7 @@ const renderEventContent = (arg) => {
                       select={gererSelection}
                       eventChange={gererModificationEvenement}
                       eventContent={renderEventContent}
+                      sonneries={sonneries}
                     />
                   </div>
                 </div>
@@ -2628,6 +2688,9 @@ export default function App() {
 
         .fc-event-main { pointer-events: auto !important; }
         .fc-timegrid-event-harness { pointer-events: none !important; }
+        .fc-timegrid-slot { height: 20px !important; }
+        .fc-timegrid-slot-lane { border-bottom: 1px dotted rgba(128,128,128,0.15) !important; }
+        .fc-timegrid-slot-label { border-bottom: none !important; }
         /* NOUVEAU : On empêche FullCalendar de forcer un fond opaque */
         .fc-timegrid-event { background: transparent !important; border: none !important; box-shadow: none !important; }
 
