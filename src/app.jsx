@@ -2058,22 +2058,25 @@ const renderEventContent = (arg) => {
           </div>
         </div>
       )}
-
-      {/* PANNEAU LATÉRAL (Fixe) */}
+{/* PANNEAU LATÉRAL (Fixe) */}
       <div className={`w-80 ${t.sidebar} shadow-lg flex flex-col z-20 border-r ${t.borderLight} no-print shrink-0 transition-colors`}>
         <div className={`p-4 ${t.sidebarText} flex flex-col gap-3`}>
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold tracking-wider">Planning CPE</h1>
-<div className="flex gap-1 flex-wrap justify-end max-w-[140px]">
-              <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
-              <button onClick={() => document.getElementById('import-file').click()} className={`${t.sidebarIconBtn} px-2 py-1.5 rounded text-xs shadow border transition-colors`} title="Restaurer une sauvegarde">⬆️</button>
-              <button onClick={handleExport} className={`relative px-2 py-1.5 rounded text-xs shadow border transition-colors ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500 text-white' : t.sidebarIconBtn}`} title="Sauvegarder les données (Fichier JSON)">
-                ⬇️{needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
-              </button>
-              <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} px-2 py-1.5 rounded text-xs shadow border transition-colors`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
-              <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} px-2 py-1.5 rounded text-xs shadow border transition-colors`} title="Paramètres">⚙️</button>
-              <button onClick={() => setModalPrint(true)} className={`${t.sidebarIconBtn} px-3 py-1.5 rounded text-xs font-bold border transition-colors`}>🖨️</button>
-            </div>          </div>
+          </div>
+          
+          {/* Barre d'outils propre sur une seule ligne répartie */}
+          <div className="flex items-center justify-between bg-black/10 p-1.5 rounded-lg gap-1">
+            <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
+            <button onClick={() => document.getElementById('import-file').click()} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Restaurer une sauvegarde">⬆️</button>
+            <button onClick={handleExport} className={`relative p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500 text-white' : t.sidebarIconBtn}`} title="Sauvegarder les données (Fichier JSON)">
+              ⬇️{needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
+            </button>
+            <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
+            <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Paramètres">⚙️</button>
+            <button onClick={() => setModalPrint(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs font-bold border transition-colors flex-1 flex justify-center`} title="Imprimer">🖨️</button>
+            <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
+          </div>
           <div className="flex flex-col bg-black/10 rounded p-1 shadow-inner gap-1 mt-2">
             <button onClick={() => setVueActive('journee')} className={`text-sm py-1.5 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
             <button onClick={() => setVueActive('template')} className={`text-sm py-1.5 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
