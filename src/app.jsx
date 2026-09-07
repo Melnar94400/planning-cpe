@@ -573,13 +573,43 @@ const layoutDayEvents = (dayEvents) => {
   return layouted;
 };
 // ============================================================================
+// NOUVEAU : MOTEUR DE GRILLE (Anti-collision + Pointillés 15m / Pleins Sonneries)
+// ============================================================================
+const generateGrid = (limitesHeures, sonneries) => {
+  const gridLines = [];
+  const gridLabels = [];
+  for (let i = limitesHeures.baseMins; i <= limitesHeures.baseMins + limitesHeures.span; i += 5) {
+     const h = String(Math.floor(i/60)).padStart(2,'0');
+     const m = String(i%60).padStart(2,'0');
+     const timeStr = `${h}:${m}`;
+     const isSonnerie = sonneries.includes(timeStr);
+     const is15Min = i % 15 === 0;
+     
+     if (isSonnerie || is15Min) {
+         const topPercent = ((i - limitesHeures.baseMins) / limitesHeures.span) * 100;
+         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent });
+         
+         // Anti-collision: cache l'étiquette 15m si une sonnerie est à moins de 7 minutes
+         const tooCloseToSonnerie = !isSonnerie && sonneries.some(s => {
+             const [sh, sm] = s.split(':').map(Number);
+             return Math.abs((sh*60+sm) - i) < 7;
+         });
+         
+         if (!tooCloseToSonnerie) {
+             gridLabels.push({ timeStr, mins: i, isSonnerie, topPercent });
+         }
+     }
+  }
+  return { gridLines, gridLabels };
+};
+
+// ============================================================================
 // GRILLES D'IMPRESSION
 // ============================================================================
-const PrintTimeGridView = ({ events, titre, sonneries }) => {
+const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { baseMins: 460, span: 620 } }) => {
   const planningEvents = events.filter(e => !e.extendedProps?.isBesoin);
   const nomsJours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
-  const BASE_MINS = 460;
-  const TOTAL_SPAN = 600;
+  const { gridLines, gridLabels } = generateGrid(limitesHeures, sonneries);
 
   return (
     <div className="print-weekly-page flex flex-col bg-white p-2">
@@ -590,14 +620,11 @@ const PrintTimeGridView = ({ events, titre, sonneries }) => {
 
       <div className="flex flex-1 border border-black relative overflow-hidden bg-white">
         <div className="w-14 flex flex-col border-r border-black bg-gray-100 text-[10px] font-bold text-gray-600 shrink-0 relative">
-          {sonneries.map(s => {
-            const [h, m] = s.split(':').map(Number);
-            const topPercent = (((h * 60 + m) - BASE_MINS) / TOTAL_SPAN) * 100;
-            if (topPercent < 0 || topPercent > 100) return null;
-            return (
-              <div key={s} className="absolute w-full pr-2 text-right" style={{ top: `${topPercent}%`, transform: 'translateY(-50%)' }}>{s}</div>
-            );
-          })}
+          {gridLabels.map(lbl => (
+            <div key={lbl.timeStr} className="absolute w-full pr-2 text-right" style={{ top: `${lbl.topPercent}%`, transform: 'translateY(-50%)' }}>
+               <span className={lbl.isSonnerie ? 'text-black font-black bg-black/10 px-1 rounded border-b-2 border-black' : 'opacity-60 text-[8px]'}>{lbl.timeStr}</span>
+            </div>
+          ))}
         </div>
 
         <div className="flex-1 grid grid-cols-5 relative bg-white">
@@ -609,30 +636,27 @@ const PrintTimeGridView = ({ events, titre, sonneries }) => {
               <div key={day} className="flex flex-col border-r border-black last:border-r-0 relative">
                 <div className="bg-gray-200 font-black text-center py-1 border-b border-black uppercase text-xs text-gray-800 shrink-0">{nomsJours[day - 1]}</div>
                 <div className="flex-1 relative bg-white">
-                  {sonneries.map(s => {
-                    const [h, m] = s.split(':').map(Number);
-                    const topPercent = (((h * 60 + m) - BASE_MINS) / TOTAL_SPAN) * 100;
-                    if (topPercent < 0 || topPercent > 100) return null;
-                    return (<div key={s} className="absolute w-full border-b border-gray-200 pointer-events-none" style={{ top: `${topPercent}%` }}></div>);
-                  })}
+                  {gridLines.map(line => (
+                    <div key={line.timeStr} className="absolute w-full pointer-events-none z-0" 
+                      style={{ top: `${line.topPercent}%`, borderBottom: line.isSonnerie ? '2px solid rgba(0,0,0,0.5)' : '1px dashed rgba(0,0,0,0.2)' }}></div>
+                  ))}
 
                   {layoutedEvents.map(item => {
                     const { evt, startMins, endMins, col, totalCols } = item;
                     const startD = new Date(evt.start);
                     const endD = new Date(evt.end);
-                    const top = Math.max(0, ((startMins - BASE_MINS) / TOTAL_SPAN) * 100);
-                    const height = Math.min(100 - top, ((endMins - startMins) / TOTAL_SPAN) * 100);
+                    const top = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
+                    const height = Math.min(100 - top, ((endMins - startMins) / limitesHeures.span) * 100);
                     
                     const isAbs = evt.extendedProps?.isAbsence;
                     const couleur = isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? '#ef4444' : '#f59e0b') : (evt.borderColor || '#3b82f6');
                     const bgClass = isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? 'bg-red-50 text-red-900' : 'bg-orange-50 text-orange-900') : 'bg-blue-50 text-blue-900';
-
                     const widthPercent = 100 / totalCols;
                     const leftPercent = col * widthPercent;
 
                     return (
                       <div key={evt.id} className={`absolute rounded p-1 border overflow-hidden shadow-xs ${bgClass}`}
-                        style={{ top: `${top}%`, height: `${Math.max(height, 4)}%`, left: `${leftPercent}%`, width: `${widthPercent}%`, borderLeftColor: couleur, borderLeftWidth: '4px', fontSize: '9px', lineHeight: '1.1', boxSizing: 'border-box' }}
+                        style={{ top: `${top}%`, height: `${Math.max(height, 3)}%`, left: `${leftPercent}%`, width: `${widthPercent}%`, borderLeftColor: couleur, borderLeftWidth: '4px', fontSize: '9px', lineHeight: '1.1', boxSizing: 'border-box', zIndex: 10 }}
                       >
                         <div className="font-black truncate text-[9px]" style={{ color: couleur }}>{isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? 'ABSENCE' : 'RETARD') : evt.extendedProps?.posteNom}</div>
                         <div className="font-bold truncate text-[8px] text-gray-800">{evt.extendedProps?.agentName || evt.extendedProps?.agentNom}</div>
@@ -644,6 +668,99 @@ const PrintTimeGridView = ({ events, titre, sonneries }) => {
               </div>
             );
           })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absences, sonneries = [], limitesHeures = { baseMins: 460, span: 620 }, postes, getMondayStr }) => {
+  const mondayStr = getMondayStr(jourConsulte);
+  const allEvents = getEventsForWeek(mondayStr);
+  const extTime = (iso) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+  const { gridLines, gridLabels } = generateGrid(limitesHeures, sonneries);
+
+  return (
+    <div className="print-weekly-page flex flex-col bg-white p-2">
+      <div className="text-center mb-3 border-b border-black pb-2 shrink-0">
+        <h2 className="text-xl font-black uppercase tracking-wider text-gray-900">
+          Planning Journalier - {new Date(jourConsulte).toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'})}
+        </h2>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-3 justify-center shrink-0">
+        <span className="text-[10px] font-bold text-gray-500 self-center uppercase mr-2">Légende :</span>
+        {postes.map(p => (
+          <span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur), border: '1px solid rgba(0,0,0,0.2)' }}>{p.nom}</span>
+        ))}
+        <span className="px-2 py-1 rounded text-[10px] font-bold bg-red-100 text-red-800 border border-red-300">🚫 ABSENCE</span>
+        <span className="px-2 py-1 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-300">⏰ RETARD</span>
+      </div>
+
+      <div className="flex-1 border border-black relative bg-white flex flex-col overflow-hidden">
+        <div className="flex border-b border-black bg-gray-100 shrink-0 h-7 relative ml-28">
+           {gridLabels.map(lbl => (
+              <div key={lbl.timeStr} className={`absolute text-[9px] ${lbl.isSonnerie ? 'font-black text-black bg-black/10 px-1 rounded border-b-2 border-black z-10' : 'text-gray-500 opacity-60 text-[8px]'}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)', top: lbl.isSonnerie ? '2px' : '6px' }}>
+                 {lbl.timeStr}
+              </div>
+           ))}
+        </div>
+
+        <div className="flex-1 relative overflow-hidden">
+          <div className="absolute top-0 bottom-0 left-28 right-0 pointer-events-none z-0">
+            {gridLines.map(line => (
+               <div key={line.timeStr} className="absolute top-0 bottom-0" style={{ left: `${line.topPercent}%`, borderLeft: line.isSonnerie ? '2px solid rgba(0,0,0,0.4)' : '1px dashed rgba(0,0,0,0.15)' }}></div>
+            ))}
+          </div>
+
+          <div className="flex flex-col h-full w-full relative z-10">
+            {agents.map(agent => {
+              const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
+              const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(jourConsulte));
+              
+              return (
+                <div key={agent.id} className="flex border-b border-gray-300 min-h-[40px] relative">
+                  <div className="w-28 shrink-0 flex items-center justify-end p-2 border-r border-black bg-gray-50">
+                    <span className="text-[10px] font-black text-right">{agent.nom}</span>
+                  </div>
+                  
+                  <div className="flex-1 relative my-1">
+                    {eventsDuJour.map(evt => {
+                      const startD = new Date(evt.start);
+                      const endD = new Date(evt.end);
+                      const startMins = startD.getHours() * 60 + startD.getMinutes();
+                      const endMins = endD.getHours() * 60 + endD.getMinutes();
+                      const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
+                      const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
+                      const isShort = (endMins - startMins) <= 20;
+
+                      return (
+                        <div key={evt.id} className="absolute top-0 bottom-0 rounded shadow-sm flex flex-col justify-center px-1 overflow-hidden border border-black/20"
+                          style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evt.extendedProps?.posteCouleur || '#3b82f6', color: getContrastYIQ(evt.extendedProps?.posteCouleur || '#3b82f6') }}>
+                          <span className="font-bold text-[8px] truncate leading-tight">{evt.extendedProps?.posteNom}</span>
+                          {!isShort && <span className="text-[7px] opacity-90 truncate leading-tight">{extTime(evt.start)}-{extTime(evt.end)}</span>}
+                        </div>
+                      );
+                    })}
+                    {absDuJour.map(abs => {
+                      const startD = new Date(abs.start);
+                      const endD = new Date(abs.end);
+                      const startMins = startD.getHours() * 60 + startD.getMinutes();
+                      const endMins = endD.getHours() * 60 + endD.getMinutes();
+                      const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
+                      const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
+                      
+                      return (
+                        <div key={abs.id} className={`absolute top-0 bottom-0 rounded shadow-sm flex flex-col justify-center px-1 overflow-hidden border ${abs.type === 'absence' ? 'bg-red-100 border-red-500 text-red-800' : 'bg-orange-100 border-orange-500 text-orange-800'}`} style={{ left: `${left}%`, width: `${width}%` }}>
+                          <span className="font-bold text-[8px] truncate leading-tight">{abs.type === 'absence' ? 'ABSENCE' : 'RETARD'}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
     </div>
@@ -782,30 +899,60 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const [customWeeks, setCustomWeeks] = useState(() => JSON.parse(localStorage.getItem('edt-custom-weeks') || '{}'));
   const [exceptions, setExceptions] = useState(() => JSON.parse(localStorage.getItem('edt-exceptions') || '{}'));
-const [sonneries, setSonneries] = useState(() => {
+
+
+const [amplitude, setAmplitude] = useState(() => {
+    const s = localStorage.getItem('edt-amplitude');
+    return s ? JSON.parse(s) : { start: '07:30', end: '18:00' };
+  });
+
+  const [sonneries, setSonneries] = useState(() => {
     const s = localStorage.getItem('edt-sonneries');
     return s ? JSON.parse(s) : ['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40'];
   });
   const [sonneriesText, setSonneriesText] = useState(() => sonneries.join(', '));
   
+  useEffect(() => { localStorage.setItem('edt-amplitude', JSON.stringify(amplitude)); }, [amplitude]);
+
   const handleSonneriesBlur = () => {
     const arr = sonneriesText.split(',')
       .map(s => s.trim().replace('h', ':'))
       .filter(s => /^\d{1,2}:\d{2}$/.test(s))
       .map(s => { let [h, m] = s.split(':'); return `${h.padStart(2,'0')}:${m.padStart(2,'0')}`; })
       .sort();
-    if(arr.length === 0) arr.push('08:00'); // Failsafe
+    if(arr.length === 0) arr.push('08:00');
     setSonneries(arr); setSonneriesText(arr.join(', '));
     localStorage.setItem('edt-sonneries', JSON.stringify(arr));
   };
+
+  const limitesHeures = (() => {
+    const [hS, mS] = (amplitude.start || '07:30').split(':').map(Number);
+    const [hE, mE] = (amplitude.end || '18:00').split(':').map(Number);
+    const baseMins = hS * 60 + mS;
+    const maxMins = hE * 60 + mE;
+    const span = maxMins - baseMins;
+    const format = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}:00`;
+    return { minStr: format(baseMins), maxStr: format(maxMins), baseMins, span };
+  })();
   
   const renderSlotLabel = (arg) => {
-    const timeStr = `${String(arg.date.getHours()).padStart(2,'0')}:${String(arg.date.getMinutes()).padStart(2,'0')}`;
-    if (sonneries.includes(timeStr)) {
-      return { html: `<span class="font-bold opacity-80" style="font-size:11px;">${timeStr}</span>` };
+    const h = String(arg.date.getHours()).padStart(2,'0');
+    const m = String(arg.date.getMinutes()).padStart(2,'0');
+    const timeStr = `${h}:${m}`;
+    const mins = arg.date.getHours()*60 + arg.date.getMinutes();
+    
+    const isSonnerie = sonneries.includes(timeStr);
+    const is15Min = ['00', '15', '30', '45'].includes(m);
+
+    if (isSonnerie) {
+      return { html: `<div class="font-bold text-black dark:text-white text-[11px] bg-black/10 dark:bg-white/10 px-1 rounded mx-auto" style="border-bottom: 2px solid currentColor">${timeStr}</div>` };
+    } else if (is15Min) {
+       const tooClose = sonneries.some(s => { const [sh, sm] = s.split(':').map(Number); return Math.abs((sh*60+sm) - mins) < 7; });
+       if (!tooClose) return { html: `<div class="opacity-40 text-[9px]">${timeStr}</div>` };
     }
     return { html: '' };
   };
+  
   // Détermination de l'année scolaire de référence dynamique
   const getSchoolYearBase = () => {
      if (templateVersions.length > 0 && templateVersions[0].dateDebut) {
@@ -1589,16 +1736,18 @@ const renderEventContent = (arg) => {
     const isLocked = vueActive === 'template' && currentTemplate.statut === 'valide';
     const textColor = t.isDark ? '#e5e7eb' : '#111827';
     
-    // Détection des événements ultra-courts
     const durationMins = tS && tE ? (tE - tS) / 60000 : 60;
-    const isShort = durationMins <= 15;
+    const isShort = durationMins <= 20;
 
     if (arg.event.extendedProps.isBesoin) {
       const isSous = arg.event.extendedProps.isSousEffectif;
       if (isShort) {
         return (
           <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className="flex items-center w-full h-full overflow-hidden rounded text-[9px] shadow-sm relative group" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a', color: '#ffffff' }}>
-            <span className="px-1 truncate font-bold">🎯 {arg.event.extendedProps.posteNom} ({arg.event.extendedProps.minCount}/{arg.event.extendedProps.qte})</span>
+            <div className="flex-1 truncate px-1 flex justify-between items-center">
+              <span>🎯 {arg.event.extendedProps.posteNom} ({arg.event.extendedProps.minCount}/{arg.event.extendedProps.qte})</span>
+              <span className="opacity-90 font-mono text-[8px] ml-1 shrink-0">{timeStr}</span>
+            </div>
           </div>
         );
       }
@@ -1622,7 +1771,10 @@ const renderEventContent = (arg) => {
       if (isShort) {
         return (
           <div onClick={() => ouvrirEdition(arg.event)} className={`flex items-center w-full h-full overflow-hidden rounded text-[9px] font-bold shadow-md relative group cursor-pointer ${isAbs ? 'bg-red-500' : 'bg-orange-500'}`} style={{ color: '#ffffff' }}>
-            <span className="px-1 truncate">{isAbs ? '🚫 ABS' : '⏰ RET'} : {arg.event.extendedProps.agentNom}</span>
+            <div className="flex-1 truncate px-1 flex justify-between items-center">
+              <span>{isAbs ? '🚫 ABS' : '⏰ RET'} : {arg.event.extendedProps.agentNom}</span>
+              <span className="opacity-90 font-mono text-[8px] ml-1 shrink-0">{timeStr}</span>
+            </div>
           </div>
         );
       }
@@ -1650,8 +1802,9 @@ const renderEventContent = (arg) => {
         <div onClick={() => !isLocked && ouvrirEdition(arg.event)} 
              className={`flex items-center w-full h-full overflow-hidden rounded text-[9px] shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
              style={{ backgroundColor: headerColor, color: headerTextColor, border: `1px solid ${agentColor}` }}>
-          <div className="flex-1 truncate px-1">
-            <strong>{arg.event.extendedProps.posteNom}</strong> <span className="opacity-80">({arg.event.extendedProps.agentNom})</span>
+          <div className="flex-1 truncate px-1 flex justify-between items-center">
+            <span><strong>{arg.event.extendedProps.posteNom}</strong> <span className="opacity-80 hidden md:inline">({arg.event.extendedProps.agentNom})</span></span>
+            <span className="font-mono text-[8px] opacity-90 ml-1 shrink-0">{timeStr}</span>
           </div>
         </div>
       );
@@ -1775,8 +1928,22 @@ const renderEventContent = (arg) => {
   };
 
   return (
-    <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
-      
+<div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
+      <style>{`
+        /* Lignes 15 min : pointillés légers */
+        tr[data-time$=":00:00"] .fc-timegrid-slot-lane, 
+        tr[data-time$=":15:00"] .fc-timegrid-slot-lane, 
+        tr[data-time$=":30:00"] .fc-timegrid-slot-lane, 
+        tr[data-time$=":45:00"] .fc-timegrid-slot-lane { 
+            border-bottom: 1px dashed rgba(128,128,128,0.25) !important; 
+        }
+        /* Lignes Sonneries : pleines et opaques */
+        ${sonneries.map(s => {
+            const [h,m] = s.split(':');
+            return `tr[data-time^="${h}:${m}:"] .fc-timegrid-slot-lane { border-bottom: 2px solid rgba(0,0,0,0.5) !important; }
+                    .dark tr[data-time^="${h}:${m}:"] .fc-timegrid-slot-lane { border-bottom: 2px solid rgba(255,255,255,0.4) !important; }`;
+        }).join('\n')}
+      `}</style>      
       {/* MODALE NOUVELLE VERSION */}
       {modalNewVersion.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
@@ -1863,10 +2030,23 @@ const renderEventContent = (arg) => {
                 {/* COLONNE GAUCHE (7/12) : DATES & SONNERIES */}
                 <div className="lg:col-span-7 flex flex-col gap-6">
                   
-                  {/* SONNERIES EN HAUT */}
+{/* HORAIRES ET AMPLITUDE */}
                   <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm`}>
-                    <h4 className={`font-bold text-lg ${t.header} mb-1`}>🔔 Horaires des Sonneries</h4>
-                    <p className="text-xs text-gray-500 mb-3">Personnalisez les heures affichées à gauche du planning (séparez par des virgules).</p>
+                    <h4 className={`font-bold text-lg ${t.header} mb-4`}>🕒 Horaires & Amplitude</h4>
+                    
+                    <div className="flex gap-4 mb-4 pb-4 border-b border-black/10 dark:border-white/10">
+                      <div className="flex-1">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Début de journée</label>
+                        <input type="time" value={amplitude.start} onChange={e => setAmplitude({...amplitude, start: e.target.value})} className={`mt-1 w-full border ${t.borderLight} rounded-lg p-2 text-sm bg-transparent font-bold`} />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-xs font-bold text-gray-500 uppercase">Fin de journée</label>
+                        <input type="time" value={amplitude.end} onChange={e => setAmplitude({...amplitude, end: e.target.value})} className={`mt-1 w-full border ${t.borderLight} rounded-lg p-2 text-sm bg-transparent font-bold`} />
+                      </div>
+                    </div>
+
+                    <h5 className={`font-bold text-sm ${t.header} mb-1`}>🔔 Heures de Sonneries</h5>
+                    <p className="text-xs text-gray-500 mb-3">Séparez par des virgules. Elles apparaîtront en traits pleins.</p>
                     <textarea 
                       value={sonneriesText} 
                       onChange={(e) => setSonneriesText(e.target.value)}
@@ -1876,7 +2056,6 @@ const renderEventContent = (arg) => {
                       placeholder="Ex: 08:00, 08:55, 10:05..."
                     />
                   </div>
-
                   {/* GESTION DES VACANCES ET FÉRIÉS */}
                   <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm flex-1 flex flex-col`}>
                     <h4 className={`font-bold text-lg ${t.header} mb-4`}>🏖️ Périodes de Vacances & Fériés</h4>
@@ -2234,117 +2413,110 @@ const renderEventContent = (arg) => {
       {/* ZONE PRINCIPALE D'AFFICHAGE */}
       <div id="print-area" className={`flex-1 flex flex-col h-full overflow-hidden ${t.cardBg}`}>
         
-        {vueActive === 'journee' && (
-          <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
-            <div className="p-4 pb-2 no-print shrink-0">
-              <div className="flex justify-between items-center mb-2">
-                <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>
-                  ⏱️ Vue Quotidienne
-                </h2>
-                <div className="flex items-center gap-3">
-                  <button onClick={() => changeJourQuotidien(-1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>◀ Jour Précédent</button>
-                  <input type="date" value={jourConsulte} onChange={(e) => setJourConsulte(e.target.value)} className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold ${t.cardBg} ${t.header} outline-none shadow-sm`} />
-                  <button onClick={() => changeJourQuotidien(1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>Jour Suivant ▶</button>
+{vueActive === 'journee' && (() => {
+          const { gridLines, gridLabels } = generateGrid(limitesHeures, sonneries);
+          return (
+            <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
+              <div className="p-4 pb-2 no-print shrink-0">
+                <div className="flex justify-between items-center mb-2">
+                  <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>⏱️ Vue Quotidienne</h2>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => changeJourQuotidien(-1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>◀ Jour Précédent</button>
+                    <input type="date" value={jourConsulte} onChange={(e) => setJourConsulte(e.target.value)} className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold ${t.cardBg} ${t.header} outline-none shadow-sm`} />
+                    <button onClick={() => changeJourQuotidien(1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>Jour Suivant ▶</button>
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <div className="flex-1 overflow-auto px-4 pb-4">
-              <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} min-w-[800px] flex flex-col h-full`}>
-{/* En-tête des heures */}
-                <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 rounded-t-xl`}>
-                  {sonneries.map(s => {
-                    const [h, m] = s.split(':').map(Number);
-                    const topPercent = (((h * 60 + m) - 460) / 600) * 100;
-                    if (topPercent < 0 || topPercent > 100) return null;
-                    return (
-                      <div key={s} className={`absolute text-[10px] font-bold ${t.header} top-2`} style={{ left: `${topPercent}%`, transform: 'translateX(-50%)' }}>{s}</div>
-                    )
-                  })}
-                </div>
-                
-                {/* Grille des agents */}
-                <div className="flex-1 overflow-y-auto relative">
-{/* Lignes verticales de fond */}
-                <div className="absolute top-0 bottom-0 left-32 right-0 pointer-events-none">
-                  {sonneries.map(s => {
-                    const [h, m] = s.split(':').map(Number);
-                    const topPercent = (((h * 60 + m) - 460) / 600) * 100;
-                    if (topPercent < 0 || topPercent > 100) return null;
-                    return (<div key={s} className={`absolute top-0 bottom-0 border-l ${t.borderLight} opacity-50`} style={{ left: `${topPercent}%` }}></div>)
-                  })}
-                </div>
-                  {agents.map(agent => {
-                    const mondayStr = getMondayStr(jourConsulte);
-                    const allEvents = getEventsForWeek(mondayStr);
-                    const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
-                    const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(jourConsulte));
+              
+              <div className="flex-1 overflow-hidden px-4 pb-4">
+                {isPrinting ? (
+                  <PrintDailyView agents={agents} jourConsulte={jourConsulte} getEventsForWeek={getEventsForWeek} absences={absences} sonneries={sonneries} limitesHeures={limitesHeures} postes={postes} getMondayStr={getMondayStr} />
+                ) : (
+                  <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} h-full flex flex-col overflow-hidden`}>
+                    <div className={`flex flex-wrap gap-2 p-3 border-b ${t.borderLight} ${t.bgLight} justify-center shrink-0`}>
+                      <span className="text-xs font-bold text-gray-500 mr-2 self-center uppercase tracking-wider">Légende :</span>
+                      {postes.map(p => (<span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold shadow-sm" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>{p.nom}</span>))}
+                    </div>
 
-                    return (
-                      <div key={agent.id} className={`flex border-b ${t.borderLight} min-h-[60px] relative group hover:bg-black/5 transition-colors`}>
-                        {/* Colonne Agent */}
-                        <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 ${t.cardBg} group-hover:bg-transparent transition-colors`}>
-                          <span className={`text-xs font-bold ${t.header} text-right leading-tight`}>{agent.nom}</span>
+                    <div className="flex-1 overflow-x-auto overflow-y-auto">
+                      <div className="min-w-[800px] flex flex-col min-h-full relative">
+                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8`}>
+                          {gridLabels.map(lbl => (
+                            <div key={lbl.timeStr} className={`absolute text-[10px] ${lbl.isSonnerie ? `font-black text-black dark:text-white bg-black/10 dark:bg-white/10 px-1 rounded border-b-2 border-black dark:border-white z-10 top-1.5` : `font-medium text-gray-500 opacity-60 text-[8px] top-2.5`}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
+                              {lbl.timeStr}
+                            </div>
+                          ))}
                         </div>
                         
-                        {/* Ligne de temps */}
-                        <div className="flex-1 relative my-1">
-                          {eventsDuJour.map(evt => {
-                            const startD = new Date(evt.start);
-                            const endD = new Date(evt.end);
-                            const startMins = startD.getHours() * 60 + startD.getMinutes();
-                            const endMins = endD.getHours() * 60 + endD.getMinutes();
-                            const left = Math.max(0, ((startMins - 460) / 600) * 100);
-                            const width = Math.min(100 - left, ((endMins - startMins) / 600) * 100);
-                            
+                        <div className="flex-1 relative z-10">
+                          <div className="absolute top-0 bottom-0 left-32 right-0 pointer-events-none z-0">
+                            {gridLines.map(line => (
+                              <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
+                            ))}
+                          </div>
+
+                          {agents.map(agent => {
+                            const mondayStr = getMondayStr(jourConsulte);
+                            const allEvents = getEventsForWeek(mondayStr);
+                            const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
+                            const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(jourConsulte));
+
                             return (
-                              <div key={evt.id} className="absolute top-1 bottom-1 rounded shadow-sm text-[10px] flex flex-col justify-center px-1.5 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-10"
-                                style={{
-                                  left: `${left}%`, width: `${width}%`,
-                                  backgroundColor: evt.extendedProps?.posteCouleur || '#3b82f6', // CORRECTION : Force la couleur du poste
-                                  borderColor: 'rgba(0,0,0,0.1)',
-                                  color: 'white'
-                                }}
-                                onClick={() => ouvrirEdition(evt)}
-                                title={`${evt.extendedProps?.posteNom} (${extractTimeStr(evt.start)} - ${extractTimeStr(evt.end)})`}
-                              >
-                                <span className="font-bold truncate">{evt.extendedProps?.posteNom}</span>
-                                <span className="text-[8px] opacity-80 truncate">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
-                              </div>
-                            );
-                            })}
-                          
-                          {absDuJour.map(abs => {
-                            const startD = new Date(abs.start);
-                            const endD = new Date(abs.end);
-                            const startMins = startD.getHours() * 60 + startD.getMinutes();
-                            const endMins = endD.getHours() * 60 + endD.getMinutes();
-                            const left = Math.max(0, ((startMins - 460) / 600) * 100);
-                            const width = Math.min(100 - left, ((endMins - startMins) / 600) * 100);
-                            const isAbs = abs.type === 'absence';
-                            
-                            return (
-                              <div key={abs.id} className={`absolute top-1 bottom-1 rounded shadow-sm text-[10px] flex flex-col justify-center px-1.5 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-20 ${isAbs ? 'bg-red-500/20 border-red-500 text-red-500' : 'bg-orange-500/20 border-orange-500 text-orange-500'}`}
-                                style={{ left: `${left}%`, width: `${width}%` }}
-                                title={`${isAbs ? 'ABSENCE' : 'RETARD'} - ${abs.motif}`}
-                              >
-                                <span className="font-bold truncate">{isAbs ? '🚫 ABSENCE' : '⏰ RETARD'}</span>
+                              <div key={agent.id} className={`flex border-b ${t.borderLight} min-h-[50px] relative group hover:bg-black/5 transition-colors`}>
+                                <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 ${t.cardBg} group-hover:bg-transparent transition-colors`}>
+                                  <span className={`text-xs font-bold ${t.header} text-right leading-tight`}>{agent.nom}</span>
+                                </div>
+                                <div className="flex-1 relative my-1">
+                                  {eventsDuJour.map(evt => {
+                                    const startD = new Date(evt.start); const endD = new Date(evt.end);
+                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
+                                    const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
+                                    const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
+                                    const isShort = (endMins - startMins) <= 20;
+                                    
+                                    return (
+                                      <div key={evt.id} className="absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-10"
+                                        style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evt.extendedProps?.posteCouleur || '#3b82f6', borderColor: 'rgba(0,0,0,0.1)', color: getContrastYIQ(evt.extendedProps?.posteCouleur || '#3b82f6') }}
+                                        onClick={() => ouvrirEdition(evt)} title={`${evt.extendedProps?.posteNom} (${extractTimeStr(evt.start)} - ${extractTimeStr(evt.end)})`}>
+                                        <div className="flex justify-between items-center w-full">
+                                          <span className="font-bold truncate leading-tight">{evt.extendedProps?.posteNom}</span>
+                                          {isShort && <span className="text-[7px] opacity-90 truncate ml-1 shrink-0">{extractTimeStr(evt.start)}-{extractTimeStr(evt.end)}</span>}
+                                        </div>
+                                        {!isShort && <span className="text-[8px] opacity-80 truncate leading-none mt-0.5">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>}
+                                      </div>
+                                    );
+                                  })}
+                                  {absDuJour.map(abs => {
+                                    const startD = new Date(abs.start); const endD = new Date(abs.end);
+                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
+                                    const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
+                                    const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
+                                    const isAbs = abs.type === 'absence'; const isShort = (endMins - startMins) <= 20;
+                                    
+                                    return (
+                                      <div key={abs.id} className={`absolute top-0.5 bottom-0.5 rounded shadow-sm flex flex-col justify-center px-1 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-20 ${isAbs ? 'bg-red-500/20 border-red-500 text-red-600' : 'bg-orange-500/20 border-orange-500 text-orange-600'}`}
+                                        style={{ left: `${left}%`, width: `${width}%` }} title={`${isAbs ? 'ABSENCE' : 'RETARD'} - ${abs.motif}`}>
+                                        <div className="flex justify-between items-center w-full">
+                                          <span className="font-bold truncate text-[9px]">{isAbs ? '🚫 ABS' : '⏰ RET'}</span>
+                                          {isShort && <span className="text-[7px] opacity-90 truncate ml-1 shrink-0">{extractTimeStr(abs.start)}-{extractTimeStr(abs.end)}</span>}
+                                        </div>
+                                        {!isShort && <span className="text-[8px] opacity-80 truncate leading-none mt-0.5">{extractTimeStr(abs.start)} - {extractTimeStr(abs.end)}</span>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             );
                           })}
                         </div>
                       </div>
-                    );
-                  })}
-                  {agents.length === 0 && (
-                    <div className="p-8 text-center text-gray-500 italic">Aucun agent configuré.</div>
-                  )}
-                </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        )}
-
+          );
+        })()}
         {vueActive === 'template' && (
           <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
             <div className="p-4 pb-2 no-print shrink-0">
@@ -2367,10 +2539,10 @@ const renderEventContent = (arg) => {
             </div>
 
             <div className="flex-1 overflow-hidden px-4 pb-4">
-                {isPrinting ? (
-                <PrintTimeGridView events={displayEvents} sonneries={sonneries} titre={`Modèle : ${currentTemplate.nom} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
+{isPrinting ? (
+                <PrintTimeGridView events={displayEvents} sonneries={sonneries} limitesHeures={limitesHeures} titre={`Modèle : ${currentTemplate.nom} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
               ) : (
-                  <div className={`${t.cardBg} rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-[#3B82F6] border-dashed border-2' : t.borderLight}`}>
+                <div className={`${t.cardBg} rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-[#3B82F6] border-dashed border-2' : t.borderLight}`}>
                   <div className={`h-full transition-all duration-300 ${currentTemplate.statut === 'valide' ? 'pointer-events-none opacity-85 grayscale-[15%]' : ''}`}>
                     <FullCalendar
                       key={`cal-template-${activeTemplateId}-${currentTemplate.statut}-${isDarkMode}`}
@@ -2382,8 +2554,8 @@ const renderEventContent = (arg) => {
                       headerToolbar={false} 
                       dayHeaderFormat={{ weekday: 'long' }} 
                       allDaySlot={false}
-                      slotMinTime="07:40:00"
-                      slotMaxTime="17:40:00"
+                      slotMinTime={limitesHeures.minStr}
+                      slotMaxTime={limitesHeures.maxStr}
                       slotDuration="00:05:00"
                       slotLabelInterval="00:05:00"
                       slotLabelContent={renderSlotLabel}
@@ -2439,7 +2611,7 @@ const renderEventContent = (arg) => {
                 <PrintTimeGridView events={displayEvents} sonneries={sonneries} titre={`Semaine du ${currentViewMonday} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
               ) : (
               <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} h-full p-2`}>
-                  <FullCalendar
+              <FullCalendar
                     key={`cal-planning-${isDarkMode}`}
                     plugins={[timeGridPlugin, interactionPlugin]}
                     initialView="timeGridWeek"
@@ -2449,9 +2621,9 @@ const renderEventContent = (arg) => {
                     datesSet={(arg) => setCurrentViewMonday(getMondayStr(arg.start))}
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
                     allDaySlot={false}
-                    slotMinTime="07:40:00"
-                    slotMaxTime="17:40:00"
-                    slotDuration="00:15:00"
+                    slotMinTime={limitesHeures.minStr}
+                    slotMaxTime={limitesHeures.maxStr}
+                    slotDuration="00:05:00"
                     snapDuration="00:05:00"
                     hiddenDays={[0, 6]}
                     editable={true}
@@ -2711,7 +2883,17 @@ export default function App() {
         .fc-timegrid-slot-label { border-bottom: none !important; }
         /* NOUVEAU : On empêche FullCalendar de forcer un fond opaque */
         .fc-timegrid-event { background: transparent !important; border: none !important; box-shadow: none !important; }
-
+        .fc-event-resizer {
+          bottom: 0 !important;
+          height: 8px !important;
+          background: rgba(0,0,0,0.2) !important;
+          border-radius: 0 0 4px 4px;
+          opacity: 0;
+          transition: opacity 0.2s;
+          cursor: ns-resize !important;
+          z-index: 10 !important;
+        }
+        .fc-timegrid-event:hover .fc-event-resizer { opacity: 1; }
         @media screen {
           ${t.isDark ? `
             .fc, table { color: ${t.hexText} !important; }
