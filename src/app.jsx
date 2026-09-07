@@ -11,7 +11,16 @@ const hexToRgb = (hex) => {
   if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
   return `${parseInt(h.substring(0,2), 16) || 0}, ${parseInt(h.substring(2,4), 16) || 0}, ${parseInt(h.substring(4,6), 16) || 0}`;
 };
-
+const getContrastYIQ = (hexcolor) => {
+  if (!hexcolor) return '#ffffff';
+  let hex = hexcolor.replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  const r = parseInt(hex.substr(0, 2), 16) || 0;
+  const g = parseInt(hex.substr(2, 2), 16) || 0;
+  const b = parseInt(hex.substr(4, 2), 16) || 0;
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+  return (yiq >= 128) ? '#111827' : '#ffffff'; // Renvoie Noir si fond clair, Blanc si fond sombre
+};
 // ============================================================================
 // CONFIGURATION DES THÈMES VISUELS
 // ============================================================================
@@ -452,7 +461,7 @@ const SetupWizard = ({ onComplete, t }) => {
                   </div>
                 </div>
 
-                <div className={`${t.bgLight} p-4 rounded-xl border ${t.borderLight} grid grid-cols-12 gap-3 items-end`}>
+<div className={`${t.bgLight} p-4 rounded-xl border ${t.borderLight} grid grid-cols-12 gap-3 items-end`}>
                   <div className="col-span-4"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Nom</label><input type="text" value={formAgent.nom} onChange={e=>handleAgentChange('nom', e.target.value)} className="w-full p-2 text-sm rounded border bg-transparent" placeholder="Ex: Célia" /></div>
                   <div className="col-span-2"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Quot. (%)</label><input type="number" step="0.1" value={formAgent.quotite} onChange={e=>handleAgentChange('quotite', e.target.value)} className="w-full p-2 text-sm rounded border bg-transparent font-bold text-center" /></div>
                   <div className="col-span-3 flex items-center justify-center pb-2"><label className={`flex items-center gap-1 text-[10px] font-bold ${t.header} cursor-pointer bg-transparent px-2 py-1.5 border rounded shadow-sm`}><input type="checkbox" checked={formAgent.estEtudiant} onChange={e=>handleAgentChange('estEtudiant', e.target.checked)} className="w-3 h-3" />🎓 Étudiant</label></div>
@@ -465,7 +474,12 @@ const SetupWizard = ({ onComplete, t }) => {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {agents.map(a => <span key={a.id} className="text-sm text-white px-3 py-1 rounded-full flex items-center gap-2 shadow-sm" style={{backgroundColor: a.couleurFond}}>{a.nom} {a.estEtudiant && '🎓'} ({a.quotite}%) <button onClick={()=>setAgents(agents.filter(x=>x.id!==a.id))} className="text-white hover:text-red-200">✖</button></span>)}
+                  {agents.map(a => (
+                    <span key={a.id} className="text-sm font-bold px-3 py-1 rounded-full flex items-center gap-2 shadow-sm" style={{ backgroundColor: a.couleurFond, color: getContrastYIQ(a.couleurFond) }}>
+                      {a.nom} {a.estEtudiant && '🎓'} ({a.quotite}%) 
+                      <button onClick={()=>setAgents(agents.filter(x=>x.id!==a.id))} className="hover:opacity-60 transition-opacity">✖</button>
+                    </span>
+                  ))}
                 </div>
 
                 <div className="flex justify-between pt-4 mt-8 border-t border-black/10"><button onClick={() => setStep(2)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => { if(agents.length === 0 && !window.confirm("Aucun agent ajouté. Continuer ?")) return; setStep(4); }} className={`${t.btnPrimary} px-6 py-2 rounded-lg font-bold shadow`}>Suivant ➔</button></div>
@@ -485,7 +499,12 @@ const SetupWizard = ({ onComplete, t }) => {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {postes.map(p => <span key={p.id} className="text-sm text-white px-3 py-1 rounded-full flex items-center gap-2 shadow-sm" style={{backgroundColor: p.couleur}}>{p.nom} <button onClick={()=>setPostes(postes.filter(x=>x.id!==p.id))} className="text-white hover:text-red-200">✖</button></span>)}
+                {postes.map(p => (
+                  <span key={p.id} className="text-sm font-bold px-3 py-1 rounded-full flex items-center gap-2 shadow-sm" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>
+                    {p.nom} 
+                    <button onClick={()=>setPostes(postes.filter(x=>x.id!==p.id))} className="hover:opacity-60 transition-opacity">✖</button>
+                  </span>
+                ))}
               </div>
 
               <div className="flex justify-between pt-4 mt-8 border-t border-black/10">
