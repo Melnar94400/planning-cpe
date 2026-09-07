@@ -2456,47 +2456,117 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
                             }, 0);
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
 
-                            return (
+return (
                               <div key={agent.id} className={`flex border-b ${t.borderLight} min-h-[50px] relative group hover:bg-black/5 transition-colors`}>
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 ${t.cardBg} group-hover:bg-transparent transition-colors`}>
                                   <span className={`text-xs font-bold ${t.header} text-right leading-tight`}>{agent.nom}</span>
                                   <span className="text-[10px] font-mono text-gray-500 font-semibold">{heuresJourStr}</span>
                                 </div>
-                                <div className="flex-1 relative my-1" onClick={(e) => {
-                                  if (e.target === e.currentTarget) {
-                                    const rect = e.currentTarget.getBoundingClientRect();
-                                    const percent = (e.clientX - rect.left) / rect.width;
-                                    const clickedMins = Math.floor(limitesHeures.baseMins + (percent * limitesHeures.span));
-                                    const startMins = clickedMins - (clickedMins % 15);
+
+                                {/* Piste cliquable et glissable pour tracer un créneau */}
+                                <div className="flex-1 relative my-1 cursor-crosshair group/timeline select-none" onMouseDown={(e) => {
+                                  if (e.target !== e.currentTarget) return; // Uniquement sur le fond vide
+                                  const track = e.currentTarget;
+                                  const rect = track.getBoundingClientRect();
+                                  const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                                  const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
+                                  
+                                  let currentEndMins = Math.min(startMins + 60, limitesHeures.baseMins + limitesHeures.span);
+                                  let hasMoved = false;
+
+                                  // Rectangle visuel de prévisualisation (Ghost)
+                                  const ghostEl = document.createElement('div');
+                                  ghostEl.className = 'absolute top-0.5 bottom-0.5 rounded bg-blue-500/40 border border-blue-600 border-dashed z-30 pointer-events-none flex items-center justify-center text-[9px] font-bold text-blue-950 dark:text-blue-100 shadow-sm';
+                                  track.appendChild(ghostEl);
+
+                                  const updateGhost = (m1, m2) => {
+                                    const minM = Math.min(m1, m2);
+                                    const maxM = Math.max(m1, m2);
+                                    const l = Math.max(0, ((minM - limitesHeures.baseMins) / limitesHeures.span) * 100);
+                                    const w = Math.min(100 - l, ((maxM - minM) / limitesHeures.span) * 100);
+                                    ghostEl.style.left = `${l}%`;
+                                    ghostEl.style.width = `${w}%`;
                                     const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                    setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsenceDeduire(false);
-                                    setFormAgent(agent.id); setFormPoste(posteActif || postes[0]?.id); setFormNote('');
-                                    setModalCreation({ isOpen: true, eventId: null, date: jourConsulte, start: formatTime(startMins), end: formatTime(startMins + 60) });
-                                  }
+                                    ghostEl.textContent = `${formatTime(minM)} - ${formatTime(maxM)}`;
+                                  };
+
+                                  updateGhost(startMins, currentEndMins);
+
+                                  const onMouseMove = (moveEvent) => {
+                                    hasMoved = true;
+                                    const movePercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
+                                    currentEndMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
+                                    updateGhost(startMins, currentEndMins);
+                                  };
+
+                                  const onMouseUp = () => {
+                                    window.removeEventListener('mousemove', onMouseMove);
+                                    window.removeEventListener('mouseup', onMouseUp);
+                                    ghostEl.remove();
+
+                                    const finalStart = Math.min(startMins, currentEndMins);
+                                    const finalEnd = Math.max(startMins, currentEndMins);
+                                    
+                                    // Si simple clic, défaut 1h ; si glissement, utilise la durée tracée
+                                    const actualEnd = hasMoved ? finalEnd : (finalStart + 60);
+
+                                    if (actualEnd - finalStart >= 5) {
+                                      const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                      setFormTypeEvent('affectation');
+                                      setFormTypeAbsence('absence');
+                                      setFormAbsenceDeduire(false);
+                                      setFormAgent(agent.id);
+                                      setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
+                                      setFormNote('');
+                                      setModalCreation({
+                                        isOpen: true,
+                                        eventId: null,
+                                        date: jourConsulte,
+                                        start: formatTime(finalStart),
+                                        end: formatTime(actualEnd)
+                                      });
+                                    }
+                                  };
+
+                                  window.addEventListener('mousemove', onMouseMove);
+                                  window.addEventListener('mouseup', onMouseUp);
                                 }}>
                                   {eventsDuJour.map(evt => {
-                                    const startD = new Date(evt.start); const endD = new Date(evt.end);
-                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
+                                    const startD = new Date(evt.start); 
+                                    const endD = new Date(evt.end);
+                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); 
+                                    const endMins = endD.getHours() * 60 + endD.getMinutes();
                                     const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
                                     const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
+                                    const isShort = (endMins - startMins) <= 20;
+                                    
+                                    const posteCouleur = evt.extendedProps?.posteCouleur || '#3b82f6';
+                                    const textColor = getContrastYIQ(posteCouleur);
                                     
                                     return (
                                       <div key={evt.id} className="absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-10 group/item"
-                                        style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evt.extendedProps?.posteCouleur || '#3b82f6', borderColor: 'rgba(0,0,0,0.1)', color: getContrastYIQ(evt.extendedProps?.posteCouleur || '#3b82f6') }}
-                                        onClick={(e) => { e.stopPropagation(); ouvrirEdition(evt); }}>
+                                        style={{ left: `${left}%`, width: `${width}%`, backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', color: textColor }}
+                                        onClick={(e) => { e.stopPropagation(); ouvrirEdition(evt); }} 
+                                        title={`${evt.extendedProps?.posteNom} (${extractTimeStr(evt.start)} - ${extractTimeStr(evt.end)})`}>
                                         
-{/* Poignée gauche (Début) */}
-                                        <div className="absolute left-0 inset-y-0 w-3 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier l'heure de début"
+                                        {/* Libellés de la barre */}
+                                        <div className="flex justify-between items-center w-full pointer-events-none">
+                                          <span className="font-bold truncate leading-tight">{evt.extendedProps?.posteNom || 'Poste'}</span>
+                                          {isShort && <span className="text-[7px] opacity-90 truncate ml-1 shrink-0">{extractTimeStr(evt.start)}-{extractTimeStr(evt.end)}</span>}
+                                        </div>
+                                        {!isShort && <span className="text-[8px] opacity-85 truncate leading-none mt-0.5 pointer-events-none">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>}
+
+                                        {/* Poignée de redimensionnement gauche */}
+                                        <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier le début"
                                           onMouseDown={(e) => {
                                             e.stopPropagation();
-                                            const startX = e.clientX;
-                                            const trackWidth = e.currentTarget.parentElement.clientWidth;
-                                            const initialStartMins = startMins;
+                                            const track = e.currentTarget.closest('.flex-1.relative.my-1');
 
                                             const onMouseMove = (moveEvent) => {
-                                              const deltaX = moveEvent.clientX - startX;
-                                              const deltaMins = Math.round((deltaX / trackWidth) * limitesHeures.span / 5) * 5;
-                                              let newStart = initialStartMins + deltaMins;
+                                              const rect = track.getBoundingClientRect();
+                                              const offsetX = moveEvent.clientX - rect.left;
+                                              const percent = Math.max(0, Math.min(1, offsetX / rect.width));
+                                              let newStart = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5;
                                               newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5));
                                               
                                               const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
@@ -2510,23 +2580,17 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
                                             window.addEventListener('mouseup', onMouseUp);
                                           }}></div>
 
-                                        <div className="flex justify-between items-center w-full px-1 pointer-events-none">
-                                          <span className="font-bold truncate leading-tight">{evt.extendedProps?.posteNom}</span>
-                                          <span className="text-[7px] opacity-90">{extractTimeStr(evt.start)}-{extractTimeStr(evt.end)}</span>
-                                        </div>
-
-                                        {/* Poignée droite (Fin) */}
-                                        <div className="absolute right-0 inset-y-0 w-3 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier l'heure de fin"
+                                        {/* Poignée de redimensionnement droite */}
+                                        <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier la fin"
                                           onMouseDown={(e) => {
                                             e.stopPropagation();
-                                            const startX = e.clientX;
-                                            const trackWidth = e.currentTarget.parentElement.clientWidth;
-                                            const initialEndMins = endMins;
+                                            const track = e.currentTarget.closest('.flex-1.relative.my-1');
 
                                             const onMouseMove = (moveEvent) => {
-                                              const deltaX = moveEvent.clientX - startX;
-                                              const deltaMins = Math.round((deltaX / trackWidth) * limitesHeures.span / 5) * 5;
-                                              let newEnd = initialEndMins + deltaMins;
+                                              const rect = track.getBoundingClientRect();
+                                              const offsetX = moveEvent.clientX - rect.left;
+                                              const percent = Math.max(0, Math.min(1, offsetX / rect.width));
+                                              let newEnd = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5;
                                               newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span));
                                               
                                               const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
