@@ -5,8 +5,90 @@ import interactionPlugin from '@fullcalendar/interaction';
 
 const BASE_HEURES_PLEINES = 1607;
 
+// ============================================================================
+// CONFIGURATION DES THÈMES VISUELS
+// ============================================================================
+const THEMES = {
+  menthe_terracotta: {
+    nom: "Menthe & Terracotta",
+    sidebar: "bg-[#25443B]", 
+    headerBg: "bg-[#25443B]",
+    header: "text-[#25443B]",
+    textMenuMuted: "text-[#8CAE9E]",
+    bgMain: "bg-[#F4F7F6]",
+    bgLight: "bg-[#E8EFEA]",
+    borderLight: "border-[#D1E0DC]",
+    btnPrimary: "bg-[#CB7659] hover:bg-[#B3634B] text-white transition-colors",
+    textAccent: "text-[#CB7659]",
+    activeTab: "bg-white text-[#CB7659] font-bold shadow-sm",
+    fcPrimary: "#CB7659", fcPrimaryHover: "#B3634B", fcToday: "rgba(203, 118, 89, 0.08)"
+  },
+  sauge_poudre: {
+    nom: "Sauge & Poudré",
+    sidebar: "bg-[#5C6656]", 
+    headerBg: "bg-[#5C6656]",
+    header: "text-[#5C6656]",
+    textMenuMuted: "text-[#A9B3A4]",
+    bgMain: "bg-[#F9FAF9]",
+    bgLight: "bg-[#EDF0EB]",
+    borderLight: "border-[#DDE2DC]",
+    btnPrimary: "bg-[#D49A9A] hover:bg-[#BF8787] text-white transition-colors",
+    textAccent: "text-[#D49A9A]",
+    activeTab: "bg-white text-[#D49A9A] font-bold shadow-sm",
+    fcPrimary: "#D49A9A", fcPrimaryHover: "#BF8787", fcToday: "rgba(212, 154, 154, 0.08)"
+  },
+  lavande_moutarde: {
+    nom: "Myrtille & Moutarde",
+    sidebar: "bg-[#413C58]", 
+    headerBg: "bg-[#413C58]",
+    header: "text-[#413C58]",
+    textMenuMuted: "text-[#A39EBC]",
+    bgMain: "bg-[#F8F7FA]",
+    bgLight: "bg-[#ECEBF2]",
+    borderLight: "border-[#DEDCF0]",
+    btnPrimary: "bg-[#DDAA3D] hover:bg-[#C29431] text-white transition-colors", 
+    textAccent: "text-[#DDAA3D]",
+    activeTab: "bg-white text-[#DDAA3D] font-bold shadow-sm",
+    fcPrimary: "#DDAA3D", fcPrimaryHover: "#C29431", fcToday: "rgba(221, 170, 61, 0.08)"
+  },
+  classique: {
+    nom: "Bleu Classique",
+    sidebar: "bg-[#1E3A8A]", 
+    headerBg: "bg-[#1E3A8A]",
+    header: "text-[#1E3A8A]",
+    textMenuMuted: "text-[#93C5FD]", 
+    bgMain: "bg-[#EFF6FF]",
+    bgLight: "bg-[#DBEAFE]", 
+    borderLight: "border-[#BFDBFE]", 
+    btnPrimary: "bg-[#2563EB] hover:bg-[#1D4ED8] text-white transition-colors", 
+    textAccent: "text-[#1E40AF]", 
+    activeTab: "bg-white text-[#1E3A8A] font-bold shadow-sm",
+    fcPrimary: "#2563EB", fcPrimaryHover: "#1D4ED8", fcToday: "rgba(37, 99, 235, 0.08)"
+  }
+};
+
 // --- CALCULATRICE BETTY ---
 const calculerContratBetty = (quotite, estEtudiant) => {
+  // --- FORMATAGE ET PARSING DES HEURES ---
+const formatHeureMinutes = (decimal) => {
+  if (decimal === undefined || decimal === null || Number.isNaN(Number(decimal))) return "";
+  const arrondi = Math.round(Number(decimal) * 60) / 60; 
+  const absVal = Math.abs(arrondi);
+  let h = Math.floor(absVal);
+  let m = Math.round((absVal - h) * 60);
+  if (m === 60) { h += 1; m = 0; }
+  return `${arrondi < 0 ? "-" : ""}${h}h${m.toString().padStart(2, '0')}min`;
+};
+
+const parseHeureSaisie = (chaine) => {
+  if (chaine === undefined || chaine === null) return 0;
+  const clean = String(chaine).toLowerCase().replace('min', '').replace('h', ':').replace(',', '.').trim();
+  if (clean.includes(':')) {
+    const parts = clean.split(':');
+    return parseFloat(parts[0]) + (parseFloat(parts[1] || 0) / 60);
+  }
+  return parseFloat(clean) || 0;
+};
   const q = (parseFloat(String(quotite).replace(',', '.')) || 100) / 100;
   const baseLegale = BASE_HEURES_PLEINES - 14; 
   let hDecimale = baseLegale * q;
@@ -38,7 +120,8 @@ const exporterDonnees = () => {
     exceptions: localStorage.getItem('edt-exceptions'),
     absencesRetards: localStorage.getItem('edt-absences-retards'),
     setupDone: localStorage.getItem('edt-setup-done'),
-    dotation: localStorage.getItem('edt-dotation')
+    dotation: localStorage.getItem('edt-dotation'),
+    theme: localStorage.getItem('edt-theme')
   };
   
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -63,6 +146,7 @@ const executeImport = (file) => {
       if (data.exceptions) localStorage.setItem('edt-exceptions', data.exceptions);
       if (data.absencesRetards) localStorage.setItem('edt-absences-retards', data.absencesRetards);
       if (data.dotation !== undefined) localStorage.setItem('edt-dotation', data.dotation);
+      if (data.theme) localStorage.setItem('edt-theme', data.theme);
       localStorage.setItem('edt-setup-done', 'true');
       
       window.location.reload();
@@ -114,7 +198,7 @@ const getJoursFerie = (year) => {
 // ============================================================================
 // ASSISTANT DE PREMIÈRE CONFIGURATION (WIZARD)
 // ============================================================================
-const SetupWizard = ({ onComplete }) => {
+const SetupWizard = ({ onComplete, t }) => {
   const [step, setStep] = useState(1);
   const [periodes, setPeriodes] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -137,7 +221,7 @@ const SetupWizard = ({ onComplete }) => {
     setFormAgent(newAgent);
   };
 
-const autoGenerateDates = async () => {
+  const autoGenerateDates = async () => {
     setIsFetchingDates(true);
     const year1 = anneeScolaireDeBase; 
     const year2 = anneeScolaireDeBase + 1;
@@ -149,13 +233,8 @@ const autoGenerateDates = async () => {
       id: `ferie_${Date.now()}_${Math.random()}`, nom: f.nom, debut: f.date, fin: f.date, type: 'ferie'
     }));
 
-    // 1. AJOUT MANUEL DE L'ÉTÉ PRÉCÉDANT LA RENTRÉE (Pour bloquer août)
     nouvellesPeriodes.push({
-      id: `vac_pre_${Date.now()}`,
-      nom: "Vacances d'Été (Pré-rentrée)",
-      debut: `${year1}-07-01`,
-      fin: `${year1}-08-31`,
-      type: 'vacances'
+      id: `vac_pre_${Date.now()}`, nom: "Vacances d'Été (Pré-rentrée)", debut: `${year1}-07-01`, fin: `${year1}-08-31`, type: 'vacances'
     });
 
     try {
@@ -172,17 +251,12 @@ const autoGenerateDates = async () => {
            endD.setDate(endD.getDate() - 1);
            const pad = n => String(n).padStart(2, '0');
            return { 
-             id: `vac_${Date.now()}_${Math.random()}`, 
-             nom: r.description, 
-             debut: r.start_date.split('T')[0], 
-             fin: `${endD.getFullYear()}-${pad(endD.getMonth()+1)}-${pad(endD.getDate())}`, 
-             type: 'vacances'
+             id: `vac_${Date.now()}_${Math.random()}`, nom: r.description, debut: r.start_date.split('T')[0], fin: `${endD.getFullYear()}-${pad(endD.getMonth()+1)}-${pad(endD.getDate())}`, type: 'vacances'
            };
         });
 
       vacs = Array.from(new Map(vacs.map(item => [item.debut, item])).values());
 
-      // 2. FORCER LA FIN DES VACANCES D'ÉTÉ AU 31 AOÛT DE L'ANNÉE SUIVANTE
       vacs = vacs.map(v => {
         if (v.nom.toLowerCase().includes("été") && v.fin < `${year2}-08-31`) {
           return { ...v, fin: `${year2}-08-31` };
@@ -192,8 +266,7 @@ const autoGenerateDates = async () => {
 
       if (vacs.length === 0 && year1 === 2026) {
          const fallback = [
-           { nom: "Vacances de la Toussaint", debut: "2026-10-17", fin: "2026-11-01" },
-           { nom: "Vacances de Noël", debut: "2026-12-19", fin: "2027-01-03" },
+           { nom: "Vacances de la Toussaint", debut: "2026-10-17", fin: "2026-11-01" }, { nom: "Vacances de Noël", debut: "2026-12-19", fin: "2027-01-03" },
            { nom: "Vacances d'Hiver", debut: zone.includes("A") ? "2027-02-06" : (zone.includes("B") ? "2027-02-13" : "2027-02-20"), fin: zone.includes("A") ? "2027-02-21" : (zone.includes("B") ? "2027-02-28" : "2027-03-07") },
            { nom: "Vacances de Printemps", debut: zone.includes("A") ? "2027-04-10" : (zone.includes("B") ? "2027-04-17" : "2027-04-24"), fin: zone.includes("A") ? "2027-04-25" : (zone.includes("B") ? "2027-05-02" : "2027-05-09") },
            { nom: "Vacances d'Été", debut: "2027-07-07", fin: "2027-08-31" }
@@ -230,34 +303,34 @@ const autoGenerateDates = async () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center py-12 px-4">
-      <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl overflow-hidden">
-        <div className="bg-blue-900 p-6 text-white text-center">
+    <div className={`min-h-screen ${t.bgMain} flex flex-col items-center py-12 px-4`}>
+      <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl overflow-hidden border border-gray-100">
+        <div className={`${t.headerBg} p-6 text-white text-center`}>
           <h1 className="text-3xl font-black tracking-wider">EDT CPE</h1><p className="opacity-80 mt-1">Configuration Initiale ({step}/4)</p>
         </div>
         
         <div className="p-8">
           {step === 1 && (
             <div className="text-center space-y-6">
-              <h2 className="text-2xl font-bold text-gray-800">Bienvenue !</h2>
+              <h2 className={`text-2xl font-bold ${t.header}`}>Bienvenue !</h2>
               <p className="text-gray-600">Souhaitez-vous importer une sauvegarde existante ou paramétrer une nouvelle année scolaire ?</p>
               <div className="grid grid-cols-2 gap-4 mt-8">
                 <button onClick={() => document.getElementById('import-init').click()} className="p-6 border-2 border-dashed border-emerald-500 rounded-xl hover:bg-emerald-50 transition group"><div className="text-4xl mb-2 group-hover:scale-110 transition">⬆️</div><div className="font-bold text-emerald-700">Importer JSON</div></button>
                 <input type="file" id="import-init" accept=".json" onChange={(e) => { if(e.target.files[0]) executeImport(e.target.files[0]); }} className="hidden" />
-                <button onClick={() => setStep(2)} className="p-6 border-2 border-blue-500 rounded-xl bg-blue-50 hover:bg-blue-100 transition group"><div className="text-4xl mb-2 group-hover:scale-110 transition">✨</div><div className="font-bold text-blue-800">Nouvelle Année</div></button>
+                <button onClick={() => setStep(2)} className={`p-6 border-2 border-transparent ${t.bgLight} transition group hover:brightness-95 rounded-xl`}><div className="text-4xl mb-2 group-hover:scale-110 transition">✨</div><div className={`font-bold ${t.header}`}>Nouvelle Année</div></button>
               </div>
             </div>
           )}
 
           {step === 2 && (
             <div className="space-y-6 animate-in fade-in">
-              <h2 className="text-xl font-bold text-gray-800 border-b pb-2">1. Vacances & Jours Fériés</h2>
+              <h2 className={`text-xl font-bold ${t.header} border-b pb-2`}>1. Vacances & Jours Fériés</h2>
               <p className="text-sm text-gray-600">Générez automatiquement toutes les dates de fermeture en choisissant votre zone et l'année de rentrée.</p>
               
-              <div className="flex gap-4 p-4 bg-blue-50 border border-blue-200 rounded-xl items-end shadow-inner">
-                <div className="w-1/4"><label className="text-xs font-bold text-blue-900 block mb-1">Année Rentrée</label><input type="number" value={anneeScolaireDeBase} onChange={e=>setAnneeScolaireDeBase(Number(e.target.value))} className="w-full p-2 rounded border bg-white" /></div>
-                <div className="flex-1"><label className="text-xs font-bold text-blue-900 block mb-1">Zone Académique</label><select value={zone} onChange={e=>setZone(e.target.value)} className="w-full p-2 rounded border bg-white"><option value="Zone A">Zone A</option><option value="Zone B">Zone B</option><option value="Zone C">Zone C</option><option value="Corse">Corse</option></select></div>
-                <div><button onClick={autoGenerateDates} disabled={isFetchingDates} className="bg-blue-600 text-white px-4 py-2 rounded font-bold shadow hover:bg-blue-700 disabled:opacity-50">{isFetchingDates ? '⏳ Calcul...' : '⚡ Générer'}</button></div>
+              <div className={`flex gap-4 p-4 ${t.bgLight} border ${t.borderLight} rounded-xl items-end shadow-inner`}>
+                <div className="w-1/4"><label className={`text-xs font-bold ${t.header} block mb-1`}>Année Rentrée</label><input type="number" value={anneeScolaireDeBase} onChange={e=>setAnneeScolaireDeBase(Number(e.target.value))} className="w-full p-2 rounded border bg-white" /></div>
+                <div className="flex-1"><label className={`text-xs font-bold ${t.header} block mb-1`}>Zone Académique</label><select value={zone} onChange={e=>setZone(e.target.value)} className="w-full p-2 rounded border bg-white"><option value="Zone A">Zone A</option><option value="Zone B">Zone B</option><option value="Zone C">Zone C</option><option value="Corse">Corse</option></select></div>
+                <div><button onClick={autoGenerateDates} disabled={isFetchingDates} className={`${t.btnPrimary} px-4 py-2 rounded font-bold shadow disabled:opacity-50`}>{isFetchingDates ? '⏳ Calcul...' : '⚡ Générer'}</button></div>
               </div>
               
               <ul className="space-y-2 max-h-48 overflow-y-auto bg-gray-50 p-2 rounded border border-gray-300">
@@ -286,46 +359,70 @@ const autoGenerateDates = async () => {
                 <button onClick={() => { if(formPeriode.nom && formPeriode.debut) { setPeriodes([...periodes, {id: Date.now(), ...formPeriode}].sort((a,b) => a.debut.localeCompare(b.debut))); setFormPeriode({nom:'', debut:'', fin:'', type:'vacances'}); } }} className="bg-gray-800 text-white px-3 rounded font-bold hover:bg-gray-700">+</button>
               </div>
 
-              <div className="flex justify-between pt-4 mt-4 border-t"><button onClick={() => setStep(1)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => setStep(3)} className="bg-gray-800 text-white px-6 py-2 rounded-lg font-bold shadow">Suivant ➔</button></div>
+              <div className="flex justify-between pt-4 mt-4 border-t"><button onClick={() => setStep(1)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => setStep(3)} className={`${t.btnPrimary} px-6 py-2 rounded-lg font-bold shadow`}>Suivant ➔</button></div>
             </div>
           )}
 
           {step === 3 && (
             <div className="space-y-6 animate-in fade-in">
-              <h2 className="text-xl font-bold text-gray-800 border-b pb-2">2. Équipe AED & Dotation</h2>
+              <h2 className={`text-xl font-bold ${t.header} border-b pb-2`}>2. Équipe AED & Dotation</h2>
+              <p className="text-sm text-gray-600">Saisissez la dotation globale de votre établissement, puis ajoutez les agents.</p>
               
-              <div className="flex justify-between items-center bg-gray-50 p-4 rounded-xl shadow-sm border border-gray-200">
-                <span className="font-bold text-gray-700">Dotation de l'établissement (en ETP) :</span>
-                <input type="number" step="0.5" value={dotation} onChange={e => setDotation(parseFloat(e.target.value) || 0)} placeholder="Ex: 5.5" className="border border-gray-300 p-2 w-24 text-center rounded font-bold" />
+              <div className={`p-5 rounded-xl border-2 flex justify-between items-center transition-all ${dotation > 0 && agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation ? 'bg-red-50 border-red-400' : `${t.bgLight} ${t.borderLight} shadow-sm`}`}>
+                <div>
+                  <label className={`text-[10px] font-bold ${t.header} uppercase tracking-wider block mb-1`}>Dotation Globale (Budget)</label>
+                  <div className="flex items-center gap-2">
+                    <input type="number" step="0.5" value={dotation || ''} onChange={e => setDotation(parseFloat(e.target.value) || 0)} placeholder="Ex: 5.5" className={`border ${t.borderLight} p-2 w-24 text-center rounded-lg font-black text-2xl ${t.header} bg-white outline-none focus:ring-2 transition-all`} />
+                    <span className="font-bold text-gray-500">ETP</span>
+                  </div>
+                </div>
+                
+                <div className="text-right flex flex-col justify-center">
+                  <label className={`text-[10px] font-bold ${t.header} uppercase tracking-wider block mb-1`}>Budget Consommé</label>
+                  <div className="flex items-end justify-end gap-1">
+                    <span className={`text-4xl font-black leading-none ${agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation && dotation > 0 ? 'text-red-600' : (dotation > 0 && agents.reduce((sum,a)=>sum+(a.quotite/100),0) === dotation ? 'text-emerald-500' : t.textAccent)}`}>
+                      {agents.reduce((sum,a)=>sum+(a.quotite/100),0).toFixed(2)}
+                    </span>
+                    <span className="text-sm font-bold text-gray-500 mb-1">/ {dotation || '?'} ETP</span>
+                  </div>
+                  {dotation > 0 && (
+                    <span className={`text-xs font-bold mt-1 ${agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation 
+                        ? `⚠️ Dépassement : +${(agents.reduce((sum,a)=>sum+(a.quotite/100),0) - dotation).toFixed(2)} ETP` 
+                        : `✅ Reste à pourvoir : ${(dotation - agents.reduce((sum,a)=>sum+(a.quotite/100),0)).toFixed(2)} ETP`}
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 grid grid-cols-12 gap-3 items-end">
-                <div className="col-span-4"><label className="text-[10px] font-bold text-blue-900 uppercase">Nom</label><input type="text" value={formAgent.nom} onChange={e=>handleAgentChange('nom', e.target.value)} className="w-full p-2 text-sm rounded border" placeholder="Ex: Célia" /></div>
-                <div className="col-span-2"><label className="text-[10px] font-bold text-blue-900 uppercase">Quot. (%)</label><input type="number" step="0.1" value={formAgent.quotite} onChange={e=>handleAgentChange('quotite', e.target.value)} className="w-full p-2 text-sm rounded border font-bold text-center" /></div>
-                <div className="col-span-3 flex items-center justify-center pb-2"><label className="flex items-center gap-1 text-[10px] font-bold text-blue-900 cursor-pointer bg-white px-2 py-1.5 border rounded shadow-sm"><input type="checkbox" checked={formAgent.estEtudiant} onChange={e=>handleAgentChange('estEtudiant', e.target.checked)} className="w-3 h-3" />🎓 Étudiant</label></div>
-                <div className="col-span-3"><label className="text-[10px] font-bold text-blue-900 uppercase">Contrat</label><input type="number" step="0.01" value={formAgent.hContrat} onChange={e=>setFormAgent({...formAgent, hContrat: e.target.value})} className="w-full p-2 text-sm rounded border font-mono text-center bg-white" /></div>
+              <div className={`${t.bgLight} p-4 rounded-xl border ${t.borderLight} grid grid-cols-12 gap-3 items-end`}>
+                <div className="col-span-4"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Nom</label><input type="text" value={formAgent.nom} onChange={e=>handleAgentChange('nom', e.target.value)} className="w-full p-2 text-sm rounded border bg-white" placeholder="Ex: Célia" /></div>
+                <div className="col-span-2"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Quot. (%)</label><input type="number" step="0.1" value={formAgent.quotite} onChange={e=>handleAgentChange('quotite', e.target.value)} className="w-full p-2 text-sm rounded border bg-white font-bold text-center" /></div>
+                <div className="col-span-3 flex items-center justify-center pb-2"><label className={`flex items-center gap-1 text-[10px] font-bold ${t.header} cursor-pointer bg-white px-2 py-1.5 border rounded shadow-sm`}><input type="checkbox" checked={formAgent.estEtudiant} onChange={e=>handleAgentChange('estEtudiant', e.target.checked)} className="w-3 h-3" />🎓 Étudiant</label></div>
+                <div className="col-span-3"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Contrat</label><input type="number" step="0.01" value={formAgent.hContrat} onChange={e=>setFormAgent({...formAgent, hContrat: e.target.value})} className="w-full p-2 text-sm rounded border font-mono text-center bg-white" /></div>
                 
-                <div className="col-span-2"><label className="text-[10px] font-bold text-blue-900 uppercase">Coul.</label><input type="color" value={formAgent.couleurFond} onChange={e=>setFormAgent({...formAgent, couleurFond: e.target.value})} className="w-full h-9 rounded cursor-pointer p-0 border-0" /></div>
-                <div className="col-span-10 mt-1"><button type="button" onClick={() => { if(formAgent.nom) { setAgents([...agents, {id: Date.now(), nom: formAgent.nom, quotite: parseFloat(formAgent.quotite), estEtudiant: formAgent.estEtudiant, hContrat: parseFloat(formAgent.hContrat), couleurFond: formAgent.couleurFond}]); setFormAgent({...formAgent, nom: '', estEtudiant: false}); } }} className="w-full bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold shadow hover:bg-blue-700">Ajouter cet agent</button></div>
-              </div>
+                <div className="col-span-2"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Coul.</label><input type="color" value={formAgent.couleurFond} onChange={e=>setFormAgent({...formAgent, couleurFond: e.target.value})} className="w-full h-9 rounded cursor-pointer p-0 border-0" /></div>
+<div className="col-span-10 mt-1">
+  <button type="button" onClick={() => { if(formAgent.nom) { const hC = typeof formAgent.hContrat === 'string' ? parseHeureSaisie(formAgent.hContrat) : formAgent.hContrat; setAgents([...agents, {id: Date.now(), nom: formAgent.nom, quotite: parseFloat(formAgent.quotite), estEtudiant: formAgent.estEtudiant, hContrat: hC, couleurFond: formAgent.couleurFond}]); setFormAgent({...formAgent, nom: '', estEtudiant: false}); } }} className={`w-full ${t.btnPrimary} px-4 py-2 rounded text-sm font-bold shadow`}>Ajouter cet agent</button>
+</div>              </div>
 
               <div className="flex flex-wrap gap-2">
                 {agents.map(a => <span key={a.id} className="text-sm text-white px-3 py-1 rounded-full flex items-center gap-2 shadow-sm" style={{backgroundColor: a.couleurFond}}>{a.nom} {a.estEtudiant && '🎓'} ({a.quotite}%) <button onClick={()=>setAgents(agents.filter(x=>x.id!==a.id))} className="text-white hover:text-red-200">✖</button></span>)}
               </div>
 
-              <div className="flex justify-between pt-4 mt-8 border-t"><button onClick={() => setStep(2)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => { if(agents.length === 0 && !window.confirm("Aucun agent ajouté. Continuer ?")) return; setStep(4); }} className="bg-gray-800 text-white px-6 py-2 rounded-lg font-bold shadow">Suivant ➔</button></div>
+              <div className="flex justify-between pt-4 mt-8 border-t"><button onClick={() => setStep(2)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => { if(agents.length === 0 && !window.confirm("Aucun agent ajouté. Continuer ?")) return; setStep(4); }} className={`${t.btnPrimary} px-6 py-2 rounded-lg font-bold shadow`}>Suivant ➔</button></div>
             </div>
           )}
 
           {step === 4 && (
             <div className="space-y-6 animate-in fade-in">
-              <h2 className="text-xl font-bold text-gray-800 border-b pb-2">3. Postes / Lieux</h2>
+              <h2 className={`text-xl font-bold ${t.header} border-b pb-2`}>3. Postes / Lieux</h2>
               <p className="text-sm text-gray-600">Définissez les postes clés du planning de l'établissement.</p>
               
               <div className="flex gap-2">
                 <input type="text" placeholder="Nom du poste..." value={formPoste.nom} onChange={e=>setFormPoste({...formPoste, nom: e.target.value})} className="flex-1 border p-2 rounded text-sm bg-gray-50" />
                 <input type="color" value={formPoste.couleur} onChange={e=>setFormPoste({...formPoste, couleur: e.target.value})} className="w-10 h-10 rounded cursor-pointer p-0 border-0" />
-                <button onClick={() => { if(formPoste.nom) { setPostes([...postes, {id: Date.now(), nom: formPoste.nom, couleur: formPoste.couleur}]); setFormPoste({...formPoste, nom: ''}); } }} className="bg-blue-600 text-white px-4 rounded font-bold">+</button>
+                <button onClick={() => { if(formPoste.nom) { setPostes([...postes, {id: Date.now(), nom: formPoste.nom, couleur: formPoste.couleur}]); setFormPoste({...formPoste, nom: ''}); } }} className={`${t.btnPrimary} px-4 rounded font-bold`}>+</button>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -334,7 +431,7 @@ const autoGenerateDates = async () => {
 
               <div className="flex justify-between pt-4 mt-8 border-t">
                 <button onClick={() => setStep(3)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button>
-                <button onClick={finishSetup} className="bg-green-600 text-white px-8 py-3 rounded-lg font-black hover:bg-green-700 shadow-lg text-lg animate-pulse">Lancer l'Application 🚀</button>
+                <button onClick={finishSetup} className={`${t.btnPrimary} px-8 py-3 rounded-lg font-black shadow-lg text-lg animate-pulse`}>Lancer l'Application 🚀</button>
               </div>
             </div>
           )}
@@ -551,7 +648,7 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
                   if (!aDesEvenementsReels) {
                     if (infoPeriode) {
                       if (infoPeriode.type === 'ferie') hDefaut = gabarits[applicableTemplate?.id]?.[agent.id]?.[dayOfWeek] || 0;
-                      else hDefaut = 0; // Vacances
+                      else hDefaut = 0;
                     } else {
                       if (customWeeks[mondayStr]) hDefaut = 0; 
                       else if (!estWeekEnd) hDefaut = gabarits[applicableTemplate?.id]?.[agent.id]?.[dayOfWeek] || 0;
@@ -577,7 +674,7 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
                   
                   if (infoPeriode) {
                     if (infoPeriode.type === 'ferie') bgJour = "bg-green-200 text-green-900 font-bold";
-                    else bgJour = "bg-blue-100 text-blue-900"; // Vacances
+                    else bgJour = "bg-blue-100 text-blue-900"; 
                   }
 
                   if (absDuJour.length > 0) bgJour = "bg-red-200 text-red-900 font-bold";
@@ -620,9 +717,14 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
 // ============================================================================
 // COMPOSANT PRINCIPAL DE L'APPLICATION GESTION
 // ============================================================================
-const MainApp = () => {
+const MainApp = ({ t, themeId, changeTheme }) => {
   const [vueActive, setVueActive] = useState('template'); 
   const [agentConsulte, setAgentConsulte] = useState(null); 
+  const [jourConsulte, setJourConsulte] = useState(() => {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  });
 
   const [agents, setAgents] = useState(() => JSON.parse(localStorage.getItem('edt-agents') || '[]'));
   const [postes, setPostes] = useState(() => JSON.parse(localStorage.getItem('edt-postes') || '[]'));
@@ -747,7 +849,6 @@ const MainApp = () => {
     let isModified = false;
     let newPeriodes = [...periodesFeriees];
 
-    // 1. Rétrocompatibilité : Assurer que les anciennes dates ont bien un "type"
     newPeriodes = newPeriodes.map(p => {
       if (!p.type) {
         isModified = true;
@@ -756,7 +857,6 @@ const MainApp = () => {
       return p;
     });
 
-    // 2. Injection silencieuse de l'été de pré-rentrée s'il n'existe pas
     const hasSummerPre = newPeriodes.some(p => p.nom.includes("Pré-rentrée") || (p.debut <= `${baseYear}-08-15` && p.fin >= `${baseYear}-08-31`));
     if (!hasSummerPre) {
       newPeriodes.push({
@@ -769,7 +869,6 @@ const MainApp = () => {
       isModified = true;
     }
 
-    // 3. Rallonger les vacances d'été de fin d'année jusqu'au 31 août
     newPeriodes = newPeriodes.map(p => {
       if (p.nom.toLowerCase().includes("été") && p.debut >= `${baseYear+1}-06-01` && p.fin < `${baseYear+1}-08-31`) {
         isModified = true;
@@ -781,7 +880,7 @@ const MainApp = () => {
     if (isModified) {
       setPeriodesFeriees(newPeriodes.sort((a, b) => a.debut.localeCompare(b.debut)));
     }
-  }, [baseYear]); // S'exécute silencieusement au chargement de l'app
+  }, [baseYear]); 
   
   useEffect(() => {
     if (isInitialMount.current) {
@@ -829,16 +928,6 @@ const MainApp = () => {
     return `${arrondi < 0 ? "-" : ""}${h}h${m.toString().padStart(2, '0')}`;
   };
 
-  const parseHeureSaisie = (chaine) => {
-    if (!chaine) return 0;
-    const clean = chaine.replace('h', ':').replace(',', '.');
-    if (clean.includes(':')) {
-      const parts = clean.split(':');
-      return parseFloat(parts[0]) + (parseFloat(parts[1]) / 60);
-    }
-    return parseFloat(clean) || 0;
-  };
-
   const getMondayStr = (dInput) => {
     const d = new Date(dInput);
     const day = d.getDay() || 7;
@@ -881,7 +970,6 @@ const MainApp = () => {
 
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
 
-  // Fonction centrale pour évaluer la priorité Vacances / Férié sur un jour donné
   const getInfosPeriode = (date) => {
     const pad = n => String(n).padStart(2, '0');
     const str = `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
@@ -1015,12 +1103,10 @@ const MainApp = () => {
     return { isSousEffectif: minCount < Number(besoin.extendedProps.qte), minCount, missingAgents: Array.from(missingAgents) };
   };
 
-const getEventsForWeek = (mondayStr) => {
+  const getEventsForWeek = (mondayStr) => {
     if (!mondayStr) return [];
     if (customWeeks[mondayStr]) return customWeeks[mondayStr]; 
     const applicableTemplate = [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= mondayStr) || templateVersions[0];
-    
-    // On masque visuellement la semaine type UNIQUEMENT pendant les vacances
     return applicableTemplate.events.map(e => shiftEventToWeek(e, mondayStr)).filter(e => {
       const info = getInfosPeriode(new Date(e.start.split('T')[0]));
       return !info || info.type !== 'vacances';
@@ -1031,11 +1117,9 @@ const getEventsForWeek = (mondayStr) => {
   let currentRealEvents;
   let currentBesoins;
 
-if (vueActive === 'planning' && currentViewMonday) {
+  if ((vueActive === 'planning' || vueActive === 'journee') && currentViewMonday) {
     currentRealEvents = getEventsForWeek(currentViewMonday);
     const applicableTemplate = [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= currentViewMonday) || templateVersions[0];
-    
-    // Pareil pour les besoins : on ne les masque que pendant les vacances
     currentBesoins = applicableTemplate.besoins.map(b => shiftEventToWeek(b, currentViewMonday)).filter(b => {
       const info = getInfosPeriode(new Date(b.start.split('T')[0]));
       return !info || info.type !== 'vacances';
@@ -1132,14 +1216,15 @@ if (vueActive === 'planning' && currentViewMonday) {
       if (action === 'update_content') mod = mod.map(e => String(e.id) === cleanId ? { ...e, ...info } : e);
       if (action === 'delete') mod = mod.filter(e => String(e.id) !== cleanId);
       updateCurrentTemplate(mod, null);
-    } else if (vueActive === 'planning' && currentViewMonday) {
-      const currentWeek = customWeeks[currentViewMonday] ? [...customWeeks[currentViewMonday]] : getEventsForWeek(currentViewMonday);
+    } else if (vueActive === 'planning' || vueActive === 'journee') {
+      const monStr = getMondayStr(info.start);
+      const currentWeek = customWeeks[monStr] ? [...customWeeks[monStr]] : getEventsForWeek(monStr);
       let mod = currentWeek;
       if (action === 'add') mod.push(info);
-      if (action === 'update') mod = mod.map(e => (String(e.id) === String(info.id) || String(e.id) === String(info.id) + '_' + currentViewMonday) ? { ...e, start: info.start, end: info.end } : e);
-      if (action === 'update_content') mod = mod.map(e => (String(e.id) === String(info.id) || String(e.id) === String(info.id) + '_' + currentViewMonday) ? { ...e, ...info } : e);
-      if (action === 'delete') mod = mod.filter(e => String(e.id) !== String(info.id) && String(e.id) !== String(info.id) + '_' + currentViewMonday);
-      setCustomWeeks({ ...customWeeks, [currentViewMonday]: mod });
+      if (action === 'update') mod = mod.map(e => (String(e.id) === String(info.id) || String(e.id) === String(info.id) + '_' + monStr) ? { ...e, start: info.start, end: info.end } : e);
+      if (action === 'update_content') mod = mod.map(e => (String(e.id) === String(info.id) || String(e.id) === String(info.id) + '_' + monStr) ? { ...e, ...info } : e);
+      if (action === 'delete') mod = mod.filter(e => String(e.id) !== String(info.id) && String(e.id) !== String(info.id) + '_' + monStr);
+      setCustomWeeks({ ...customWeeks, [monStr]: mod });
     }
   };
 
@@ -1330,23 +1415,25 @@ if (vueActive === 'planning' && currentViewMonday) {
   };
 
   const ouvrirEdition = (evt) => {
-    const isAbs = evt.extendedProps.isAbsence;
-    let dateJour = evt.startStr;
-    if (dateJour.includes('T')) {
+    const isAbs = evt.extendedProps ? evt.extendedProps.isAbsence : false;
+    let dateJour = evt.startStr || evt.start;
+    if (dateJour && dateJour.includes('T')) {
       dateJour = dateJour.split('T')[0];
     }
+    const extProps = evt.extendedProps || {};
+
     setFormTypeEvent(isAbs ? 'absence' : 'affectation');
-    setFormTypeAbsence(evt.extendedProps.typeAbsence || 'absence');
-    setFormAbsenceDeduire(evt.extendedProps.deduire || false);
-    setFormAgent(evt.extendedProps.agentId || '');
-    setFormPoste(evt.extendedProps.posteId || postes.find(p => p.nom === evt.extendedProps.posteNom)?.id || '');
-    setFormNote(evt.extendedProps.motif || evt.extendedProps.note || '');
+    setFormTypeAbsence(extProps.typeAbsence || 'absence');
+    setFormAbsenceDeduire(extProps.deduire || false);
+    setFormAgent(extProps.agentId || '');
+    setFormPoste(extProps.posteId || postes.find(p => p.nom === extProps.posteNom)?.id || '');
+    setFormNote(extProps.motif || extProps.note || '');
     setModalCreation({ 
       isOpen: true, 
       eventId: evt.id, 
       date: dateJour,
-      start: extractTimeStr(evt.startStr), 
-      end: extractTimeStr(evt.endStr) 
+      start: extractTimeStr(evt.startStr || evt.start), 
+      end: extractTimeStr(evt.endStr || evt.end) 
     });
   };
 
@@ -1455,21 +1542,21 @@ if (vueActive === 'planning' && currentViewMonday) {
     setModalAgent(newAgent);
   };
 
-  const validerAgentModal = (e) => {
+const validerAgentModal = (e) => {
     e.preventDefault();
     if (!modalAgent.nom.trim()) return alert('Obligatoire.');
     const q = parseFloat(String(modalAgent.quotite).replace(',', '.')) || 100;
+    const hC = typeof modalAgent.hContrat === 'string' ? parseHeureSaisie(modalAgent.hContrat) : modalAgent.hContrat;
     
     if (modalAgent.id) {
-      setAgents(agents.map(a => a.id === modalAgent.id ? { ...a, nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: modalAgent.hContrat, couleurFond: modalAgent.couleurFond } : a));
+      setAgents(agents.map(a => a.id === modalAgent.id ? { ...a, nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond } : a));
       updateCurrentTemplate(currentTemplate.events.map(evt => evt.extendedProps?.agentId === modalAgent.id ? { ...evt, extendedProps: { ...evt.extendedProps, agentNom: modalAgent.nom }, backgroundColor: modalAgent.couleurFond, borderColor: modalAgent.couleurFond } : evt), null);
     } else {
-      setAgents([...agents, { id: Date.now(), nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: modalAgent.hContrat, couleurFond: modalAgent.couleurFond }]);
+      setAgents([...agents, { id: Date.now(), nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond }]);
     }
     setModalAgent({ ...modalAgent, isOpen: false });
   };
-
-  const supprimerAgent = (id, n, e) => { e.stopPropagation(); if(confirm(`Supprimer l'agent ${n} ?`)) { setAgents(agents.filter(a => a.id !== id)); updateCurrentTemplate(currentTemplate.events.filter(e => e.extendedProps?.agentId !== id), null); if (agentActif === id) setAgentActif(null); } };
+    const supprimerAgent = (id, n, e) => { e.stopPropagation(); if(confirm(`Supprimer l'agent ${n} ?`)) { setAgents(agents.filter(a => a.id !== id)); updateCurrentTemplate(currentTemplate.events.filter(e => e.extendedProps?.agentId !== id), null); if (agentActif === id) setAgentActif(null); } };
   
   const validerNouveauPoste = (e) => {
     e.preventDefault();
@@ -1518,6 +1605,13 @@ if (vueActive === 'planning' && currentViewMonday) {
   };
   const supprimerPeriodeFeriee = (id) => setPeriodesFeriees(periodesFeriees.filter(p => p.id !== id));
 
+  const changeJourQuotidien = (jours) => {
+    const d = new Date(jourConsulte);
+    d.setDate(d.getDate() + jours);
+    const pad = n => String(n).padStart(2, '0');
+    setJourConsulte(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`);
+  };
+
   const BandeauAlerte = () => {
     if (isPrinting || alertesSousEffectif.length === 0) return null;
     return (
@@ -1541,9 +1635,18 @@ if (vueActive === 'planning' && currentViewMonday) {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-gray-100 font-sans overflow-hidden">
+    <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
       
       <style>{`
+        :root {
+          --fc-button-bg-color: ${t.fcPrimary};
+          --fc-button-border-color: ${t.fcPrimary};
+          --fc-button-hover-bg-color: ${t.fcPrimaryHover};
+          --fc-button-hover-border-color: ${t.fcPrimaryHover};
+          --fc-button-active-bg-color: ${t.fcPrimaryHover};
+          --fc-button-active-border-color: ${t.fcPrimaryHover};
+          --fc-today-bg-color: ${t.fcToday};
+        }
         .fc-event-main { pointer-events: auto !important; }
         .fc-timegrid-event-harness { pointer-events: none !important; }
         
@@ -1563,7 +1666,7 @@ if (vueActive === 'planning' && currentViewMonday) {
       {modalNewVersion.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="bg-blue-900 text-white p-4"><h3 className="font-bold text-lg">➕ Créer une évolution</h3></div>
+            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">➕ Créer une évolution</h3></div>
             <form onSubmit={validerCreationVersionModal}>
               <div className="p-5 space-y-4">
                 <div>
@@ -1577,7 +1680,7 @@ if (vueActive === 'planning' && currentViewMonday) {
               </div>
               <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
                 <button type="button" onClick={() => setModalNewVersion({...modalNewVersion, isOpen: false})} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded font-medium">Annuler</button>
-                <button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded font-medium">Créer</button>
+                <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>Créer</button>
               </div>
             </form>
           </div>
@@ -1588,7 +1691,7 @@ if (vueActive === 'planning' && currentViewMonday) {
       {modalNewPoste.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="bg-blue-900 text-white p-4"><h3 className="font-bold text-lg">➕ Ajouter un poste</h3></div>
+            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">➕ Ajouter un poste</h3></div>
             <form onSubmit={validerNouveauPoste}>
               <div className="p-5 space-y-4">
                 <div>
@@ -1598,7 +1701,7 @@ if (vueActive === 'planning' && currentViewMonday) {
               </div>
               <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
                 <button type="button" onClick={() => setModalNewPoste({isOpen: false, nom: ''})} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded font-medium">Annuler</button>
-                <button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded font-medium">Ajouter</button>
+                <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>Ajouter</button>
               </div>
             </form>
           </div>
@@ -1609,7 +1712,7 @@ if (vueActive === 'planning' && currentViewMonday) {
       {modalException.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="bg-blue-900 text-white p-4"><h3 className="font-bold text-lg">Modifier le jour ({modalException.dateStr})</h3></div>
+            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">Modifier le jour ({modalException.dateStr})</h3></div>
             <form onSubmit={validerExceptionJourModal}>
               <div className="p-5 space-y-4">
                 <div>
@@ -1623,7 +1726,7 @@ if (vueActive === 'planning' && currentViewMonday) {
               </div>
               <div className="p-4 bg-gray-50 border-t flex justify-end gap-3">
                 <button type="button" onClick={() => setModalException({isOpen: false, agentId: null, dateStr: null, h: '0h00', note: ''})} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded font-medium">Annuler</button>
-                <button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded font-medium">Enregistrer</button>
+                <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>Enregistrer</button>
               </div>
             </form>
           </div>
@@ -1634,9 +1737,13 @@ if (vueActive === 'planning' && currentViewMonday) {
       {modalParametres && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="bg-gray-800 text-white p-4 flex justify-between items-center"><h3 className="font-bold text-lg">⚙️ Vacances et Jours Fériés</h3><button onClick={() => setModalParametres(false)} className="text-white hover:text-red-400 font-bold">✖</button></div>
+            <div className="bg-gray-800 text-white p-4 flex justify-between items-center">
+              <h3 className="font-bold text-lg">⚙️ Paramètres Généraux</h3>
+              <button onClick={() => setModalParametres(false)} className="text-white hover:text-red-400 font-bold">✖</button>
+            </div>
             <div className="p-4 overflow-y-auto flex-1 bg-gray-50">
-              <p className="text-sm text-gray-600 mb-4">Ces dates annulent automatiquement les heures dues par les agents dans le "Bilan Équipe" annuel.</p>
+              
+              <h4 className="font-bold text-sm text-gray-700 mb-3">🏖️ Périodes de Vacances & Fériés</h4>
               <ul className="space-y-2 mb-6">
                 {periodesFeriees.map(p => (
                   <li key={p.id} className="bg-white p-2 rounded border border-gray-200 flex justify-between items-center text-sm shadow-sm">
@@ -1652,7 +1759,7 @@ if (vueActive === 'planning' && currentViewMonday) {
                 ))}
               </ul>
               <form onSubmit={ajouterPeriodeFeriee} className="bg-white p-4 rounded border border-gray-300 shadow-inner">
-                <h4 className="font-bold text-sm text-gray-700 mb-3">➕ Ajouter une période manuellement</h4>
+                <h4 className="font-bold text-xs text-gray-500 uppercase mb-3">➕ Ajouter une période</h4>
                 <div className="space-y-3">
                   <input type="text" required placeholder="Nom (ex: Pont Ascension)" value={formPeriode.nom} onChange={e => setFormPeriode({...formPeriode, nom: e.target.value})} className="w-full border rounded p-2 text-sm" />
                   <select value={formPeriode.type} onChange={e => setFormPeriode({...formPeriode, type: e.target.value})} className="w-full border rounded p-2 text-sm bg-white">
@@ -1666,6 +1773,22 @@ if (vueActive === 'planning' && currentViewMonday) {
                   <button type="submit" className="w-full bg-gray-800 text-white rounded p-2 text-sm font-bold shadow hover:bg-gray-700 mt-2">Enregistrer la date</button>
                 </div>
               </form>
+
+              <div className="mt-8 border-t border-gray-300 pt-4">
+                <h4 className="font-bold text-sm text-gray-700 mb-3">🎨 Thème visuel</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(THEMES).map(([id, theme]) => (
+                    <button type="button" key={id} onClick={() => changeTheme(id)} className={`p-2 rounded-xl border-2 flex items-center gap-3 transition-all ${themeId === id ? 'border-gray-800 shadow-md bg-gray-100' : 'border-gray-200 hover:border-gray-300 bg-white'}`}>
+                      <div className="flex shrink-0 overflow-hidden rounded-full w-6 h-6 border border-gray-300 shadow-inner">
+                        <div className={`w-1/2 h-full ${theme.sidebar.split(' ')[0]}`}></div>
+                        <div className={`w-1/2 h-full ${theme.btnPrimary.split(' ')[0]}`}></div>
+                      </div>
+                      <span className="text-xs font-bold text-gray-700 text-left leading-tight">{theme.nom}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -1674,18 +1797,18 @@ if (vueActive === 'planning' && currentViewMonday) {
       {modalPrint && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="bg-blue-900 text-white p-4"><h3 className="font-bold text-lg">🖨️ Impression (A4 Paysage)</h3></div>
+            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">🖨️ Impression (A4 Paysage)</h3></div>
             <form onSubmit={declencherImpression}>
               <div className="p-6 space-y-4">
                 {(vueActive === 'template' || vueActive === 'planning') ? (
                   <>
-                    <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="radio" checked={printFilter.type === 'all'} onChange={() => setPrintFilter({ type: 'all', id: null })} className="w-4 h-4 text-blue-600" /><span className="font-semibold text-gray-800">Vue Globale (Équipe)</span></label>
-                    <label className="flex flex-col gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"><div className="flex items-center gap-3"><input type="radio" checked={printFilter.type === 'agent'} onChange={() => setPrintFilter({ type: 'agent', id: agents[0]?.id })} className="w-4 h-4 text-blue-600" /><span className="font-semibold text-gray-800">Filtrer par Agent</span></div>{printFilter.type === 'agent' && (<select value={printFilter.id || ''} onChange={(e) => setPrintFilter({ type: 'agent', id: Number(e.target.value) })} className="ml-7 p-2 border rounded text-sm w-64 bg-white outline-none">{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select>)}</label>
-                    <label className="flex flex-col gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"><div className="flex items-center gap-3"><input type="radio" checked={printFilter.type === 'poste'} onChange={() => setPrintFilter({ type: 'poste', id: postes[0]?.id })} className="w-4 h-4 text-blue-600" /><span className="font-semibold text-gray-800">Filtrer par Poste</span></div>{printFilter.type === 'poste' && (<select value={printFilter.id || ''} onChange={(e) => setPrintFilter({ type: 'poste', id: Number(e.target.value) })} className="ml-7 p-2 border rounded text-sm w-64 bg-white outline-none">{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select>)}</label>
+                    <label className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50`}><input type="radio" checked={printFilter.type === 'all'} onChange={() => setPrintFilter({ type: 'all', id: null })} className="w-4 h-4" /><span className="font-semibold text-gray-800">Vue Globale (Équipe)</span></label>
+                    <label className={`flex flex-col gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50`}><div className="flex items-center gap-3"><input type="radio" checked={printFilter.type === 'agent'} onChange={() => setPrintFilter({ type: 'agent', id: agents[0]?.id })} className="w-4 h-4" /><span className="font-semibold text-gray-800">Filtrer par Agent</span></div>{printFilter.type === 'agent' && (<select value={printFilter.id || ''} onChange={(e) => setPrintFilter({ type: 'agent', id: Number(e.target.value) })} className="ml-7 p-2 border rounded text-sm w-64 bg-white outline-none">{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select>)}</label>
+                    <label className={`flex flex-col gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50`}><div className="flex items-center gap-3"><input type="radio" checked={printFilter.type === 'poste'} onChange={() => setPrintFilter({ type: 'poste', id: postes[0]?.id })} className="w-4 h-4" /><span className="font-semibold text-gray-800">Filtrer par Poste</span></div>{printFilter.type === 'poste' && (<select value={printFilter.id || ''} onChange={(e) => setPrintFilter({ type: 'poste', id: Number(e.target.value) })} className="ml-7 p-2 border rounded text-sm w-64 bg-white outline-none">{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select>)}</label>
                   </>
                 ) : <div className="text-center py-4"><span className="text-4xl mb-3 block">✅</span><p>Adaptation automatique pour le format A4 Recto-Verso (2 pages).</p></div>}
               </div>
-              <div className="p-4 bg-gray-50 border-t flex justify-end gap-3"><button type="button" onClick={() => setModalPrint(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded font-medium">Annuler</button><button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded font-medium shadow flex items-center gap-2">🖨️ Lancer</button></div>
+              <div className="p-4 bg-gray-50 border-t flex justify-end gap-3"><button type="button" onClick={() => setModalPrint(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded font-medium">Annuler</button><button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium shadow flex items-center gap-2`}>🖨️ Lancer</button></div>
             </form>
           </div>
         </div>
@@ -1695,10 +1818,10 @@ if (vueActive === 'planning' && currentViewMonday) {
       {modalCreation.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className="bg-blue-900 text-white p-4"><h3 className="font-bold text-lg">{modalCreation.eventId ? 'Modifier l\'affectation' : 'Nouvelle affectation'}</h3></div>
+            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">{modalCreation.eventId ? 'Modifier l\'affectation' : 'Nouvelle affectation'}</h3></div>
             <form onSubmit={validerCreationModal}>
               <div className="p-5 space-y-4">
-                {vueActive === 'planning' && !modalCreation.eventId && (
+                {(vueActive === 'planning' || vueActive === 'journee') && !modalCreation.eventId && (
                   <div>
                     <label className="block text-sm font-semibold mb-1">Type d'action</label>
                     <select value={formTypeEvent} onChange={e => setFormTypeEvent(e.target.value)} className="w-full border rounded p-2 bg-gray-50 font-bold text-sm">
@@ -1708,33 +1831,33 @@ if (vueActive === 'planning' && currentViewMonday) {
                   </div>
                 )}
 
-                <div><label className="block text-sm font-semibold mb-1">👤 Agent</label><select value={formAgent} onChange={e => setFormAgent(e.target.value)} className="w-full border rounded p-2 bg-white"><option value="" disabled>-- Sélectionner --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></div>
+                <div><label className={`block text-sm font-semibold mb-1`}>👤 Agent</label><select value={formAgent} onChange={e => setFormAgent(e.target.value)} className="w-full border rounded p-2 bg-white"><option value="" disabled>-- Sélectionner --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></div>
                 
                 {formTypeEvent === 'absence' ? (
                   <>
                     <div>
-                      <label className="block text-sm font-semibold mb-1">Nature</label>
+                      <label className={`block text-sm font-semibold mb-1`}>Nature</label>
                       <select value={formTypeAbsence} onChange={e => setFormTypeAbsence(e.target.value)} className="w-full border rounded p-2 bg-white">
                         <option value="absence">Absence (Plage horaire)</option>
                         <option value="retard">Retard</option>
                       </select>
                     </div>
-                    <label className="flex items-center gap-2 text-sm font-bold text-blue-800 cursor-pointer bg-blue-50 p-2 rounded border border-blue-100">
+                    <label className={`flex items-center gap-2 text-sm font-bold ${t.textAccent} cursor-pointer ${t.bgLight} p-2 rounded border ${t.borderLight}`}>
                       <input type="checkbox" checked={formAbsenceDeduire} onChange={e => setFormAbsenceDeduire(e.target.checked)} className="w-4 h-4 cursor-pointer" />
                       Déduire ces heures du bilan
                     </label>
                   </>
                 ) : (
-                  <div><label className="block text-sm font-semibold mb-1">📍 Poste</label><select value={formPoste} onChange={e => setFormPoste(e.target.value)} className="w-full border rounded p-2 bg-white"><option value="" disabled>-- Sélectionner --</option>{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select></div>
+                  <div><label className={`block text-sm font-semibold mb-1`}>📍 Poste</label><select value={formPoste} onChange={e => setFormPoste(e.target.value)} className="w-full border rounded p-2 bg-white"><option value="" disabled>-- Sélectionner --</option>{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select></div>
                 )}
 
                 <div className="flex gap-4">
-                  <div className="flex-1"><label className="block text-sm font-semibold mb-1">Début</label><input type="time" required value={extractTimeStr(modalCreation.start)} onChange={e => setModalCreation({...modalCreation, start: e.target.value})} className="w-full border rounded p-2" /></div>
-                  <div className="flex-1"><label className="block text-sm font-semibold mb-1">Fin</label><input type="time" required value={extractTimeStr(modalCreation.end)} onChange={e => setModalCreation({...modalCreation, end: e.target.value})} className="w-full border rounded p-2" /></div>
+                  <div className="flex-1"><label className={`block text-sm font-semibold mb-1`}>Début</label><input type="time" required value={extractTimeStr(modalCreation.start)} onChange={e => setModalCreation({...modalCreation, start: e.target.value})} className="w-full border rounded p-2" /></div>
+                  <div className="flex-1"><label className={`block text-sm font-semibold mb-1`}>Fin</label><input type="time" required value={extractTimeStr(modalCreation.end)} onChange={e => setModalCreation({...modalCreation, end: e.target.value})} className="w-full border rounded p-2" /></div>
                 </div>
-                <div><label className="block text-sm font-semibold mb-1">📝 {formTypeEvent === 'absence' ? 'Motif' : 'Note'}</label><input type="text" value={formNote} onChange={e => setFormNote(e.target.value)} placeholder={formTypeEvent === 'absence' ? "Ex: Maladie..." : "Ex: Réunion..."} className="w-full border rounded p-2" autoFocus={!!modalCreation.eventId} /></div>
+                <div><label className={`block text-sm font-semibold mb-1`}>📝 {formTypeEvent === 'absence' ? 'Motif' : 'Note'}</label><input type="text" value={formNote} onChange={e => setFormNote(e.target.value)} placeholder={formTypeEvent === 'absence' ? "Ex: Maladie..." : "Ex: Réunion..."} className="w-full border rounded p-2" autoFocus={!!modalCreation.eventId} /></div>
               </div>
-              <div className="p-4 bg-gray-50 border-t flex justify-end gap-3"><button type="button" onClick={() => setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' })} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded font-medium">Annuler</button><button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded font-medium">{modalCreation.eventId ? 'Enregistrer' : 'Créer'}</button></div>
+              <div className="p-4 bg-gray-50 border-t flex justify-end gap-3"><button type="button" onClick={() => setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' })} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded font-medium">Annuler</button><button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>{modalCreation.eventId ? 'Enregistrer' : 'Créer'}</button></div>
             </form>
           </div>
         </div>
@@ -1813,60 +1936,62 @@ if (vueActive === 'planning' && currentViewMonday) {
       {modalAgent.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="bg-blue-900 text-white p-4"><h3 className="font-bold text-lg">{modalAgent.id ? 'Modifier un agent' : 'Nouvel agent'}</h3></div>
+            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">{modalAgent.id ? 'Modifier un agent' : 'Nouvel agent'}</h3></div>
             <form onSubmit={validerAgentModal}>
               <div className="p-5 space-y-4">
                 <div><label className="block text-sm font-semibold mb-1">Nom complet</label><input type="text" required value={modalAgent.nom} onChange={e => setModalAgent({...modalAgent, nom: e.target.value})} className="w-full border rounded p-2" autoFocus /></div>
                 <div className="flex gap-4">
                   <div className="flex-1"><label className="block text-sm font-semibold mb-1">Quotité (%)</label><input type="number" step="0.1" required value={modalAgent.quotite} onChange={e => handleEditAgentChange('quotite', e.target.value)} className="w-full border rounded p-2 font-bold text-center" /></div>
-                  <div className="flex-1 flex flex-col justify-end"><label className="flex items-center gap-2 p-2 border rounded bg-gray-50 cursor-pointer font-bold text-sm"><input type="checkbox" checked={modalAgent.estEtudiant} onChange={e => handleEditAgentChange('estEtudiant', e.target.checked)} className="w-4 h-4" />🎓 Statut Étudiant</label></div>
+                  <div className="flex-1 flex flex-col justify-end"><label className={`flex items-center gap-2 p-2 border ${t.borderLight} ${t.bgLight} rounded cursor-pointer font-bold text-sm`}><input type="checkbox" checked={modalAgent.estEtudiant} onChange={e => handleEditAgentChange('estEtudiant', e.target.checked)} className="w-4 h-4" />🎓 Statut Étudiant</label></div>
                 </div>
                 <div className="flex gap-4">
-                  <div className="flex-1"><label className="block text-sm font-semibold mb-1">Contrat (Calculé)</label><input type="number" step="0.01" required value={modalAgent.hContrat} onChange={e => setModalAgent({...modalAgent, hContrat: e.target.value})} className="w-full border rounded p-2 font-mono text-center bg-white" /></div>
-                  <div className="flex-1"><label className="block text-sm font-semibold mb-1">Couleur</label><div className="flex items-center gap-3"><input type="color" value={modalAgent.couleurFond} onChange={e => setModalAgent({...modalAgent, couleurFond: e.target.value})} className="w-10 h-10 p-1 border rounded cursor-pointer" /><span className="text-sm uppercase">{modalAgent.couleurFond}</span></div></div>
+<div className="flex-1">
+  <label className="block text-sm font-semibold mb-1">Contrat (Calculé)</label>
+  <input type="text" required value={typeof modalAgent.hContrat === 'number' ? formatHeureMinutes(modalAgent.hContrat) : modalAgent.hContrat} onChange={e => setModalAgent({...modalAgent, hContrat: e.target.value})} onBlur={e => setModalAgent({...modalAgent, hContrat: parseHeureSaisie(e.target.value)})} className="w-full border rounded p-2 font-mono text-center bg-white" />
+</div>                  <div className="flex-1"><label className="block text-sm font-semibold mb-1">Couleur</label><div className="flex items-center gap-3"><input type="color" value={modalAgent.couleurFond} onChange={e => setModalAgent({...modalAgent, couleurFond: e.target.value})} className="w-10 h-10 p-1 border rounded cursor-pointer" /><span className="text-sm uppercase">{modalAgent.couleurFond}</span></div></div>
                 </div>
               </div>
-              <div className="p-4 bg-gray-50 border-t flex justify-end gap-3"><button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-600 hover:bg-gray-200">Annuler</button><button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded">{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button></div>
+              <div className="p-4 bg-gray-50 border-t flex justify-end gap-3"><button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-600 hover:bg-gray-200">Annuler</button><button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded`}>{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button></div>
             </form>
           </div>
         </div>
       )}
 
       {/* PANNEAU LATÉRAL (Fixe) */}
-      <div className="w-80 bg-white shadow-lg flex flex-col z-20 border-r border-gray-200 no-print shrink-0">
-        <div className="p-4 bg-blue-900 text-white flex flex-col gap-3">
+      <div className={`w-80 ${t.sidebar} shadow-lg flex flex-col z-20 border-r border-gray-200 no-print shrink-0 transition-colors`}>
+        <div className="p-4 text-white flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold tracking-wider">EDT CPE</h1>
             <div className="flex gap-1 flex-wrap justify-end max-w-[140px]">
               <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
               
-              <button onClick={() => document.getElementById('import-file').click()} className="bg-emerald-700 hover:bg-emerald-600 px-2 py-1.5 rounded text-xs shadow border border-emerald-600" title="Restaurer une sauvegarde">⬆️</button>
+              <button onClick={() => document.getElementById('import-file').click()} className="bg-white/10 hover:bg-white/20 px-2 py-1.5 rounded text-xs shadow border border-white/20" title="Restaurer une sauvegarde">⬆️</button>
               
-              {/* Le bouton d'export avec l'indicateur visuel s'il y a des modifications */}
-              <button onClick={handleExport} className={`relative px-2 py-1.5 rounded text-xs shadow border transition-colors ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500' : 'bg-emerald-700 hover:bg-emerald-600 border-emerald-600'}`} title="Sauvegarder les données (Fichier JSON)">
+              <button onClick={handleExport} className={`relative px-2 py-1.5 rounded text-xs shadow border transition-colors ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500' : 'bg-white/10 hover:bg-white/20 border-white/20'}`} title="Sauvegarder les données (Fichier JSON)">
                 ⬇️{needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
               </button>
 
-              <button onClick={() => setModalParametres(true)} className="bg-gray-800 hover:bg-gray-700 px-2 py-1.5 rounded text-xs shadow border border-gray-600" title="Paramétrer les Vacances">⚙️</button>
-              <button onClick={() => setModalPrint(true)} className="bg-blue-700 hover:bg-blue-600 px-3 py-1.5 rounded text-xs font-bold border border-blue-500">🖨️</button>
+              <button onClick={() => setModalParametres(true)} className="bg-white/10 hover:bg-white/20 px-2 py-1.5 rounded text-xs shadow border border-white/20" title="Paramètres">⚙️</button>
+              <button onClick={() => setModalPrint(true)} className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded text-xs font-bold border border-white/20">🖨️</button>
               <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 px-2 py-1.5 rounded text-xs font-bold border border-red-500 text-white text-center" title="Tout réinitialiser">🗑️</button>
             </div>
           </div>
-          <div className="flex flex-col bg-blue-950 rounded p-1 shadow-inner gap-1">
-            <button onClick={() => setVueActive('template')} className={`text-sm py-1.5 rounded transition ${vueActive === 'template' ? 'bg-white text-blue-900 font-bold' : 'text-blue-300 hover:text-white'}`}>📐 Modèle : Semaine Type</button>
-            <button onClick={() => setVueActive('planning')} className={`text-sm py-1.5 rounded transition ${vueActive === 'planning' ? 'bg-white text-blue-900 font-bold' : 'text-blue-300 hover:text-white'}`}>📅 Planning Hebdo (Réel)</button>
-            <button onClick={() => setVueActive('dashboard')} className={`text-sm py-1.5 rounded transition ${vueActive === 'dashboard' ? 'bg-white text-blue-900 font-bold' : 'text-blue-300 hover:text-white'}`}>📊 Bilan Équipe</button>
-            <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-sm py-1.5 rounded transition ${vueActive === 'agent' ? 'bg-white text-blue-900 font-bold' : 'text-blue-300 hover:text-white'}`}>👤 Calendriers Individuels</button>
-            <button onClick={() => setVueActive('absences')} className={`text-sm py-1.5 rounded transition ${vueActive === 'absences' ? 'bg-white text-blue-900 font-bold' : 'text-blue-300 hover:text-white'}`}>📋 Absences & Retards</button>
+          <div className="flex flex-col bg-black/20 rounded p-1 shadow-inner gap-1 mt-2">
+            <button onClick={() => setVueActive('journee')} className={`text-sm py-1.5 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>⏱️ Vue Quotidienne</button>
+            <button onClick={() => setVueActive('template')} className={`text-sm py-1.5 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>📐 Modèle : Semaine Type</button>
+            <button onClick={() => setVueActive('planning')} className={`text-sm py-1.5 rounded transition ${vueActive === 'planning' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>📅 Planning Hebdo (Réel)</button>
+            <button onClick={() => setVueActive('dashboard')} className={`text-sm py-1.5 rounded transition ${vueActive === 'dashboard' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>📊 Bilan Équipe</button>
+            <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-sm py-1.5 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>👤 Calendriers Individuels</button>
+            <button onClick={() => setVueActive('absences')} className={`text-sm py-1.5 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>📋 Absences & Retards</button>
           </div>
         </div>
         
-        {(vueActive === 'template' || vueActive === 'planning') && (
-          <div className="p-4 flex-1 overflow-y-auto space-y-4">
+        {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
+          <div className="p-4 flex-1 overflow-y-auto space-y-4 bg-white">
             
             {vueActive === 'template' && currentTemplate.statut === 'brouillon' && (
               <div className="flex bg-gray-200 rounded p-1 mb-2">
-                <button onClick={() => setModeEdition('agents')} className={`flex-1 text-xs py-1.5 rounded transition ${modeEdition === 'agents' ? 'bg-white font-bold text-blue-700 shadow-sm' : 'text-gray-600 hover:text-black'}`}>🖌️ Agents</button>
+                <button onClick={() => setModeEdition('agents')} className={`flex-1 text-xs py-1.5 rounded transition ${modeEdition === 'agents' ? `bg-white font-bold ${t.textAccent} shadow-sm` : 'text-gray-600 hover:text-black'}`}>🖌️ Agents</button>
                 <button onClick={() => setModeEdition('besoins')} className={`flex-1 text-xs py-1.5 rounded transition ${modeEdition === 'besoins' ? 'bg-white font-bold text-red-600 shadow-sm' : 'text-gray-600 hover:text-black'}`}>🎯 Besoins</button>
               </div>
             )}
@@ -1876,20 +2001,20 @@ if (vueActive === 'planning' && currentViewMonday) {
                 <span className="text-2xl block mb-1">🔒</span>
                 <p className="text-sm font-bold text-gray-700">Modèle Validé</p>
                 <p className="text-xs text-gray-500 mt-1">Structure verrouillée pour protéger le compte d'heures passé.</p>
-                <button onClick={() => setModalNewVersion({ isOpen: true, dateDebut: `${baseYear+1}-01-04`, nom: 'Évolution Hiver' })} className="mt-3 bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded shadow hover:bg-blue-700 w-full flex items-center justify-center gap-1">➕ Créer une évolution</button>
+                <button onClick={() => setModalNewVersion({ isOpen: true, dateDebut: `${baseYear+1}-01-04`, nom: 'Évolution Hiver' })} className={`mt-3 ${t.btnPrimary} text-xs font-bold px-3 py-2 rounded shadow w-full flex items-center justify-center gap-1`}>➕ Créer une évolution</button>
                 <button onClick={deverrouillerModele} className="mt-2 text-xs text-gray-400 hover:text-gray-800 underline">🔓 Déverrouiller (Corriger erreur)</button>
               </div>
             )}
 
-            {(vueActive === 'planning' || (vueActive === 'template' && currentTemplate.statut === 'brouillon')) && modeEdition === 'agents' && (
+            {(vueActive === 'planning' || vueActive === 'journee' || (vueActive === 'template' && currentTemplate.statut === 'brouillon')) && modeEdition === 'agents' && (
               <div className="animate-in fade-in">
                 <div>
                   <div className="flex justify-between items-center mb-2"><h2 className="font-bold text-gray-700 text-sm">Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-gray-200 w-5 h-5 rounded-full text-xs font-bold">+</button></div>
                   <ul className="space-y-1">
                     {agents.map((agent) => (
-                      <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${agentActif === agent.id ? 'bg-blue-50 border-blue-600 font-bold' : 'bg-gray-50 hover:bg-gray-100'}`} style={{ borderLeftColor: agent.couleurFond }}>
-                        <span style={{ color: agentActif === agent.id ? '#1e3a8a' : '#374151' }}>{agent.nom} {agent.estEtudiant && '🎓'}</span>
-                        <div className="flex gap-1 items-center"><button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className="text-gray-400 hover:text-blue-600 text-xs px-1">⚙️</button><button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button></div>
+                      <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ring-black/10` : 'bg-gray-50 hover:bg-gray-100'}`} style={{ borderLeftColor: agent.couleurFond }}>
+                        <span>{agent.nom} {agent.estEtudiant && '🎓'}</span>
+                        <div className="flex gap-1 items-center"><button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className="text-gray-400 hover:text-gray-800 text-xs px-1">⚙️</button><button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button></div>
                       </li>
                     ))}
                   </ul>
@@ -1898,7 +2023,7 @@ if (vueActive === 'planning' && currentViewMonday) {
                   <div className="flex justify-between items-center mb-2"><h2 className="font-bold text-gray-700 text-sm">Postes</h2><button onClick={() => setModalNewPoste({ isOpen: true, nom: '' })} className="bg-gray-200 w-5 h-5 rounded-full text-xs font-bold">+</button></div>
                   <ul className="space-y-1">
                     {postes.map((poste) => (
-                      <li key={poste.id} onClick={() => setPosteActif(posteActif === poste.id ? null : poste.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${posteActif === poste.id ? 'bg-indigo-50 border-indigo-600 font-bold' : 'bg-gray-50 hover:bg-gray-100'}`} style={{ borderLeftColor: poste.couleur }}>
+                      <li key={poste.id} onClick={() => setPosteActif(posteActif === poste.id ? null : poste.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${posteActif === poste.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ring-black/10` : 'bg-gray-50 hover:bg-gray-100'}`} style={{ borderLeftColor: poste.couleur }}>
                         <span>{poste.nom}</span><button onClick={(e) => supprimerPoste(poste.id, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
                       </li>
                     ))}
@@ -1911,10 +2036,7 @@ if (vueActive === 'planning' && currentViewMonday) {
               <div className="space-y-4 animate-in fade-in duration-200">
                 <div className="bg-red-50 border border-red-200 p-3 rounded text-sm text-red-800">
                   <p className="font-bold mb-2">1. Création Rapide (Clavier) :</p>
-                  <button onClick={() => setModalBesoinMulti({ isOpen: true, posteId: '', qte: 1, slots: [{ id: Date.now(), start: '08:00', end: '10:00', days: { 1: false, 2: false, 3: false, 4: false, 5: false } }]})} className="w-full bg-red-600 text-white rounded p-2 text-xs font-bold hover:bg-red-700 shadow flex items-center justify-center gap-1 mb-4">
-                    ➕ Saisir une grille complète
-                  </button>
-
+                  <button onClick={() => setModalBesoinMulti({ isOpen: true, posteId: '', qte: 1, slots: [{ id: Date.now(), start: '08:00', end: '10:00', days: { 1: false, 2: false, 3: false, 4: false, 5: false } }]})} className="w-full bg-red-600 text-white rounded p-2 text-xs font-bold hover:bg-red-700 shadow flex items-center justify-center gap-1 mb-4">➕ Saisir une grille complète</button>
                   <p className="font-bold mb-2 border-t border-red-200 pt-3">2. Pinceau Manuel (Souris) :</p>
                   <select value={posteActif||''} onChange={e => setPosteActif(Number(e.target.value))} className="w-full p-2 rounded border border-red-300 mb-2 bg-white"><option value="" disabled>-- Poste --</option>{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select>
                   <input type="number" min="1" value={formBesoinQte} onChange={e => setFormBesoinQte(Number(e.target.value))} className="w-full p-2 rounded border border-red-300 font-bold text-center mb-2 bg-white" />
@@ -1929,11 +2051,117 @@ if (vueActive === 'planning' && currentViewMonday) {
       {/* ZONE PRINCIPALE D'AFFICHAGE */}
       <div id="print-area" className="flex-1 flex flex-col h-full overflow-hidden bg-white">
         
+        {vueActive === 'journee' && (
+          <div className="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
+            <div className="p-4 pb-2 no-print shrink-0">
+              <div className="flex justify-between items-center mb-2">
+                <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>
+                  ⏱️ Vue Quotidienne
+                </h2>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => changeJourQuotidien(-1)} className="px-3 py-1 rounded text-sm font-bold bg-white border border-gray-300 hover:bg-gray-100 shadow-sm transition-colors">◀ Jour Précédent</button>
+                  <input type="date" value={jourConsulte} onChange={(e) => setJourConsulte(e.target.value)} className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold bg-white outline-none shadow-sm`} />
+                  <button onClick={() => changeJourQuotidien(1)} className="px-3 py-1 rounded text-sm font-bold bg-white border border-gray-300 hover:bg-gray-100 shadow-sm transition-colors">Jour Suivant ▶</button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-auto px-4 pb-4">
+              <div className="bg-white rounded-xl shadow border border-gray-200 min-w-[800px] flex flex-col h-full">
+                {/* En-tête des heures */}
+                <div className={`flex border-b border-gray-200 ${t.bgLight} shrink-0 ml-32 relative h-8 rounded-t-xl`}>
+                  {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map(h => (
+                    <div key={h} className="absolute text-[10px] font-bold text-gray-500 top-2" style={{ left: `${((h * 60 - 460) / 600) * 100}%`, transform: 'translateX(-50%)' }}>
+                      {h}h00
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Grille des agents */}
+                <div className="flex-1 overflow-y-auto relative">
+                  {/* Lignes verticales de fond */}
+                  <div className="absolute top-0 bottom-0 left-32 right-0 pointer-events-none">
+                    {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map(h => (
+                      <div key={h} className="absolute top-0 bottom-0 border-l border-gray-100" style={{ left: `${((h * 60 - 460) / 600) * 100}%` }}></div>
+                    ))}
+                  </div>
+
+                  {agents.map(agent => {
+                    const mondayStr = getMondayStr(jourConsulte);
+                    const allEvents = getEventsForWeek(mondayStr);
+                    const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
+                    const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(jourConsulte));
+
+                    return (
+                      <div key={agent.id} className="flex border-b border-gray-100 min-h-[60px] relative group hover:bg-gray-50 transition-colors">
+                        {/* Colonne Agent */}
+                        <div className="w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r border-gray-200 z-10 bg-white group-hover:bg-gray-50 transition-colors">
+                          <span className="text-xs font-bold text-gray-800 text-right leading-tight">{agent.nom}</span>
+                        </div>
+                        
+                        {/* Ligne de temps */}
+                        <div className="flex-1 relative my-1">
+                          {eventsDuJour.map(evt => {
+                            const startD = new Date(evt.start);
+                            const endD = new Date(evt.end);
+                            const startMins = startD.getHours() * 60 + startD.getMinutes();
+                            const endMins = endD.getHours() * 60 + endD.getMinutes();
+                            const left = Math.max(0, ((startMins - 460) / 600) * 100);
+                            const width = Math.min(100 - left, ((endMins - startMins) / 600) * 100);
+                            
+                            return (
+                              <div key={evt.id} className="absolute top-1 bottom-1 rounded shadow-sm text-[10px] flex flex-col justify-center px-1.5 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-10"
+                                style={{
+                                  left: `${left}%`, width: `${width}%`,
+                                  backgroundColor: evt.backgroundColor || evt.extendedProps?.posteCouleur || '#3b82f6',
+                                  borderColor: 'rgba(0,0,0,0.1)',
+                                  color: 'white'
+                                }}
+                                onClick={() => ouvrirEdition(evt)}
+                                title={`${evt.extendedProps?.posteNom} (${extractTimeStr(evt.start)} - ${extractTimeStr(evt.end)})`}
+                              >
+                                <span className="font-bold truncate">{evt.extendedProps?.posteNom}</span>
+                                <span className="text-[8px] opacity-80 truncate">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
+                              </div>
+                            );
+                          })}
+                          
+                          {absDuJour.map(abs => {
+                            const startD = new Date(abs.start);
+                            const endD = new Date(abs.end);
+                            const startMins = startD.getHours() * 60 + startD.getMinutes();
+                            const endMins = endD.getHours() * 60 + endD.getMinutes();
+                            const left = Math.max(0, ((startMins - 460) / 600) * 100);
+                            const width = Math.min(100 - left, ((endMins - startMins) / 600) * 100);
+                            const isAbs = abs.type === 'absence';
+                            
+                            return (
+                              <div key={abs.id} className={`absolute top-1 bottom-1 rounded shadow-sm text-[10px] flex flex-col justify-center px-1.5 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-20 ${isAbs ? 'bg-red-100 border-red-500 text-red-900' : 'bg-orange-100 border-orange-500 text-orange-900'}`}
+                                style={{ left: `${left}%`, width: `${width}%` }}
+                                title={`${isAbs ? 'ABSENCE' : 'RETARD'} - ${abs.motif}`}
+                              >
+                                <span className="font-bold truncate">{isAbs ? '🚫 ABSENCE' : '⏰ RETARD'}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {agents.length === 0 && (
+                    <div className="p-8 text-center text-gray-400 italic">Aucun agent configuré.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {vueActive === 'template' && (
           <div className="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
             <div className="p-4 pb-2 no-print shrink-0">
               <div className="flex justify-between items-center mb-2">
-                <h2 className="text-lg font-bold text-blue-900 flex items-center gap-2">
+                <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>
                   📐 Modèle : {currentTemplate.nom} (dès le {currentTemplate.dateDebut}) 
                   {printFilter.type === 'agent' && ` - Filtré : ${agents.find(a=>a.id===printFilter.id)?.nom}`}
                 </h2>
@@ -1954,7 +2182,7 @@ if (vueActive === 'planning' && currentViewMonday) {
               {isPrinting ? (
                 <PrintTimeGridView events={displayEvents} titre={`Modèle : ${currentTemplate.nom} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
               ) : (
-                <div className={`bg-white rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-blue-400 border-dashed border-2' : 'border-gray-200'}`}>
+                <div className={`bg-white rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-gray-400 border-dashed border-2' : 'border-gray-200'}`}>
                   <FullCalendar
                     plugins={[timeGridPlugin, interactionPlugin]}
                     initialView="timeGridWeek"
@@ -1990,28 +2218,24 @@ if (vueActive === 'planning' && currentViewMonday) {
           <div className="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
             <div className="p-4 pb-2 no-print shrink-0">
               <div className="flex justify-between items-center mb-2">
-                <h2 className="text-lg font-bold text-blue-900">
+                <h2 className={`text-lg font-bold ${t.header}`}>
                   📅 Planning Réel 
                   {printFilter.type === 'agent' && ` - Filtré pour : ${agents.find(a=>a.id===printFilter.id)?.nom}`}
                   {printFilter.type === 'poste' && ` - Filtré pour le poste : ${postes.find(p=>p.id===printFilter.id)?.nom}`}
                 </h2>
-                
                 <div className="flex gap-2 items-center">
                   {currentViewMonday && (
                     <>
-                      <select onChange={(e) => { if(e.target.value) importerModele(e.target.value); e.target.value=''; }} className="bg-white text-blue-800 px-2 py-1 rounded text-xs font-bold border border-blue-300 shadow-sm outline-none cursor-pointer hover:bg-blue-50">
+                      <select onChange={(e) => { if(e.target.value) importerModele(e.target.value); e.target.value=''; }} className={`bg-white ${t.textAccent} px-2 py-1 rounded text-xs font-bold border ${t.borderLight} shadow-sm outline-none cursor-pointer ${t.bgLight}`}>
                         <option value="">📥 Appliquer un modèle...</option>
                         {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.nom}</option>)}
                       </select>
                       {customWeeks[currentViewMonday] && (
-                        <button onClick={reinitialiserSemaineReelle} className="bg-orange-100 text-orange-700 hover:bg-orange-200 px-3 py-1 rounded text-xs font-bold border border-orange-300 shadow-sm transition">
-                          🔄 Rétablir
-                        </button>
+                        <button onClick={reinitialiserSemaineReelle} className="bg-orange-100 text-orange-700 hover:bg-orange-200 px-3 py-1 rounded text-xs font-bold border border-orange-300 shadow-sm transition">🔄 Rétablir</button>
                       )}
                     </>
                   )}
                 </div>
-
               </div>
               <BandeauAlerte />
             </div>
@@ -2054,53 +2278,35 @@ if (vueActive === 'planning' && currentViewMonday) {
 
         {vueActive === 'dashboard' && (
           <div className="flex-1 p-8 overflow-auto bg-gray-50 print-dashboard-table">
-            
             <div className="flex justify-between items-end mb-6">
-              <h2 className="text-2xl font-bold text-blue-900">Bilan Annuel Global de l'Équipe ({baseYear}-{baseYear+1})</h2>
-              
-              {/* Le widget de la dotation globale */}
+              <h2 className={`text-2xl font-bold ${t.header}`}>Bilan Annuel Global ({baseYear}-{baseYear+1})</h2>
               <div className="bg-white px-5 py-3 rounded-xl shadow-sm border border-gray-300 flex items-center gap-6">
                  <div>
                     <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Dotation Globale</label>
-                    <div className="flex items-center gap-1">
-                      <input type="number" step="0.1" value={dotation} onChange={e => setDotation(parseFloat(e.target.value)||0)} className="w-20 p-1 border rounded text-xl font-black text-center text-blue-900" />
-                      <span className="font-bold text-gray-400">ETP</span>
-                    </div>
+                    <div className="flex items-center gap-1"><input type="number" step="0.1" value={dotation} onChange={e => setDotation(parseFloat(e.target.value)||0)} className={`w-20 p-1 border rounded text-xl font-black text-center ${t.header}`} /><span className="font-bold text-gray-400">ETP</span></div>
                  </div>
                  <div className="text-3xl font-light text-gray-200">/</div>
                  <div>
                     <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">ETP Répartis (Agents)</label>
-                    <div className={`text-2xl font-black flex items-center gap-1 ${agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation && dotation > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                      {agents.reduce((sum,a)=>sum+(a.quotite/100),0).toFixed(2)}
-                      <span className="text-base">ETP</span>
-                    </div>
+                    <div className={`text-2xl font-black flex items-center gap-1 ${agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation && dotation > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{agents.reduce((sum,a)=>sum+(a.quotite/100),0).toFixed(2)}<span className="text-base">ETP</span></div>
                  </div>
               </div>
             </div>
 
             <div className="bg-white rounded-xl shadow border border-gray-300 overflow-hidden">
               <table className="w-full text-sm text-left">
-                <thead className="bg-blue-900 text-white font-medium uppercase text-xs">
-                  <tr>
-                    <th className="p-4 border-r border-blue-800">Agent</th>
-                    <th className="p-4 border-r border-blue-800 text-center">%</th>
-                    <th className="p-4 border-r border-blue-800 text-center bg-blue-950">H. Contrat</th>
-                    <th className="p-4 border-r border-blue-800 text-center">H. Type Hebdo</th>
-                    <th className="p-4 border-r border-blue-800 text-center bg-blue-950">H. Consommées</th>
-                    <th className="p-4 text-center">Solde Final</th>
-                  </tr>
+                <thead className={`${t.headerBg} text-white font-medium uppercase text-xs`}>
+                  <tr><th className="p-4 border-r border-black/20">Agent</th><th className="p-4 border-r border-black/20 text-center">%</th><th className="p-4 border-r border-black/20 text-center bg-black/20">H. Contrat</th><th className="p-4 border-r border-black/20 text-center">H. Type Hebdo</th><th className="p-4 border-r border-black/20 text-center bg-black/20">H. Consommées</th><th className="p-4 text-center">Solde Final</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {statsAgents.map(agent => (
-                    <tr key={agent.id} className="hover:bg-blue-50">
+                    <tr key={agent.id} className={`hover:${t.bgLight}`}>
                       <td className="p-4 font-bold border-r border-gray-200 text-gray-800">{agent.nom} {agent.estEtudiant && '🎓'}</td>
                       <td className="p-4 text-center border-r border-gray-200" style={{ color: agent.couleurFond }}>{agent.quotite}%</td>
                       <td className="p-4 text-center border-r border-gray-200 font-mono font-bold">{formatHeureTableau(agent.hContrat, true)}</td>
                       <td className="p-4 text-center border-r border-gray-200 font-mono text-gray-500">{formatHeureTableau(agent.hHebdoType, true)}</td>
                       <td className="p-4 text-center border-r border-gray-200 font-mono font-bold bg-gray-50 text-gray-700">{formatHeureTableau(agent.heuresConsommees, true)}</td>
-                      <td className={`p-4 text-center font-mono font-black text-lg ${agent.soldeGlobal > 0 ? 'bg-green-100 text-green-700' : (agent.soldeGlobal < 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-50 text-emerald-600')}`}>
-                        {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}
-                      </td>
+                      <td className={`p-4 text-center font-mono font-black text-lg ${agent.soldeGlobal > 0 ? 'bg-green-100 text-green-700' : (agent.soldeGlobal < 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-50 text-emerald-600')}`}>{agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2109,164 +2315,61 @@ if (vueActive === 'planning' && currentViewMonday) {
           </div>
         )}
 
-        {/* --- ONGLET DÉDIÉ : ABSENCES & RETARDS --- */}
         {vueActive === 'absences' && (
           <div className="flex-1 p-6 overflow-auto bg-gray-50">
-            <h2 className="text-2xl font-bold text-blue-900 mb-6">Gestion des Absences et Retards</h2>
+            <h2 className={`text-2xl font-bold ${t.header} mb-6`}>Gestion des Absences et Retards</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               {bilanAbsences.map(b => (
                 <div key={b.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 border-l-4" style={{ borderLeftColor: b.couleur }}>
                   <div className="font-black text-lg text-gray-800 mb-3">{b.nom}</div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <div className="text-gray-500 text-xs font-bold uppercase">Absences</div>
-                      <div className="font-mono text-red-600 font-bold mt-1">{b.nbAbs} <span className="text-xs text-gray-400">({formatHeureTableau(b.hAbs, true)})</span></div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500 text-xs font-bold uppercase">Retards</div>
-                      <div className="font-mono text-orange-500 font-bold mt-1">{b.nbRet} <span className="text-xs text-gray-400">({formatHeureTableau(b.hRet, true)})</span></div>
-                    </div>
+                    <div><div className="text-gray-500 text-xs font-bold uppercase">Absences</div><div className="font-mono text-red-600 font-bold mt-1">{b.nbAbs} <span className="text-xs text-gray-400">({formatHeureTableau(b.hAbs, true)})</span></div></div>
+                    <div><div className="text-gray-500 text-xs font-bold uppercase">Retards</div><div className="font-mono text-orange-500 font-bold mt-1">{b.nbRet} <span className="text-xs text-gray-400">({formatHeureTableau(b.hRet, true)})</span></div></div>
                   </div>
-                  {b.nbRetRat > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-100 text-xs font-bold text-red-600 bg-red-50 p-2 rounded">
-                      ⚠️ {b.nbRetRat} retard(s) à rattraper ({formatHeureTableau(b.hRetRat, true)})
-                    </div>
-                  )}
-                  {b.nbRet > 0 && b.nbRetRat === 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-100 text-xs font-bold text-green-600 bg-green-50 p-2 rounded">
-                      ✅ Tous les retards sont rattrapés.
-                    </div>
-                  )}
+                  {b.nbRetRat > 0 && (<div className="mt-3 pt-3 border-t border-gray-100 text-xs font-bold text-red-600 bg-red-50 p-2 rounded">⚠️ {b.nbRetRat} retard(s) à rattraper ({formatHeureTableau(b.hRetRat, true)})</div>)}
+                  {b.nbRet > 0 && b.nbRetRat === 0 && (<div className="mt-3 pt-3 border-t border-gray-100 text-xs font-bold text-green-600 bg-green-50 p-2 rounded">✅ Tous les retards sont rattrapés.</div>)}
                 </div>
               ))}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow border border-gray-200 h-fit">
-                <h3 className="font-bold text-md text-blue-900 mb-4 pb-2 border-b">Déclarer un événement</h3>
+                <h3 className={`font-bold text-md ${t.header} mb-4 pb-2 border-b`}>Déclarer un événement</h3>
                 <form onSubmit={ajouterAbsenceRetard} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold mb-1">Agent concerné</label>
-                    <select required value={formAbsence.agentId} onChange={e => setFormAbsence({...formAbsence, agentId: e.target.value})} className="w-full border rounded p-2 bg-white text-sm">
-                      <option value="" disabled>-- Choisir un agent --</option>
-                      {agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-semibold mb-1">Type</label>
-                    <select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', deduireHeures: e.target.value === 'retard'})} className="w-full border rounded p-2 bg-white text-sm">
-                      <option value="absence">Absence</option>
-                      <option value="retard">Retard</option>
-                    </select>
-                  </div>
-
-                  {formAbsence.type === 'absence' && (
-                    <label className="flex items-center gap-2 text-sm font-bold text-blue-800 cursor-pointer bg-blue-50 p-2 rounded border border-blue-100">
-                      <input type="checkbox" checked={formAbsence.journeeComplete} onChange={e => setFormAbsence({...formAbsence, journeeComplete: e.target.checked})} className="w-4 h-4 cursor-pointer" />
-                      Journée(s) complète(s)
-                    </label>
-                  )}
-
+                  <div><label className="block text-sm font-semibold mb-1">Agent concerné</label><select required value={formAbsence.agentId} onChange={e => setFormAbsence({...formAbsence, agentId: e.target.value})} className="w-full border rounded p-2 bg-white text-sm"><option value="" disabled>-- Choisir un agent --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></div>
+                  <div><label className="block text-sm font-semibold mb-1">Type</label><select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', deduireHeures: e.target.value === 'retard'})} className="w-full border rounded p-2 bg-white text-sm"><option value="absence">Absence</option><option value="retard">Retard</option></select></div>
+                  {formAbsence.type === 'absence' && (<label className={`flex items-center gap-2 text-sm font-bold ${t.textAccent} cursor-pointer ${t.bgLight} p-2 rounded border ${t.borderLight}`}><input type="checkbox" checked={formAbsence.journeeComplete} onChange={e => setFormAbsence({...formAbsence, journeeComplete: e.target.checked})} className="w-4 h-4 cursor-pointer" />Journée(s) complète(s)</label>)}
                   <div className="flex gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-semibold mb-1">{formAbsence.journeeComplete ? 'Début' : 'Date'}</label>
-                      <input type="date" required value={formAbsence.dateDebut} onChange={e => setFormAbsence({...formAbsence, dateDebut: e.target.value})} className="w-full border rounded p-2 text-sm" />
-                    </div>
-                    {formAbsence.journeeComplete && (
-                      <div className="flex-1">
-                        <label className="block text-sm font-semibold mb-1">Fin (Optionnel)</label>
-                        <input type="date" value={formAbsence.dateFin} onChange={e => setFormAbsence({...formAbsence, dateFin: e.target.value})} min={formAbsence.dateDebut} className="w-full border rounded p-2 text-sm" />
-                      </div>
-                    )}
+                    <div className="flex-1"><label className="block text-sm font-semibold mb-1">{formAbsence.journeeComplete ? 'Début' : 'Date'}</label><input type="date" required value={formAbsence.dateDebut} onChange={e => setFormAbsence({...formAbsence, dateDebut: e.target.value})} className="w-full border rounded p-2 text-sm" /></div>
+                    {formAbsence.journeeComplete && (<div className="flex-1"><label className="block text-sm font-semibold mb-1">Fin (Optionnel)</label><input type="date" value={formAbsence.dateFin} onChange={e => setFormAbsence({...formAbsence, dateFin: e.target.value})} min={formAbsence.dateDebut} className="w-full border rounded p-2 text-sm" /></div>)}
                   </div>
-
-                  {!formAbsence.journeeComplete && (
-                    <div className="flex gap-4">
-                      <div className="flex-1"><label className="block text-sm font-semibold mb-1">Heure Début</label><input type="time" required value={formAbsence.heureDebut} onChange={e => setFormAbsence({...formAbsence, heureDebut: e.target.value})} className="w-full border rounded p-2 text-sm font-bold text-center" /></div>
-                      <div className="flex-1"><label className="block text-sm font-semibold mb-1">Heure Fin</label><input type="time" required value={formAbsence.heureFin} onChange={e => setFormAbsence({...formAbsence, heureFin: e.target.value})} className="w-full border rounded p-2 text-sm font-bold text-center" /></div>
-                    </div>
-                  )}
-
-                  <label className="flex items-center gap-2 text-sm font-bold text-red-800 cursor-pointer bg-red-50 p-2 rounded border border-red-100">
-                    <input type="checkbox" checked={formAbsence.deduireHeures} onChange={e => setFormAbsence({...formAbsence, deduireHeures: e.target.checked})} className="w-4 h-4 cursor-pointer" />
-                    Déduire du bilan (à rattraper / sans solde)
-                  </label>
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-1">Motif</label>
-                    <input type="text" required value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder="Ex: Maladie, Grève, Panne réveil..." className="w-full border rounded p-2 text-sm" />
-                  </div>
-
-                  <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded p-2.5 text-sm font-bold shadow transition">
-                    Créer sur le planning
-                  </button>
+                  {!formAbsence.journeeComplete && (<div className="flex gap-4"><div className="flex-1"><label className="block text-sm font-semibold mb-1">Heure Début</label><input type="time" required value={formAbsence.heureDebut} onChange={e => setFormAbsence({...formAbsence, heureDebut: e.target.value})} className="w-full border rounded p-2 text-sm font-bold text-center" /></div><div className="flex-1"><label className="block text-sm font-semibold mb-1">Heure Fin</label><input type="time" required value={formAbsence.heureFin} onChange={e => setFormAbsence({...formAbsence, heureFin: e.target.value})} className="w-full border rounded p-2 text-sm font-bold text-center" /></div></div>)}
+                  <label className="flex items-center gap-2 text-sm font-bold text-red-800 cursor-pointer bg-red-50 p-2 rounded border border-red-100"><input type="checkbox" checked={formAbsence.deduireHeures} onChange={e => setFormAbsence({...formAbsence, deduireHeures: e.target.checked})} className="w-4 h-4 cursor-pointer" />Déduire du bilan (à rattraper / sans solde)</label>
+                  <div><label className="block text-sm font-semibold mb-1">Motif</label><input type="text" required value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder="Ex: Maladie, Grève, Panne réveil..." className="w-full border rounded p-2 text-sm" /></div>
+                  <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition`}>Créer sur le planning</button>
                 </form>
               </div>
 
               <div className="lg:col-span-2 bg-white rounded-xl shadow border border-gray-200 overflow-hidden flex flex-col">
-                <div className="bg-blue-900 text-white p-4 font-bold text-sm">Historique complet des événements</div>
+                <div className={`${t.headerBg} text-white p-4 font-bold text-sm`}>Historique complet des événements</div>
                 <div className="overflow-x-auto flex-1">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-100 text-gray-700 uppercase text-xs border-b">
-                      <tr>
-                        <th className="p-3">Date</th>
-                        <th className="p-3">Agent</th>
-                        <th className="p-3">Type</th>
-                        <th className="p-3 text-center">Durée</th>
-                        <th className="p-3">Motif</th>
-                        <th className="p-3 text-center">Statut (Retards)</th>
-                        <th className="p-3 text-center">Action</th>
-                      </tr>
-                    </thead>
+                    <thead className="bg-gray-100 text-gray-700 uppercase text-xs border-b"><tr><th className="p-3">Date</th><th className="p-3">Agent</th><th className="p-3">Type</th><th className="p-3 text-center">Durée</th><th className="p-3">Motif</th><th className="p-3 text-center">Statut (Retards)</th><th className="p-3 text-center">Action</th></tr></thead>
                     <tbody className="divide-y divide-gray-200">
                       {absences.map(a => {
-                        const ag = agents.find(agent => agent.id === a.agentId);
-                        const typeAbs = a.type || 'absence';
-                        
-                        let h = a.heures;
-                        let m = a.minutes;
-                        if (h === undefined) {
-                          h = Math.floor(a.dureeTotale || a.duree || 0);
-                          m = Math.round(((a.dureeTotale || a.duree || 0) - h) * 60);
-                        }
-
+                        const ag = agents.find(agent => agent.id === a.agentId); const typeAbs = a.type || 'absence'; let h = a.heures; let m = a.minutes; if (h === undefined) { h = Math.floor(a.dureeTotale || a.duree || 0); m = Math.round(((a.dureeTotale || a.duree || 0) - h) * 60); }
                         return (
                           <tr key={a.id} className="hover:bg-gray-50">
-                            <td className="p-3 font-mono text-xs text-gray-600">{a.start.split('T')[0]}</td>
-                            <td className="p-3 font-bold text-gray-800">{ag ? ag.nom : 'Inconnu'}</td>
-                            <td className="p-3 flex items-center gap-1">
-                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${typeAbs === 'absence' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}>
-                                {typeAbs.toUpperCase()}
-                              </span>
-                              {a.deduire && <span className="text-[10px] bg-red-600 text-white px-1 rounded shadow-sm" title="Déduit du bilan">DÉDUIT</span>}
-                            </td>
-                            <td className="p-3 text-center font-mono font-bold">{h}h{String(m).padStart(2,'0')}</td>
-                            <td className="p-3 text-gray-600 italic">{a.motif || ''}</td>
-                            <td className="p-3 text-center">
-                              {typeAbs === 'retard' && a.deduire ? (
-                                <button 
-                                  onClick={() => toggleRattrape(a.id)}
-                                  className={`px-2 py-1 rounded text-xs font-bold transition shadow-sm ${a.rattrape ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-100 text-red-800 border border-red-300 hover:bg-red-200'}`}
-                                >
-                                  {a.rattrape ? '✅ Rattrapé' : '❌ À rattraper'}
-                                </button>
-                              ) : (
-                                <span className="text-gray-400 text-xs">-</span>
-                              )}
-                            </td>
-                            <td className="p-3 text-center">
-                              <button onClick={() => supprimerAbsence(a.id)} className="text-gray-400 hover:text-red-600 px-2 py-1 rounded text-xs font-bold transition">✖</button>
-                            </td>
+                            <td className="p-3 font-mono text-xs text-gray-600">{a.start.split('T')[0]}</td><td className="p-3 font-bold text-gray-800">{ag ? ag.nom : 'Inconnu'}</td>
+                            <td className="p-3 flex items-center gap-1"><span className={`px-2 py-0.5 rounded text-xs font-bold ${typeAbs === 'absence' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}>{typeAbs.toUpperCase()}</span>{a.deduire && <span className="text-[10px] bg-red-600 text-white px-1 rounded shadow-sm" title="Déduit du bilan">DÉDUIT</span>}</td>
+                            <td className="p-3 text-center font-mono font-bold">{h}h{String(m).padStart(2,'0')}</td><td className="p-3 text-gray-600 italic">{a.motif || ''}</td>
+                            <td className="p-3 text-center">{typeAbs === 'retard' && a.deduire ? ( <button onClick={() => toggleRattrape(a.id)} className={`px-2 py-1 rounded text-xs font-bold transition shadow-sm ${a.rattrape ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-100 text-red-800 border border-red-300 hover:bg-red-200'}`}>{a.rattrape ? '✅ Rattrapé' : '❌ À rattraper'}</button> ) : ( <span className="text-gray-400 text-xs">-</span> )}</td>
+                            <td className="p-3 text-center"><button onClick={() => supprimerAbsence(a.id)} className="text-gray-400 hover:text-red-600 px-2 py-1 rounded text-xs font-bold transition">✖</button></td>
                           </tr>
                         );
                       })}
-                      {absences.length === 0 && (
-                        <tr>
-                          <td colSpan="7" className="p-6 text-center text-gray-400 italic">Aucune absence ou retard enregistré pour le moment.</td>
-                        </tr>
-                      )}
+                      {absences.length === 0 && ( <tr><td colSpan="7" className="p-6 text-center text-gray-400 italic">Aucune absence ou retard enregistré.</td></tr> )}
                     </tbody>
                   </table>
                 </div>
@@ -2275,22 +2378,19 @@ if (vueActive === 'planning' && currentViewMonday) {
           </div>
         )}
 
-        {/* --- ONGLET CALENDRIER AGENT --- */}
         {vueActive === 'agent' && agentConsulte && (
-          <div className="flex-1 flex flex-col h-full bg-[#0F2942] text-white print:h-auto print:bg-white print:text-black">
-            <div className="flex justify-between items-center p-3 bg-[#0a1c2d] border-b border-gray-700 no-print shrink-0">
+          <div className="flex-1 flex flex-col h-full bg-gray-800 text-white print:h-auto print:bg-white print:text-black">
+            <div className="flex justify-between items-center p-3 bg-gray-900 border-b border-gray-700 no-print shrink-0">
               <div className="flex gap-4 items-center">
-                <select value={agentConsulte} onChange={(e) => setAgentConsulte(Number(e.target.value))} className="bg-white text-blue-900 font-bold p-2 rounded shadow outline-none">
-                  {agents.map(a => <option key={a.id} value={a.id}>{a.nom} ({a.quotite}%)</option>)}
-                </select>
+                <select value={agentConsulte} onChange={(e) => setAgentConsulte(Number(e.target.value))} className={`bg-white ${t.header} font-bold p-2 rounded shadow outline-none`}>{agents.map(a => <option key={a.id} value={a.id}>{a.nom} ({a.quotite}%)</option>)}</select>
                 <span className="text-sm font-medium text-gray-300">Année Scolaire {baseYear}-{baseYear+1}</span>
               </div>
               <div className="hidden print:block text-xl font-bold">Bilan Annuel : {agents.find(a=>a.id===agentConsulte)?.nom} ({baseYear}-{baseYear+1})</div>
-              <div className="flex gap-6 bg-[#173b5c] p-2 rounded border border-gray-600 print:border-none">
-                <div className="flex flex-col items-center"><span className="text-xs text-gray-400 print:text-black">H. Contrat</span><span className="font-mono font-bold">{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.hContrat, true)}</span></div>
-                <div className="flex flex-col items-center"><span className="text-xs text-gray-400 print:text-black">H. Consommées</span><span className="font-mono font-bold text-blue-300 print:text-black">{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.heuresConsommees, true)}</span></div>
+              <div className="flex gap-6 bg-gray-700 p-2 rounded border border-gray-600 print:border-none">
+                <div className="flex flex-col items-center"><span className="text-xs text-gray-300 print:text-black">H. Contrat</span><span className="font-mono font-bold">{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.hContrat, true)}</span></div>
+                <div className="flex flex-col items-center"><span className="text-xs text-gray-300 print:text-black">H. Consommées</span><span className="font-mono font-bold text-white/80 print:text-black">{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.heuresConsommees, true)}</span></div>
                 <div className="flex flex-col items-center">
-                  <span className="text-xs text-gray-400 print:text-black">Solde Actuel</span>
+                  <span className="text-xs text-gray-300 print:text-black">Solde Actuel</span>
                   <span className={`font-mono font-bold px-2 rounded print:border print:border-black ${statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal > 0 ? 'bg-green-500 text-white print:text-green-800 print:bg-green-100' : (statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal < 0 ? 'bg-red-500 text-white print:text-red-800 print:bg-red-100' : 'bg-emerald-600 text-white print:text-emerald-800 print:bg-emerald-100')}`}>
                     {statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal, true)}
                   </span>
@@ -2300,84 +2400,31 @@ if (vueActive === 'planning' && currentViewMonday) {
 
             <div className="flex-1 overflow-auto p-2 bg-white print:hidden">
               <table className="w-full text-center border-collapse text-xs table-fixed min-w-[1200px] text-black">
-                <thead><tr>{anneeScolaire.map((mois, i) => (<th key={i} className="border-2 border-black bg-yellow-400 py-1 uppercase">{mois.nom}</th>))}</tr></thead>
+                <thead><tr>{anneeScolaire.map((mois, i) => (<th key={i} className="border-2 border-black bg-gray-200 py-1 uppercase">{mois.nom}</th>))}</tr></thead>
                 <tbody>
                   {Array.from({ length: 31 }, (_, i) => i + 1).map(jourNum => (
                     <tr key={jourNum}>
                       {anneeScolaire.map((mois, idx) => {
                         const daysInMonth = new Date(mois.y, mois.m + 1, 0).getDate();
                         if (jourNum > daysInMonth) return <td key={idx} className="border border-gray-400 bg-gray-200"></td>;
-
-                        const dateObj = new Date(mois.y, mois.m, jourNum);
-                        const dateStr = `${mois.y}-${String(mois.m+1).padStart(2,'0')}-${String(jourNum).padStart(2,'0')}`;
-                        const mondayStr = getMondayStr(dateObj);
-                        
-                        const dayOfWeek = dateObj.getDay();
-                        const nomJour = nomsJours[dayOfWeek];
-                        const estWeekEnd = dayOfWeek === 0 || dayOfWeek === 6;
-                        const infoPeriode = getInfosPeriode(dateObj);
-
-                        let hDefaut = 0;
-                        let aDesEvenementsReels = false;
-
-                        const applicableTemplate = [...window.__templateVersions__].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || window.__templateVersions__[0];
-
-                        // Si la semaine a été modifiée à la main pour CE jour
-                        if (customWeeks[mondayStr]) {
-                          const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agentConsulte && e.start.startsWith(dateStr) && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin);
-                          if (evtsJour.length > 0) {
-                            hDefaut = evtsJour.reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0);
-                            aDesEvenementsReels = true;
-                          }
-                        }
-
-                        // Si aucune "Permanence" ou heure modifiée sur ce jour précis
-                        if (!aDesEvenementsReels) {
-                          if (infoPeriode) {
-                            if (infoPeriode.type === 'ferie') hDefaut = gabarits[applicableTemplate?.id]?.[agentConsulte]?.[dayOfWeek] || 0;
-                            else hDefaut = 0;
-                          } else {
-                            if (customWeeks[mondayStr]) hDefaut = 0; 
-                            else if (!estWeekEnd) hDefaut = gabarits[applicableTemplate?.id]?.[agentConsulte]?.[dayOfWeek] || 0;
-                          }
-                        }
-                        
-                        const exc = exceptions[`${agentConsulte}_${dateStr}`];
-                        let hFinal = exc ? exc.h : hDefaut;
-                        
-                        const absDuJour = absences.filter(a => a.agentId === agentConsulte && a.start.startsWith(dateStr));
-                        const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + ((new Date(a.end) - new Date(a.start))/3600000), 0);
-                        hFinal = Math.max(0, hFinal - hDeduct);
-
-                        let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : '');
-                        if (absDuJour.length > 0) {
-                          const txtAbs = absDuJour.map(a => `${a.type.toUpperCase()}${a.deduire?' (-h)':''}`).join(', ');
-                          noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs;
-                        }
-
-                        let bgJour = "bg-[#c6f6d5]"; 
-                        if (dayOfWeek === 0) bgJour = "bg-yellow-200"; 
-                        if (dayOfWeek === 6) bgJour = "bg-yellow-50";  
-                        
-                        if (infoPeriode) {
-                          if (infoPeriode.type === 'ferie') bgJour = "bg-green-200 text-green-900 font-bold";
-                          else bgJour = "bg-blue-100 text-blue-900";
-                        }
-
-                        if (absDuJour.length > 0) bgJour = "bg-red-200 text-red-900 font-bold";
-
+                        const dateObj = new Date(mois.y, mois.m, jourNum); const dateStr = `${mois.y}-${String(mois.m+1).padStart(2,'0')}-${String(jourNum).padStart(2,'0')}`;
+                        const mondayStr = getMondayStr(dateObj); const dayOfWeek = dateObj.getDay(); const nomJour = nomsJours[dayOfWeek]; const estWeekEnd = dayOfWeek === 0 || dayOfWeek === 6; const infoPeriode = getInfosPeriode(dateObj);
+                        let hDefaut = 0; let aDesEvenementsReels = false;
+                        const applicableTemplate = [...window.__templateVersions__].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(temp => temp.dateDebut <= dateStr) || window.__templateVersions__[0];
+                        if (customWeeks[mondayStr]) { const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agentConsulte && e.start.startsWith(dateStr) && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin); if (evtsJour.length > 0) { hDefaut = evtsJour.reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0); aDesEvenementsReels = true; } }
+                        if (!aDesEvenementsReels) { if (infoPeriode) { if (infoPeriode.type === 'ferie') hDefaut = gabarits[applicableTemplate?.id]?.[agentConsulte]?.[dayOfWeek] || 0; else hDefaut = 0; } else { if (customWeeks[mondayStr]) hDefaut = 0; else if (!estWeekEnd) hDefaut = gabarits[applicableTemplate?.id]?.[agentConsulte]?.[dayOfWeek] || 0; } }
+                        const exc = exceptions[`${agentConsulte}_${dateStr}`]; let hFinal = exc ? exc.h : hDefaut;
+                        const absDuJour = absences.filter(a => a.agentId === agentConsulte && a.start.startsWith(dateStr)); const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + ((new Date(a.end) - new Date(a.start))/3600000), 0); hFinal = Math.max(0, hFinal - hDeduct);
+                        let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : ''); if (absDuJour.length > 0) { const txtAbs = absDuJour.map(a => `${a.type.toUpperCase()}${a.deduire?' (-h)':''}`).join(', '); noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs; }
+                        let bgJour = "bg-white"; if (dayOfWeek === 0) bgJour = "bg-gray-100"; if (dayOfWeek === 6) bgJour = "bg-gray-50";  
+                        if (infoPeriode) { if (infoPeriode.type === 'ferie') bgJour = "bg-green-100 text-green-900 font-bold"; else bgJour = `${t.bgLight} ${t.header}`; }
+                        if (absDuJour.length > 0) bgJour = "bg-red-100 text-red-900 font-bold";
                         return (
                           <td key={idx} className="border border-black p-0 hover:outline hover:outline-2 hover:outline-blue-500 cursor-pointer relative" onClick={() => gererClicJourAgent(agentConsulte, dateStr, hFinal, noteAffichage)}>
                             <div className="flex h-6 items-stretch">
-                              <div className={`w-8 flex-shrink-0 flex items-center justify-center border-r border-gray-300 text-[10px] ${bgJour}`}>
-                                <span className="rotate-[-90deg] mr-1 text-[8px] opacity-70">{nomJour[0]}</span>{jourNum}
-                              </div>
-                              <div className={`w-10 flex-shrink-0 flex items-center justify-center font-bold font-mono border-r border-gray-300 ${exc || absDuJour.length > 0 ? 'bg-orange-100 text-orange-900' : ''}`}>
-                                {formatHeureTableau(hFinal)}
-                              </div>
-                              <div className={`flex-1 flex items-center px-1 truncate text-[10px] ${exc || absDuJour.length > 0 ? 'bg-orange-50 font-bold text-orange-800' : 'text-gray-500'}`}>
-                                {noteAffichage}
-                              </div>
+                              <div className={`w-8 flex-shrink-0 flex items-center justify-center border-r border-gray-300 text-[10px] ${bgJour}`}><span className="rotate-[-90deg] mr-1 text-[8px] opacity-70">{nomJour[0]}</span>{jourNum}</div>
+                              <div className={`w-10 flex-shrink-0 flex items-center justify-center font-bold font-mono border-r border-gray-300 ${exc || absDuJour.length > 0 ? 'bg-orange-100 text-orange-900' : ''}`}>{formatHeureTableau(hFinal)}</div>
+                              <div className={`flex-1 flex items-center px-1 truncate text-[10px] ${exc || absDuJour.length > 0 ? 'bg-orange-50 font-bold text-orange-800' : 'text-gray-500'}`}>{noteAffichage}</div>
                             </div>
                           </td>
                         );
@@ -2389,18 +2436,7 @@ if (vueActive === 'planning' && currentViewMonday) {
             </div>
 
             <div className="hidden print:block w-full">
-              <PrintAgentYearlyView 
-                agent={agents.find(a=>a.id===agentConsulte)} 
-                baseYear={baseYear}
-                anneeScolaire={anneeScolaire}
-                getMondayStr={getMondayStr}
-                getInfosPeriode={getInfosPeriode}
-                customWeeks={customWeeks}
-                gabarits={gabarits}
-                exceptions={exceptions}
-                formatHeureTableau={formatHeureTableau}
-                absences={absences}
-              />
+              <PrintAgentYearlyView agent={agents.find(a=>a.id===agentConsulte)} baseYear={baseYear} anneeScolaire={anneeScolaire} getMondayStr={getMondayStr} getInfosPeriode={getInfosPeriode} customWeeks={customWeeks} gabarits={gabarits} exceptions={exceptions} formatHeureTableau={formatHeureTableau} absences={absences} />
             </div>
           </div>
         )}
@@ -2411,9 +2447,16 @@ if (vueActive === 'planning' && currentViewMonday) {
 
 export default function App() {
   const [isSetupComplete, setIsSetupComplete] = useState(() => localStorage.getItem('edt-setup-done') === 'true');
-  
+  const [themeId, setThemeId] = useState(() => localStorage.getItem('edt-theme') || 'menthe_terracotta');
+  const t = THEMES[themeId] || THEMES.menthe_terracotta;
+
+  const changeTheme = (newTheme) => {
+    setThemeId(newTheme);
+    localStorage.setItem('edt-theme', newTheme);
+  };
+
   if (!isSetupComplete) {
-    return <SetupWizard onComplete={() => setIsSetupComplete(true)} />;
+    return <SetupWizard onComplete={() => setIsSetupComplete(true)} t={t} />;
   }
-  return <MainApp />;
+  return <MainApp t={t} themeId={themeId} changeTheme={changeTheme} />;
 }
