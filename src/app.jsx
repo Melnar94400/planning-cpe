@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -259,10 +259,11 @@ const getJoursFerie = (year) => {
 // ASSISTANT DE PREMIÈRE CONFIGURATION (WIZARD)
 // ============================================================================
 const SetupWizard = ({ onComplete, t }) => {
+  const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
   const [step, setStep] = useState(1);
   const [periodes, setPeriodes] = useState([]);
   const [agents, setAgents] = useState([]);
-  const [postes, setPostes] = useState([{ id: 101, nom: 'Loge', couleur: '#EF4444' }, { id: 102, nom: 'Cantine', couleur: '#F59E0B' }, { id: 103, nom: 'Grille', couleur: '#8B5CF6' }]);
+  const [postes, setPostes] = useState([]); // Vide par défaut
 
   const [anneeScolaireDeBase, setAnneeScolaireDeBase] = useState(new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1);
   const [zone, setZone] = useState("Zone C");
@@ -271,7 +272,14 @@ const SetupWizard = ({ onComplete, t }) => {
 
   const [formPeriode, setFormPeriode] = useState({ nom: '', debut: '', fin: '', type: 'vacances' });
   const [formAgent, setFormAgent] = useState({ nom: '', quotite: '100', estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6' });
-  const [formPoste, setFormPoste] = useState({ nom: '', couleur: '#10B981' });
+  
+  // Formulaire de poste enrichi avec la grille de besoins
+  const [formPoste, setFormPoste] = useState({
+    nom: '',
+    couleur: '#8B5CF6',
+    qte: 1,
+    slots: [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]
+  });
 
   const handleAgentChange = (champ, valeur) => {
     const newAgent = { ...formAgent, [champ]: valeur };
@@ -357,7 +365,34 @@ const SetupWizard = ({ onComplete, t }) => {
     const pad = n => String(n).padStart(2, '0');
     const startStr = `${baseDate.getFullYear()}-${pad(baseDate.getMonth()+1)}-${pad(baseDate.getDate())}`;
 
-    localStorage.setItem('edt-template-versions', JSON.stringify([{ id: 1, nom: "Modèle Initial", dateDebut: startStr, events: [], besoins: [], statut: 'brouillon' }]));
+    // Génération automatique des besoins initiaux à partir des grilles horaires configurées pour chaque poste
+    const initialBesoins = [];
+    const baseMonday = new Date(startStr);
+
+    postes.forEach(p => {
+      if (p.slots && p.slots.length > 0) {
+        p.slots.forEach(slot => {
+          if (slot.start && slot.end) {
+            [1, 2, 3, 4, 5].forEach(dayIndex => {
+              if (slot.days[dayIndex]) {
+                const d = new Date(baseMonday);
+                d.setDate(d.getDate() + dayIndex - 1);
+                const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+                initialBesoins.push({
+                  id: String(Date.now() + Math.random()),
+                  start: `${dateStr}T${slot.start}:00`,
+                  end: `${dateStr}T${slot.end}:00`,
+                  extendedProps: { posteId: p.id, posteNom: p.nom, qte: Number(p.qte) || 1 }
+                });
+              }
+            });
+          }
+        });
+      }
+    });
+
+    localStorage.setItem('edt-template-versions', JSON.stringify([{ id: 1, nom: "Modèle Initial", dateDebut: startStr, events: [], besoins: initialBesoins, statut: 'brouillon' }]));
     localStorage.setItem('edt-setup-done', 'true');
     onComplete();
   };
@@ -424,7 +459,6 @@ const SetupWizard = ({ onComplete, t }) => {
           )}
 
           {step === 3 && (() => {
-            // Calcul parfait sécurisé contre les erreurs de décimales JS
             const totalETP = Math.round(agents.reduce((sum, a) => sum + Number(a.quotite), 0)) / 100;
             const isOverflow = dotation > 0 && totalETP > dotation;
             const isExact = dotation > 0 && totalETP === dotation;
@@ -451,17 +485,10 @@ const SetupWizard = ({ onComplete, t }) => {
                       </span>
                       <span className="text-sm font-bold text-gray-500 mb-1">/ {dotation || '?'} ETP</span>
                     </div>
-                    {dotation > 0 && (
-                      <span className={`text-xs font-bold mt-1 ${isOverflow ? 'text-red-500' : 'text-emerald-500'}`}>
-                        {isOverflow 
-                          ? `⚠️ Dépassement : +${(totalETP - dotation).toFixed(2)} ETP` 
-                          : `✅ Reste à pourvoir : ${(dotation - totalETP).toFixed(2)} ETP`}
-                      </span>
-                    )}
                   </div>
                 </div>
 
-<div className={`${t.bgLight} p-4 rounded-xl border ${t.borderLight} grid grid-cols-12 gap-3 items-end`}>
+                <div className={`${t.bgLight} p-4 rounded-xl border ${t.borderLight} grid grid-cols-12 gap-3 items-end`}>
                   <div className="col-span-4"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Nom</label><input type="text" value={formAgent.nom} onChange={e=>handleAgentChange('nom', e.target.value)} className="w-full p-2 text-sm rounded border bg-transparent" placeholder="Ex: Célia" /></div>
                   <div className="col-span-2"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Quot. (%)</label><input type="number" step="0.1" value={formAgent.quotite} onChange={e=>handleAgentChange('quotite', e.target.value)} className="w-full p-2 text-sm rounded border bg-transparent font-bold text-center" /></div>
                   <div className="col-span-3 flex items-center justify-center pb-2"><label className={`flex items-center gap-1 text-[10px] font-bold ${t.header} cursor-pointer bg-transparent px-2 py-1.5 border rounded shadow-sm`}><input type="checkbox" checked={formAgent.estEtudiant} onChange={e=>handleAgentChange('estEtudiant', e.target.checked)} className="w-3 h-3" />🎓 Étudiant</label></div>
@@ -482,26 +509,80 @@ const SetupWizard = ({ onComplete, t }) => {
                   ))}
                 </div>
 
-                <div className="flex justify-between pt-4 mt-8 border-t border-black/10"><button onClick={() => setStep(2)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => { if(agents.length === 0 && !window.confirm("Aucun agent ajouté. Continuer ?")) return; setStep(4); }} className={`${t.btnPrimary} px-6 py-2 rounded-lg font-bold shadow`}>Suivant ➔</button></div>
+                <div className="flex justify-between pt-4 mt-8 border-t border-black/10"><button onClick={() => setStep(2)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => setStep(4)} className={`${t.btnPrimary} px-6 py-2 rounded-lg font-bold shadow`}>Suivant ➔</button></div>
               </div>
             );
           })()}
           
           {step === 4 && (
             <div className="space-y-6 animate-in fade-in">
-              <h2 className={`text-xl font-bold ${t.header} border-b pb-2`}>3. Postes / Lieux</h2>
-              <p className="text-sm text-gray-500">Définissez les postes clés du planning de l'établissement.</p>
+              <h2 className={`text-xl font-bold ${t.header} border-b pb-2`}>3. Postes & Grilles de Besoins</h2>
+              <p className="text-sm text-gray-500">Définissez les postes clés et configurez leurs plages horaires récurrentes.</p>
               
-              <div className="flex gap-2">
-                <input type="text" placeholder="Nom du poste..." value={formPoste.nom} onChange={e=>setFormPoste({...formPoste, nom: e.target.value})} className={`flex-1 border ${t.borderLight} p-2 rounded text-sm bg-transparent`} />
-                <input type="color" value={formPoste.couleur} onChange={e=>setFormPoste({...formPoste, couleur: e.target.value})} className="w-10 h-10 rounded cursor-pointer p-0 border-0" />
-                <button onClick={() => { if(formPoste.nom) { setPostes([...postes, {id: Date.now(), nom: formPoste.nom, couleur: formPoste.couleur}]); setFormPoste({...formPoste, nom: ''}); } }} className={`${t.btnPrimary} px-4 rounded font-bold`}>+</button>
+              <div className={`p-4 rounded-xl border ${t.borderLight} ${t.bgLight} space-y-3`}>
+                <div className="flex gap-3">
+                  <div className="flex-[2]">
+                    <label className={`text-[10px] font-bold ${t.header} uppercase block mb-1`}>Nom du poste</label>
+                    <input type="text" placeholder="Ex: Loge, Cantine..." value={formPoste.nom} onChange={e=>setFormPoste({...formPoste, nom: e.target.value})} className="w-full border rounded p-2 text-sm bg-transparent font-bold" />
+                  </div>
+                  <div className="w-24">
+                    <label className={`text-[10px] font-bold ${t.header} uppercase block mb-1`}>Effectif</label>
+                    <input type="number" min="1" value={formPoste.qte} onChange={e=>setFormPoste({...formPoste, qte: e.target.value})} className="w-full border rounded p-2 text-sm text-center font-bold bg-transparent" />
+                  </div>
+                  <div>
+                    <label className={`text-[10px] font-bold ${t.header} uppercase block mb-1`}>Couleur</label>
+                    <input type="color" value={formPoste.couleur} onChange={e=>setFormPoste({...formPoste, couleur: e.target.value})} className="w-10 h-10 rounded cursor-pointer p-0 border-0" />
+                  </div>
+                </div>
+
+                {/* Plages horaires de ce poste */}
+                <div className="border-t border-black/10 pt-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-bold text-gray-500 uppercase">Plages horaires (Semaine type)</span>
+                    <button type="button" onClick={() => setFormPoste({...formPoste, slots: [...formPoste.slots, { id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]})} className="text-xs bg-black/10 hover:bg-black/20 px-2 py-1 rounded font-bold">➕ Plage</button>
+                  </div>
+                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                    {formPoste.slots.map((slot, idx) => (
+                      <div key={idx} className={`p-2 rounded border ${t.borderLight} ${t.cardBg} flex flex-col gap-1.5`}>
+                        <div className="flex items-center gap-2">
+                          <input type="time" required value={slot.start} onChange={e => {
+                            const ns = [...formPoste.slots]; ns[idx].start = e.target.value; setFormPoste({...formPoste, slots: ns});
+                          }} className="border p-1 text-xs rounded bg-transparent w-24 text-center font-bold" />
+                          <span className="text-gray-400 text-xs">à</span>
+                          <input type="time" required value={slot.end} onChange={e => {
+                            const ns = [...formPoste.slots]; ns[idx].end = e.target.value; setFormPoste({...formPoste, slots: ns});
+                          }} className="border p-1 text-xs rounded bg-transparent w-24 text-center font-bold" />
+                          <button type="button" onClick={() => {
+                            const ns = [...formPoste.slots]; ns.splice(idx, 1); setFormPoste({...formPoste, slots: ns});
+                          }} className="text-red-500 font-bold text-xs ml-auto">✖</button>
+                        </div>
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5].map(day => (
+                            <label key={day} className={`flex-1 flex items-center justify-center py-0.5 rounded border text-[10px] font-bold cursor-pointer ${slot.days[day] ? `${t.btnPrimary} border-transparent` : 'bg-transparent text-gray-500 border-black/10'}`}>
+                              <input type="checkbox" className="hidden" checked={slot.days[day]} onChange={e => {
+                                const ns = [...formPoste.slots]; ns[idx].days[day] = e.target.checked; setFormPoste({...formPoste, slots: ns});
+                              }} />
+                              {nomsJours[day % 7]}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <button type="button" onClick={() => {
+                  if(formPoste.nom) {
+                    setPostes([...postes, { id: Date.now(), ...formPoste, qte: Number(formPoste.qte) || 1 }]);
+                    setFormPoste({ nom: '', couleur: '#8B5CF6', qte: 1, slots: [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }] });
+                  }
+                }} className={`w-full ${t.btnPrimary} py-2 rounded text-sm font-bold shadow mt-2`}>Ajouter ce poste</button>
               </div>
 
               <div className="flex flex-wrap gap-2">
                 {postes.map(p => (
                   <span key={p.id} className="text-sm font-bold px-3 py-1 rounded-full flex items-center gap-2 shadow-sm" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>
-                    {p.nom} 
+                    {p.nom} ({p.qte} pers., {p.slots?.length || 0} plage(s)) 
                     <button onClick={()=>setPostes(postes.filter(x=>x.id!==p.id))} className="hover:opacity-60 transition-opacity">✖</button>
                   </span>
                 ))}
@@ -518,7 +599,6 @@ const SetupWizard = ({ onComplete, t }) => {
     </div>
   );
 };
-
 // ============================================================================
 // ALGORITHME ANTI-CHEVAUCHEMENT POUR L'IMPRESSION DU PLANNING
 // ============================================================================
@@ -855,7 +935,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const pad = n => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   });
-
   const [agents, setAgents] = useState(() => JSON.parse(localStorage.getItem('edt-agents') || '[]'));
   const [postes, setPostes] = useState(() => JSON.parse(localStorage.getItem('edt-postes') || '[]'));
   
@@ -974,8 +1053,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return s ? JSON.parse(s)[0].id : 1;
   });
 
-  const [customWeeks, setCustomWeeks] = useState(() => JSON.parse(localStorage.getItem('edt-custom-weeks') || '{}'));
-  const [exceptions, setExceptions] = useState(() => JSON.parse(localStorage.getItem('edt-exceptions') || '{}'));
+const [customWeeks, setCustomWeeks] = useState(() => JSON.parse(localStorage.getItem('edt-custom-weeks') || '{}'));
+const [exceptions, setExceptions] = useState(() => JSON.parse(localStorage.getItem('edt-exceptions') || '{}'));
 
 
 const [amplitude, setAmplitude] = useState(() => {
@@ -1011,6 +1090,8 @@ const [amplitude, setAmplitude] = useState(() => {
     const format = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}:00`;
     return { minStr: format(baseMins), maxStr: format(maxMins), baseMins, span };
   })();
+
+
   
 const renderSlotLabel = (arg) => {
     const h = String(arg.date.getHours()).padStart(2,'0');
@@ -1081,8 +1162,7 @@ const renderSlotLabel = (arg) => {
     });
   });
 
-  const currentTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0] || {id:1, events:[], besoins:[]};
-
+  const currentTemplate = templateVersions.find(v => v.id === activeTemplateId) || templateVersions[0]; 
   const [modalCreation, setModalCreation] = useState({ isOpen: false, eventId: null, start: null, end: null });
   const [formTypeEvent, setFormTypeEvent] = useState('affectation'); 
   const [formTypeAbsence, setFormTypeAbsence] = useState('absence'); 
@@ -1122,10 +1202,12 @@ const renderSlotLabel = (arg) => {
   const [agentActif, setAgentActif] = useState(null);
   const [posteActif, setPosteActif] = useState(null);
   const [currentViewMonday, setCurrentViewMonday] = useState(null);
-
+  const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const isInitialMount = useRef(true);
   const [needsBackup, setNeedsBackup] = useState(false);
 
+
+  
   useEffect(() => {
     let isModified = false;
     let newPeriodes = [...periodesFeriees];
@@ -1261,6 +1343,7 @@ const renderSlotLabel = (arg) => {
 
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
 
+
   const getInfosPeriode = (date) => {
     const pad = n => String(n).padStart(2, '0');
     const str = `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
@@ -1295,7 +1378,8 @@ const renderSlotLabel = (arg) => {
       });
     });
     return g;
-  })();
+  
+})();
 
   const getHeuresTheoriquesJour = (agentId, dateStr) => {
     const dateObj = new Date(dateStr);
@@ -1465,7 +1549,30 @@ const renderSlotLabel = (arg) => {
       return true;
     })
   ];
+const activeAlerts = useMemo(() => {
+    const alerts = [];
+    const targetMon = currentViewMonday || getMondayStr(currentTemplate?.dateDebut || new Date());
+    const realEvts = customWeeks[targetMon] ? customWeeks[targetMon] : (
+      [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= targetMon || true)?.events.map(e => shiftEventToWeek(e, targetMon)) || []
+    );
+    const applicableT = [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= targetMon) || templateVersions[0];
+    const besoins = (applicableT?.besoins || []).map(b => shiftEventToWeek(b, targetMon));
 
+    besoins.forEach(b => {
+      const { isSousEffectif, minCount, missingAgents } = checkCoverage(b, realEvts, absences);
+      if (isSousEffectif) {
+        const dStart = new Date(b.start);
+        const dEnd = new Date(b.end);
+        const rmp = missingAgents?.length > 0 ? ` (Manque : ${missingAgents.join(', ')})` : '';
+        alerts.push({
+          title: `Sous-effectif : ${b.extendedProps?.posteNom || 'Poste'}`,
+          message: `${nomsJours[dStart.getDay()]} de ${dStart.getHours()}h${String(dStart.getMinutes()).padStart(2,'0')} à ${dEnd.getHours()}h${String(dEnd.getMinutes()).padStart(2,'0')} (${minCount} / ${b.extendedProps?.qte} pers.)${rmp}`
+        });
+      }
+    });
+
+    return alerts;
+  }, [agents, currentTemplate, currentViewMonday, customWeeks, absences, templateVersions]);
 const declencherImpression = (e) => {
     if (e) e.preventDefault();
     setPrintFilter({ type: 'all', id: null }); // Force la vue globale par défaut
@@ -2456,27 +2563,64 @@ const renderEventContent = (arg) => {
             <h1 className="text-xl font-bold tracking-wider">Planning CPE</h1>
           </div>
           
-          {/* Barre d'outils propre sur une seule ligne répartie */}
+{/* Barre d'outils propre sur une seule ligne répartie */}
           <div className="flex items-center justify-between bg-black/10 p-1.5 rounded-lg gap-1">
             <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
             <button onClick={() => document.getElementById('import-file').click()} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Restaurer une sauvegarde">⬆️</button>
             <button onClick={handleExport} className={`relative p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500 text-white' : t.sidebarIconBtn}`} title="Sauvegarder les données (Fichier JSON)">
               ⬇️{needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
             </button>
+
+            {/* 🔔 BOUTON DE NOTIFICATIONS DISCRET INTÉGRÉ ICI */}
+            <div className="relative flex-1 flex justify-center">
+              <button 
+                onClick={() => setShowNotificationMenu(!showNotificationMenu)} 
+                className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors w-full flex items-center justify-center relative`}
+                title="Centre de notifications"
+              >
+                🔔
+                {activeAlerts.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-sm">
+                    {activeAlerts.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Menu déroulant des notifications */}
+              {showNotificationMenu && (
+                <div className={`absolute left-0 mt-9 w-72 rounded-xl shadow-2xl border ${t.borderLight} ${t.cardBg} z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150`}>
+                  <div className={`${t.headerBg} p-3 flex justify-between items-center border-b ${t.borderLight}`}>
+                    <h3 className={`font-bold text-xs uppercase tracking-wider ${t.headerText}`}>Centre d'alertes</h3>
+                    <button onClick={() => setShowNotificationMenu(false)} className="text-xs font-bold opacity-70 hover:opacity-100">✖</button>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto p-2 space-y-2">
+                    {activeAlerts.length === 0 ? (
+                      <div className="text-center py-6 text-gray-400 text-xs italic">
+                        Aucun problème détecté tout est en ordre 👍
+                      </div>
+                    ) : (
+                      activeAlerts.map((alert, idx) => (
+                        <div key={idx} className={`p-2.5 rounded-lg border ${t.borderLight} ${t.bgLight} text-xs flex gap-2 items-start shadow-xs`}>
+                          <span className="text-base leading-none">⚠️</span>
+                          <div className="flex-1">
+                            <p className={`font-bold ${t.header}`}>{alert.title}</p>
+                            <p className="text-gray-500 text-[11px] mt-0.5">{alert.message}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
             <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Paramètres">⚙️</button>
-<button onClick={declencherImpression} className={`${t.sidebarIconBtn} p-2 rounded text-xs font-bold border transition-colors flex-1 flex justify-center`} title="Imprimer">🖨️</button>            <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
+            <button onClick={declencherImpression} className={`${t.sidebarIconBtn} p-2 rounded text-xs font-bold border transition-colors flex-1 flex justify-center`} title="Imprimer">🖨️</button>
+            <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
           </div>
-          <div className="flex flex-col bg-black/10 rounded p-1 shadow-inner gap-1 mt-2">
-            <button onClick={() => setVueActive('journee')} className={`text-sm py-1.5 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
-            <button onClick={() => setVueActive('template')} className={`text-sm py-1.5 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
-            <button onClick={() => setVueActive('planning')} className={`text-sm py-1.5 rounded transition ${vueActive === 'planning' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📅 Planning Hebdo (Réel)</button>
-            <button onClick={() => setVueActive('dashboard')} className={`text-sm py-1.5 rounded transition ${vueActive === 'dashboard' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📊 Bilan Équipe</button>
-            <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-sm py-1.5 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>👤 Calendriers Individuels</button>
-            <button onClick={() => setVueActive('absences')} className={`text-sm py-1.5 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📋 Absences & Retards</button>
           </div>
-        </div>
-        
+ 
         {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
           <div className={`p-4 flex-1 overflow-y-auto space-y-4 ${t.bgMain}`}>
             
@@ -2815,8 +2959,7 @@ const renderEventContent = (arg) => {
                   </select>
                 </div>
               </div>
-              <BandeauAlerte />
-            </div>
+                          </div>
 
             <div className="flex-1 overflow-hidden px-4 pb-4">
 {isPrinting ? (
@@ -2911,7 +3054,6 @@ const renderEventContent = (arg) => {
                   )}
                 </div>
               </div>
-              <BandeauAlerte />
             </div>
             
             <div className="flex-1 overflow-hidden px-4 pb-4">
