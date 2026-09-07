@@ -4,6 +4,14 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 
 const BASE_HEURES_PLEINES = 1607;
+
+// --- FONCTION DE CONVERSION HEX -> RGB POUR LE THÈME DYNAMIQUE ---
+const hexToRgb = (hex) => {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  return `${parseInt(h.substring(0,2), 16) || 0}, ${parseInt(h.substring(2,4), 16) || 0}, ${parseInt(h.substring(4,6), 16) || 0}`;
+};
+
 // ============================================================================
 // CONFIGURATION DES THÈMES VISUELS
 // ============================================================================
@@ -78,13 +86,33 @@ const THEMES = {
     },
     dark: {
       sidebar: "bg-[#0A1128]", sidebarText: "text-[#E0E7FF]", sidebarIconBtn: "bg-white/5 hover:bg-white/10 border-white/10",
-      headerBg: "bg-[#0A1128]", headerText: "text-[#E0E7FF]", header: "text-[#60A5FA]", textMenuMuted: "text-[#93C5FD]", 
+      headerBg: "bg-[#0A1128]", headerText: "text-[#E0E7FF]", header: "text-[#60A5FA]", textMenuMuted: "text-[#3B82F6]", 
       bgMain: "bg-[#040712]", bgLight: "bg-[#111D3D]", borderLight: "border-[#1E2E5B]", cardBg: "bg-[#080D1D]",
       activeTab: "bg-[#080D1D] text-[#60A5FA] font-bold shadow-sm border border-[#1E2E5B]",
       hexBgMain: "#040712", hexCardBg: "#080D1D", hexBgLight: "#111D3D", hexBorder: "#1E2E5B", hexText: "#E5E7EB"
     }
+  },
+  personnalise: {
+    nom: "Personnalisé",
+    btnPrimary: "custom-btn transition-colors", textAccent: "custom-text-accent",
+    fcPrimary: "var(--c-acc)", fcPrimaryHover: "var(--c-acc)", fcToday: "rgba(var(--c-acc-rgb), 0.15)",
+    light: {
+      sidebar: "custom-sidebar", sidebarText: "text-white", sidebarIconBtn: "bg-black/10 hover:bg-black/20 border-transparent",
+      headerBg: "custom-sidebar", headerText: "text-white", header: "custom-text-primary", textMenuMuted: "text-white/70",
+      bgMain: "custom-bg-main", bgLight: "custom-bg-light", borderLight: "custom-border", cardBg: "custom-card",
+      activeTab: "custom-card custom-text-accent font-bold shadow-sm border custom-border",
+      hexBgMain: "rgba(var(--c-prim-rgb), 0.05)", hexCardBg: "#ffffff", hexBgLight: "rgba(var(--c-prim-rgb), 0.15)", hexBorder: "rgba(var(--c-prim-rgb), 0.2)", hexText: "#374151"
+    },
+    dark: {
+      sidebar: "custom-sidebar-dark", sidebarText: "custom-text-primary", sidebarIconBtn: "bg-white/5 hover:bg-white/10 border-transparent",
+      headerBg: "custom-sidebar-dark", headerText: "custom-text-primary", header: "custom-text-primary", textMenuMuted: "custom-text-primary-muted",
+      bgMain: "bg-[#0f1115]", bgLight: "custom-sidebar-dark", borderLight: "custom-border-dark", cardBg: "bg-[#16181d]",
+      activeTab: "bg-[#16181d] custom-text-accent font-bold shadow-sm border custom-border-dark",
+      hexBgMain: "#0f1115", hexCardBg: "#16181d", hexBgLight: "rgba(var(--c-prim-rgb), 0.1)", hexBorder: "rgba(var(--c-prim-rgb), 0.2)", hexText: "#E5E7EB"
+    }
   }
 };
+
 // --- FORMATAGE ET PARSING DES HEURES ---
 const formatHeureMinutes = (decimal) => {
   if (decimal === undefined || decimal === null || Number.isNaN(Number(decimal))) return "";
@@ -141,7 +169,8 @@ const exporterDonnees = () => {
     setupDone: localStorage.getItem('edt-setup-done'),
     dotation: localStorage.getItem('edt-dotation'),
     theme: localStorage.getItem('edt-theme'),
-    darkMode: localStorage.getItem('edt-dark-mode')
+    darkMode: localStorage.getItem('edt-dark-mode'),
+    customColors: localStorage.getItem('edt-custom-colors')
   };
   
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -168,6 +197,7 @@ const executeImport = (file) => {
       if (data.dotation !== undefined) localStorage.setItem('edt-dotation', data.dotation);
       if (data.theme) localStorage.setItem('edt-theme', data.theme);
       if (data.darkMode) localStorage.setItem('edt-dark-mode', data.darkMode);
+      if (data.customColors) localStorage.setItem('edt-custom-colors', data.customColors);
       localStorage.setItem('edt-setup-done', 'true');
       
       window.location.reload();
@@ -715,7 +745,7 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
 // ============================================================================
 // COMPOSANT PRINCIPAL DE L'APPLICATION GESTION
 // ============================================================================
-const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
+const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
   const [vueActive, setVueActive] = useState('template'); 
   const [agentConsulte, setAgentConsulte] = useState(null); 
   const [jourConsulte, setJourConsulte] = useState(() => {
@@ -793,7 +823,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
         motif: a.motif || '',
         deduire: a.deduire !== undefined ? a.deduire : (a.type === 'retard'),
         rattrape: a.rattrape || false,
-        journeeComplete: a.journeeComplete // Migration silencieuse pour la suite
+        journeeComplete: a.journeeComplete
       };
     });
   });
@@ -1528,18 +1558,21 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
     setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' });
   };
 
-  const renderEventContent = (arg) => {
+const renderEventContent = (arg) => {
     const tS = arg.event.start;
     const tE = arg.event.end;
     const timeStr = (tS && tE) ? `${tS.getHours()}h${String(tS.getMinutes()).padStart(2,'0')}-${tE.getHours()}h${String(tE.getMinutes()).padStart(2,'0')}` : '';
     
     const isLocked = vueActive === 'template' && currentTemplate.statut === 'valide';
+    
+    // Le secret de la lisibilité : on contrecarre le blanc forcé de FullCalendar
+    const textColor = t.isDark ? '#e5e7eb' : '#111827';
 
     if (arg.event.extendedProps.isBesoin) {
       const isSous = arg.event.extendedProps.isSousEffectif;
       return (
-        <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-red-400' : ''}`}>
-          <div className="px-1 py-0.5 font-bold text-white flex justify-between items-center" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a' }}>
+        <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-red-400' : ''}`} style={{ color: textColor }}>
+          <div className="px-1 py-0.5 font-bold flex justify-between items-center" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a', color: '#ffffff' }}>
             <span className="truncate">🎯 {arg.event.extendedProps.posteNom} <span className="text-[9px] font-normal opacity-90 ml-1">({timeStr})</span></span>
             {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-white/50 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✖</button>}
           </div>
@@ -1555,8 +1588,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
       const isAbs = typeAbs === 'absence';
       const ded = arg.event.extendedProps.deduire;
       return (
-        <div onClick={() => ouvrirEdition(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] border border-black/10 shadow-md relative group cursor-pointer hover:ring-2 transition-all z-50 opacity-90 ${isAbs ? 'bg-red-50 text-red-900' : 'bg-orange-50 text-orange-900'}`}>
-          <div className="px-1 py-0.5 font-bold text-white flex justify-between items-center" style={{ backgroundColor: isAbs ? '#EF4444' : '#F59E0B' }}>
+        <div onClick={() => ouvrirEdition(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] border border-black/10 shadow-md relative group cursor-pointer hover:ring-2 transition-all z-50 opacity-90 ${isAbs ? 'bg-red-500/20 border-red-500' : 'bg-orange-500/20 border-orange-500'}`} style={{ color: textColor }}>
+          <div className={`px-1 py-0.5 font-bold flex justify-between items-center ${isAbs ? 'bg-red-500' : 'bg-orange-500'}`} style={{ color: '#ffffff' }}>
             <span className="truncate">{isAbs ? '🚫 ABSENCE' : '⏰ RETARD'} {ded && '(-H)'} <span className="text-[9px] font-normal opacity-90 ml-1">({timeStr})</span></span>
             <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-red-700 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✖</button>
           </div>
@@ -1568,17 +1601,24 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
       );
     }
     
+    // Opacité remontée à 40% (valeur hexa '66')
+    const agentColor = arg.event.backgroundColor || '#3b82f6';
+    const bgColorWithOpacity = agentColor + '66';
+
     return (
-      <div onClick={() => !isLocked && ouvrirEdition(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] border border-black/10 shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}>
-        <div className="px-1 py-0.5 font-bold text-white flex justify-between items-center" style={{ backgroundColor: arg.event.extendedProps.posteCouleur }}>
+      <div onClick={() => !isLocked && ouvrirEdition(arg.event)} 
+           className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] border border-black/10 shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
+           style={{ backgroundColor: bgColorWithOpacity, border: `1px solid ${agentColor}`, color: textColor }}
+      >
+        <div className="px-1 py-0.5 font-bold flex justify-between items-center" style={{ backgroundColor: arg.event.extendedProps.posteCouleur, color: '#ffffff' }}>
           <span className="truncate">{arg.event.extendedProps.posteNom} <span className="text-[9px] font-normal opacity-90 ml-1">({timeStr})</span></span>
           {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-red-500 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✖</button>}
         </div>
-        <div className="p-1 bg-white/95 text-gray-800 flex flex-col flex-1 leading-tight">
+        <div className="p-1 flex flex-col flex-1 leading-tight">
           <div className="flex justify-between items-start">
             <span className="font-semibold truncate pr-1">{arg.event.extendedProps.agentNom}</span>
           </div>
-          {arg.event.extendedProps.note && <span className="text-[10px] text-gray-600 truncate italic mt-1 bg-gray-100 rounded px-1">{arg.event.extendedProps.note}</span>}
+          {arg.event.extendedProps.note && <span className="text-[10px] opacity-80 truncate italic mt-1 bg-black/5 dark:bg-white/10 rounded px-1">{arg.event.extendedProps.note}</span>}
         </div>
       </div>
     );
@@ -1666,15 +1706,15 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
   const BandeauAlerte = () => {
     if (isPrinting || alertesSousEffectif.length === 0) return null;
     return (
-      <div className="bg-red-50 border-l-4 border-red-500 p-3 mb-3 rounded shadow-sm flex flex-col text-sm no-print">
-        <span className="font-bold text-red-800 mb-1">⚠️ Alertes de sous-effectif détectées :</span>
-        <ul className="grid grid-cols-2 gap-1 text-red-700">
+      <div className="bg-red-500/10 border-l-4 border-red-500 p-3 mb-3 rounded shadow-sm flex flex-col text-sm no-print">
+        <span className="font-bold text-red-500 mb-1">⚠️ Alertes de sous-effectif détectées :</span>
+        <ul className="grid grid-cols-2 gap-1 text-red-400">
           {alertesSousEffectif.map(a => {
             const dStart = new Date(a.start);
             const dEnd = new Date(a.end);
             const rmp = a.missingAgents?.length > 0 ? ` (Remplacement nécessaire: ${a.missingAgents.join(', ')})` : '';
             return (
-              <li key={a.id} className="bg-white/60 px-2 py-1 rounded">
+              <li key={a.id} className={`${t.bgLight} px-2 py-1 rounded`}>
                 <strong>{nomsJours[dStart.getDay()]} {dStart.getHours()}h{String(dStart.getMinutes()).padStart(2,'0')}-{dEnd.getHours()}h{String(dEnd.getMinutes()).padStart(2,'0')}</strong> : {a.extendedProps.posteNom} (<em>{a.minCount} / {a.extendedProps.qte} pers.</em>)
                 <span className="font-bold">{rmp}</span>
               </li>
@@ -1778,7 +1818,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
                     {periodesFeriees.map(p => (
                       <li key={p.id} className={`${t.cardBg} p-3 rounded-lg border ${t.borderLight} flex justify-between items-center text-sm shadow-sm`}>
                         <div>
-                          <span className="font-bold text-gray-800">{p.nom}</span> 
+                          <span className={`font-bold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{p.nom}</span> 
                           <span className={`ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-white ${p.type === 'ferie' ? 'bg-green-600' : 'bg-blue-600'}`}>
                             {p.type === 'ferie' ? 'Férié (Payé)' : 'Vacances (0h)'}
                           </span>
@@ -1813,12 +1853,13 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
                       {isDarkMode ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 gap-3">
-                    {Object.entries(THEMES).map(([id, theme]) => {
+                  
+                  <div className="grid grid-cols-1 gap-3 mb-4">
+                    {Object.entries(THEMES).filter(([id]) => id !== 'personnalise').map(([id, theme]) => {
                       const currentMode = isDarkMode ? theme.dark : theme.light;
                       return (
-                        <button type="button" key={id} onClick={() => changeTheme(id)} className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all ${themeId === id ? `border-[${theme.fcPrimary}] shadow-md ${currentMode.cardBg}` : `border-transparent hover:border-gray-500/30 ${t.cardBg}`}`}>
-                          <div className={`flex shrink-0 overflow-hidden rounded-full w-10 h-10 border border-gray-500/30 shadow-inner ${currentMode.cardBg}`}>
+                        <button type="button" key={id} onClick={() => changeTheme(id)} className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all ${themeId === id ? `border-[${theme.fcPrimary}] shadow-md ${currentMode.cardBg}` : `border-transparent hover:border-black/5 dark:hover:border-white/5 ${t.cardBg}`}`}>
+                          <div className={`flex shrink-0 overflow-hidden rounded-full w-10 h-10 border border-black/10 dark:border-white/10 shadow-inner ${currentMode.cardBg}`}>
                             <div className={`w-1/2 h-full ${currentMode.sidebar.split(' ')[0]}`}></div>
                             <div className={`w-1/2 h-full ${theme.btnPrimary.split(' ')[0]}`}></div>
                           </div>
@@ -1827,6 +1868,25 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
                       );
                     })}
                   </div>
+
+                  {/* THÈME PERSONNALISÉ */}
+                  <div className={`mt-4 pt-4 border-t ${t.borderLight}`}>
+                    <h5 className={`font-bold text-sm mb-3 ${t.header}`}>✨ Thème Personnalisé</h5>
+                    <div className="flex items-end gap-3">
+                      <label className={`flex flex-col text-[10px] font-bold uppercase ${t.textMenuMuted}`}>
+                        Dominante
+                        <input type="color" value={customColors.primary} onChange={(e) => updateCustomColor('primary', e.target.value)} className="w-10 h-10 mt-1 cursor-pointer border-0 rounded p-0 bg-transparent" />
+                      </label>
+                      <label className={`flex flex-col text-[10px] font-bold uppercase ${t.textMenuMuted}`}>
+                        Accent
+                        <input type="color" value={customColors.accent} onChange={(e) => updateCustomColor('accent', e.target.value)} className="w-10 h-10 mt-1 cursor-pointer border-0 rounded p-0 bg-transparent" />
+                      </label>
+                      <button type="button" onClick={() => changeTheme('personnalise')} className={`flex-1 px-3 py-2 text-xs font-bold rounded shadow transition-all ${themeId === 'personnalise' ? 'bg-blue-600 text-white' : `${t.bgLight} ${t.header} hover:opacity-80`}`}>
+                        {themeId === 'personnalise' ? '✅ Actif' : 'Activer'}
+                      </button>
+                    </div>
+                  </div>
+
                 </div>
 
               </div>
@@ -2118,7 +2178,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
                 {/* En-tête des heures */}
                 <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 rounded-t-xl`}>
                   {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map(h => (
-                    <div key={h} className={`absolute text-[10px] font-bold text-gray-500 top-2`} style={{ left: `${((h * 60 - 460) / 600) * 100}%`, transform: 'translateX(-50%)' }}>
+                    <div key={h} className={`absolute text-[10px] font-bold ${t.header} top-2`} style={{ left: `${((h * 60 - 460) / 600) * 100}%`, transform: 'translateX(-50%)' }}>
                       {h}h00
                     </div>
                   ))}
@@ -2160,7 +2220,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
                               <div key={evt.id} className="absolute top-1 bottom-1 rounded shadow-sm text-[10px] flex flex-col justify-center px-1.5 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-10"
                                 style={{
                                   left: `${left}%`, width: `${width}%`,
-                                  backgroundColor: evt.backgroundColor || evt.extendedProps?.posteCouleur || '#3b82f6',
+                                  backgroundColor: evt.extendedProps?.posteCouleur || '#3b82f6', // CORRECTION : Force la couleur du poste
                                   borderColor: 'rgba(0,0,0,0.1)',
                                   color: 'white'
                                 }}
@@ -2171,7 +2231,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
                                 <span className="text-[8px] opacity-80 truncate">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
                               </div>
                             );
-                          })}
+                            })}
                           
                           {absDuJour.map(abs => {
                             const startD = new Date(abs.start);
@@ -2430,7 +2490,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode }) => {
           </div>
         )}
 
-{vueActive === 'agent' && agentConsulte && (
+        {vueActive === 'agent' && agentConsulte && (
           <div className={`flex-1 flex flex-col h-full ${t.bgMain} print:h-auto print:bg-white`}>
             <div className={`flex justify-between items-center p-3 ${t.headerBg} border-b ${t.borderLight} no-print shrink-0`}>
               <div className="flex gap-4 items-center">
@@ -2510,16 +2570,18 @@ export default function App() {
   const [isSetupComplete, setIsSetupComplete] = useState(() => localStorage.getItem('edt-setup-done') === 'true');
   const [themeId, setThemeId] = useState(() => localStorage.getItem('edt-theme') || 'menthe_terracotta');
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('edt-dark-mode') === 'true');
-  
+  const [customColors, setCustomColors] = useState(() => JSON.parse(localStorage.getItem('edt-custom-colors')) || { primary: '#3B82F6', accent: '#F59E0B' });
+
   const baseTheme = THEMES[themeId] || THEMES.menthe_terracotta;
   const t = { ...baseTheme, ...(isDarkMode ? baseTheme.dark : baseTheme.light), isDark: isDarkMode };
 
   const changeTheme = (newTheme) => { setThemeId(newTheme); localStorage.setItem('edt-theme', newTheme); };
   const toggleDarkMode = () => { const newMode = !isDarkMode; setIsDarkMode(newMode); localStorage.setItem('edt-dark-mode', newMode.toString()); };
+  const updateCustomColor = (key, val) => { const newColors = { ...customColors, [key]: val }; setCustomColors(newColors); localStorage.setItem('edt-custom-colors', JSON.stringify(newColors)); };
 
   return (
     <>
-<style>{`
+      <style>{`
         :root {
           --fc-page-bg-color: transparent;
           --fc-neutral-bg-color: rgba(0, 0, 0, 0.04);
@@ -2532,21 +2594,46 @@ export default function App() {
           --fc-button-active-border-color: ${t.fcPrimaryHover};
           --fc-today-bg-color: ${t.fcToday};
         }
+
+        ${themeId === 'personnalise' ? `
+          :root {
+            --c-prim: ${customColors.primary};
+            --c-prim-rgb: ${hexToRgb(customColors.primary)};
+            --c-acc: ${customColors.accent};
+            --c-acc-rgb: ${hexToRgb(customColors.accent)};
+            --c-dark-sidebar: color-mix(in srgb, var(--c-prim) 15%, #0b0f19);
+          }
+          .custom-sidebar { background-color: var(--c-prim) !important; }
+          .custom-btn { background-color: var(--c-acc) !important; color: white !important; }
+          .custom-text-accent { color: var(--c-acc) !important; }
+          .custom-text-primary { color: var(--c-prim) !important; }
+          .custom-text-primary-muted { color: rgba(var(--c-prim-rgb), 0.6) !important; }
+          .custom-bg-main { background-color: rgba(var(--c-prim-rgb), 0.05) !important; }
+          .custom-bg-light { background-color: rgba(var(--c-prim-rgb), 0.15) !important; }
+          .custom-border { border-color: rgba(var(--c-prim-rgb), 0.2) !important; }
+          .custom-card { background-color: #ffffff !important; }
+          
+          .custom-sidebar-dark { background-color: rgba(var(--c-prim-rgb), 0.15) !important; }
+          .custom-border-dark { border-color: rgba(var(--c-prim-rgb), 0.2) !important; }
+        ` : ''}
+
         .fc-event-main { pointer-events: auto !important; }
         .fc-timegrid-event-harness { pointer-events: none !important; }
-        
-        ${t.isDark ? `
-          /* Mode sombre intelligent global */
-          .fc, table { color: ${t.hexText} !important; }
-          .fc-theme-standard td, .fc-theme-standard th, .fc-scrollgrid { border-color: ${t.hexBorder} !important; }
-          .fc-col-header-cell { background-color: ${t.hexBgMain} !important; }
-          input[type="date"], input[type="time"], input[type="number"], input[type="text"], select { 
-            color-scheme: dark; 
-            background-color: ${t.hexCardBg} !important;
-            color: ${t.hexText} !important;
-          }
-          ::placeholder { color: ${t.hexText}; opacity: 0.5; }
-        ` : ''}
+        /* NOUVEAU : On empêche FullCalendar de forcer un fond opaque */
+        .fc-timegrid-event { background: transparent !important; border: none !important; box-shadow: none !important; }
+
+        @media screen {
+          ${t.isDark ? `
+            .fc, table { color: ${t.hexText} !important; }
+            .fc-theme-standard td, .fc-theme-standard th, .fc-scrollgrid { border-color: ${t.hexBorder} !important; }
+            .fc-col-header-cell { background-color: ${t.hexBgMain} !important; }
+            input[type="date"], input[type="time"], input[type="number"], input[type="text"], select { 
+              color-scheme: dark; 
+              color: ${t.hexText} !important;
+            }
+            ::placeholder { color: ${t.hexText}; opacity: 0.5; }
+          ` : ''}
+        }
 
         @media print {
           @page { size: A4 landscape; margin: 8mm; }
@@ -2557,11 +2644,17 @@ export default function App() {
           .print-agent-page { width: 100%; height: 98vh; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; page-break-after: always; break-after: page; }
           .print-agent-page:last-child { page-break-after: auto; break-after: auto; }
           .print-dashboard-table { transform: scale(0.85); transform-origin: top left; width: 115% !important; border:none; box-shadow:none; }
+          
+          /* Forcer les couleurs noires à l'impression pour annuler les thèmes */
+          .print-agent-page td, .print-agent-page th, .print-dashboard-table td, .print-dashboard-table th { color: black !important; }
+          .print-agent-page td > div > div { color: black !important; }
         }
-      `}</style>      {!isSetupComplete ? (
+      `}</style>
+
+      {!isSetupComplete ? (
         <SetupWizard onComplete={() => setIsSetupComplete(true)} t={t} />
       ) : (
-        <MainApp t={t} themeId={themeId} changeTheme={changeTheme} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
+        <MainApp t={t} themeId={themeId} changeTheme={changeTheme} isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} customColors={customColors} updateCustomColor={updateCustomColor} />
       )}
     </>
   );
