@@ -742,6 +742,47 @@ const MainApp = () => {
   const isInitialMount = useRef(true);
   const [needsBackup, setNeedsBackup] = useState(false);
 
+  // --- MIGRATION AUTOMATIQUE DES ANCIENNES BASES DE DONNÉES ---
+  useEffect(() => {
+    let isModified = false;
+    let newPeriodes = [...periodesFeriees];
+
+    // 1. Rétrocompatibilité : Assurer que les anciennes dates ont bien un "type"
+    newPeriodes = newPeriodes.map(p => {
+      if (!p.type) {
+        isModified = true;
+        return { ...p, type: p.nom.toLowerCase().includes('vacance') ? 'vacances' : 'ferie' };
+      }
+      return p;
+    });
+
+    // 2. Injection silencieuse de l'été de pré-rentrée s'il n'existe pas
+    const hasSummerPre = newPeriodes.some(p => p.nom.includes("Pré-rentrée") || (p.debut <= `${baseYear}-08-15` && p.fin >= `${baseYear}-08-31`));
+    if (!hasSummerPre) {
+      newPeriodes.push({
+        id: `vac_pre_auto_${Date.now()}`,
+        nom: "Vacances d'Été (Pré-rentrée)",
+        debut: `${baseYear}-07-01`,
+        fin: `${baseYear}-08-31`,
+        type: 'vacances'
+      });
+      isModified = true;
+    }
+
+    // 3. Rallonger les vacances d'été de fin d'année jusqu'au 31 août
+    newPeriodes = newPeriodes.map(p => {
+      if (p.nom.toLowerCase().includes("été") && p.debut >= `${baseYear+1}-06-01` && p.fin < `${baseYear+1}-08-31`) {
+        isModified = true;
+        return { ...p, fin: `${baseYear+1}-08-31` };
+      }
+      return p;
+    });
+
+    if (isModified) {
+      setPeriodesFeriees(newPeriodes.sort((a, b) => a.debut.localeCompare(b.debut)));
+    }
+  }, [baseYear]); // S'exécute silencieusement au chargement de l'app
+  
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
