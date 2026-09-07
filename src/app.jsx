@@ -18,10 +18,10 @@ const THEMES = {
     headerText: "text-[#2A3B32]",
     header: "text-[#4A6B53]",
     textMenuMuted: "text-[#6B8572]",
-    bgMain: "bg-[#E1ECE0]",     // Fond global : Vert d'eau doux
-    bgLight: "bg-[#D4E2D3]",    // Bordures et accents
+    bgMain: "bg-[#E1ECE0]",
+    bgLight: "bg-[#D4E2D3]",
     borderLight: "border-[#C5D6C6]",
-    cardBg: "bg-[#F0F5EE]",     // Fond des cartes et calendriers : Vert ultra-pâle (remplace le blanc pur)
+    cardBg: "bg-[#F0F5EE]",
     btnPrimary: "bg-[#CB7659] hover:bg-[#B3634B] text-white transition-colors",
     textAccent: "text-[#CB7659]",
     activeTab: "bg-[#F0F5EE] text-[#CB7659] font-bold shadow-sm border border-[#D4E2D3]",
@@ -615,7 +615,7 @@ const PrintTimeGridView = ({ events, titre }) => {
   );
 };
 
-const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, getInfosPeriode, customWeeks, gabarits, exceptions, formatHeureTableau, absences }) => {
+const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, getInfosPeriode, exceptions, formatHeureTableau, absences, getHeuresTheoriquesJour, getHeuresAbsence }) => {
   const semestre1 = anneeScolaire.slice(0, 6); 
   const semestre2 = anneeScolaire.slice(6);    
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
@@ -630,7 +630,7 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
           <thead>
             <tr>
               {moisList.map((mois, i) => (
-                <th key={i} className="border border-black bg-yellow-400 py-1.5 uppercase font-bold text-[11px]">{mois.nom}</th>
+                <th key={i} className="border border-black bg-gray-200 py-1.5 uppercase font-bold text-[11px]">{mois.nom}</th>
               ))}
             </tr>
           </thead>
@@ -643,41 +643,18 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
 
                   const dateObj = new Date(mois.y, mois.m, jourNum);
                   const dateStr = `${mois.y}-${String(mois.m+1).padStart(2,'0')}-${String(jourNum).padStart(2,'0')}`;
-                  const mondayStr = getMondayStr(dateObj);
                   
                   const dayOfWeek = dateObj.getDay();
                   const nomJour = nomsJours[dayOfWeek];
-                  const estWeekEnd = dayOfWeek === 0 || dayOfWeek === 6;
                   const infoPeriode = getInfosPeriode(dateObj);
 
-                  let hDefaut = 0;
-                  let aDesEvenementsReels = false;
-
-                  const applicableTemplate = [...window.__templateVersions__].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || window.__templateVersions__[0];
-
-                  if (customWeeks[mondayStr]) {
-                    const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(dateStr) && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin);
-                    if (evtsJour.length > 0) {
-                      hDefaut = evtsJour.reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0);
-                      aDesEvenementsReels = true;
-                    }
-                  }
-
-                  if (!aDesEvenementsReels) {
-                    if (infoPeriode) {
-                      if (infoPeriode.type === 'ferie') hDefaut = gabarits[applicableTemplate?.id]?.[agent.id]?.[dayOfWeek] || 0;
-                      else hDefaut = 0; // Vacances
-                    } else {
-                      if (customWeeks[mondayStr]) hDefaut = 0; 
-                      else if (!estWeekEnd) hDefaut = gabarits[applicableTemplate?.id]?.[agent.id]?.[dayOfWeek] || 0;
-                    }
-                  }
-                  
                   const exc = exceptions[`${agent.id}_${dateStr}`];
-                  let hFinal = exc ? exc.h : hDefaut;
+                  
+                  // Utilisation directe du moteur central pour connaitre les heures dues
+                  let hFinal = exc ? exc.h : getHeuresTheoriquesJour(agent.id, dateStr);
                   
                   const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr));
-                  const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + ((new Date(a.end) - new Date(a.start))/3600000), 0);
+                  const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + getHeuresAbsence(a), 0);
                   hFinal = Math.max(0, hFinal - hDeduct);
 
                   let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : '');
@@ -686,16 +663,16 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
                     noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs;
                   }
 
-                  let bgJour = "bg-[#c6f6d5]"; 
-                  if (dayOfWeek === 0) bgJour = "bg-yellow-200"; 
-                  if (dayOfWeek === 6) bgJour = "bg-yellow-50";  
+                  let bgJour = "bg-white"; 
+                  if (dayOfWeek === 0) bgJour = "bg-gray-100"; 
+                  if (dayOfWeek === 6) bgJour = "bg-gray-50";  
                   
                   if (infoPeriode) {
                     if (infoPeriode.type === 'ferie') bgJour = "bg-green-100 text-green-900 font-bold";
-                    else bgJour = "bg-blue-100 text-blue-900";
+                    else bgJour = "bg-blue-50 text-blue-900"; 
                   }
 
-                  if (absDuJour.length > 0) bgJour = "bg-red-200 text-red-900 font-bold";
+                  if (absDuJour.length > 0) bgJour = "bg-red-100 text-red-900 font-bold";
 
                   return (
                     <td key={idx} className="border border-black p-0 h-[18px]">
@@ -812,7 +789,8 @@ const MainApp = ({ t, themeId, changeTheme }) => {
         end: formatLocal(endD),
         motif: a.motif || '',
         deduire: a.deduire !== undefined ? a.deduire : (a.type === 'retard'),
-        rattrape: a.rattrape || false
+        rattrape: a.rattrape || false,
+        journeeComplete: a.journeeComplete // Migration silencieuse pour la suite
       };
     });
   });
@@ -1034,6 +1012,58 @@ const MainApp = ({ t, themeId, changeTheme }) => {
     return g;
   })();
 
+  // ============================================================================
+  // NOUVELLES FONCTIONS CENTRALISÉES (POUR ÉVITER LES DIVERGENCES DE CALCUL)
+  // ============================================================================
+  const getHeuresTheoriquesJour = (agentId, dateStr) => {
+    const dateObj = new Date(dateStr);
+    const mondayStr = getMondayStr(dateObj);
+    const dayOfWeek = dateObj.getDay();
+    const estWeekEnd = dayOfWeek === 0 || dayOfWeek === 6;
+    const infoPeriode = getInfosPeriode(dateObj);
+    const applicableTemplate = [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || templateVersions[0];
+    
+    const exc = exceptions[`${agentId}_${dateStr}`];
+    if (exc) return exc.h;
+
+    let aDesEvenementsReels = false;
+    let hJour = 0;
+    if (customWeeks[mondayStr]) {
+      const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agentId && e.start.startsWith(dateStr) && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin);
+      if (evtsJour.length > 0) {
+        hJour = evtsJour.reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0);
+        aDesEvenementsReels = true;
+      }
+    }
+
+    if (!aDesEvenementsReels) {
+      if (infoPeriode) {
+        if (infoPeriode.type === 'ferie') {
+          hJour = gabarits[applicableTemplate?.id]?.[agentId]?.[dayOfWeek] || 0;
+        } else {
+          hJour = 0; // Vacances = 0h par défaut
+        }
+      } else {
+        if (customWeeks[mondayStr]) hJour = 0; 
+        else if (!estWeekEnd) hJour = gabarits[applicableTemplate?.id]?.[agentId]?.[dayOfWeek] || 0;
+      }
+    }
+    return hJour;
+  };
+
+  const getHeuresAbsence = (a) => {
+    const dateStr = a.start.split('T')[0];
+    const dureeSaisie = (new Date(a.end) - new Date(a.start)) / 3600000;
+    
+    // Rétrocompatibilité : si journeeComplete n'est pas défini, on devine via la durée (>= 9h)
+    const estJourneeComplete = a.journeeComplete !== undefined ? a.journeeComplete : (dureeSaisie >= 9);
+    
+    if (estJourneeComplete) {
+      return getHeuresTheoriquesJour(a.agentId, dateStr);
+    }
+    return dureeSaisie;
+  };
+
   const statsAgents = agents.map(agent => {
     let heuresConsommees = 0;
     for (let m = 8; m < 20; m++) {
@@ -1041,48 +1071,11 @@ const MainApp = ({ t, themeId, changeTheme }) => {
       const month = m % 12;
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       for (let d = 1; d <= daysInMonth; d++) {
-        const dateObj = new Date(year, month, d);
         const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        const mondayStr = getMondayStr(dateObj);
         
-        const estWeekEnd = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-        const infoPeriode = getInfosPeriode(dateObj);
-        const exc = exceptions[`${agent.id}_${dateStr}`];
-        const applicableTemplate = [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= dateStr) || templateVersions[0];
-
-        let hJour = 0;
-        
-        if (exc) {
-          hJour = exc.h;
-        } else {
-          let aDesEvenementsReels = false;
-          if (customWeeks[mondayStr]) {
-            const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin && e.start.startsWith(dateStr));
-            if (evtsJour.length > 0) {
-              hJour = evtsJour.reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0);
-              aDesEvenementsReels = true;
-            }
-          }
-
-          if (!aDesEvenementsReels) {
-            if (infoPeriode) {
-              if (infoPeriode.type === 'ferie') {
-                hJour = gabarits[applicableTemplate?.id]?.[agent.id]?.[dateObj.getDay()] || 0;
-              } else {
-                hJour = 0; // Vacances = 0h par défaut
-              }
-            } else {
-              if (customWeeks[mondayStr]) {
-                hJour = 0;
-              } else if (!estWeekEnd) {
-                hJour = gabarits[applicableTemplate?.id]?.[agent.id]?.[dateObj.getDay()] || 0;
-              }
-            }
-          }
-        }
-
+        const hJour = getHeuresTheoriquesJour(agent.id, dateStr);
         const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr) && a.deduire);
-        const hDeduct = absDuJour.reduce((tot, a) => tot + ((new Date(a.end) - new Date(a.start)) / 3600000), 0);
+        const hDeduct = absDuJour.reduce((tot, a) => tot + getHeuresAbsence(a), 0);
 
         heuresConsommees += Math.max(0, hJour - hDeduct);
       }
@@ -1209,7 +1202,26 @@ const MainApp = ({ t, themeId, changeTheme }) => {
     setTemplateVersions(newVersions);
   };
 
-  const validerModele = () => setTemplateVersions(templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, statut: 'valide' } : tv));
+const validerModele = () => {
+    setTemplateVersions(templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, statut: 'valide' } : tv));
+    
+    const sorted = [...templateVersions].sort((a,b) => a.dateDebut.localeCompare(b.dateDebut));
+    const currentIndex = sorted.findIndex(t => t.id === activeTemplateId);
+    const nextTemplate = sorted[currentIndex + 1];
+    const dateFin = nextTemplate ? nextTemplate.dateDebut : '9999-12-31';
+
+    // On repère toutes les semaines "réelles" qui avaient été modifiées/générées avec des erreurs
+    const affectedWeeks = Object.keys(customWeeks).filter(m => m >= currentTemplate.dateDebut && m < dateFin);
+    
+    if (affectedWeeks.length > 0) {
+      if (confirm(`Voulez-vous propager ces corrections aux semaines réelles (du ${currentTemplate.dateDebut} au ${nextTemplate ? nextTemplate.dateDebut : 'fin d\'année'}) ?\n\nAttention : Cela écrasera les éventuelles permanences manuelles saisies sur cette période.`)) {
+        const newCustomWeeks = { ...customWeeks };
+        affectedWeeks.forEach(m => delete newCustomWeeks[m]);
+        setCustomWeeks(newCustomWeeks);
+      }
+    }
+  };  
+  
   const deverrouillerModele = () => {
     if (confirm("⚠️ Déverrouiller permet de corriger une erreur. Si vous modifiez les heures, les soldes passés des agents seront recalculés.\n\nContinuer ?")) {
       setTemplateVersions(templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, statut: 'brouillon' } : tv));
@@ -1235,27 +1247,26 @@ const MainApp = ({ t, themeId, changeTheme }) => {
     }
   };
 
-  const applyAction = (action, info) => {
+const applyAction = (action, info) => {
     const cleanId = String(info.id).split('_')[0]; 
     if (vueActive === 'template') {
       let mod = [...currentTemplate.events];
       if (action === 'add') mod.push({ ...info, id: cleanId });
-      if (action === 'update') mod = mod.map(e => String(e.id) === cleanId ? { ...e, start: info.start, end: info.end } : e);
-      if (action === 'update_content') mod = mod.map(e => String(e.id) === cleanId ? { ...e, ...info } : e);
-      if (action === 'delete') mod = mod.filter(e => String(e.id) !== cleanId);
+      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: info.start, end: info.end } : e);
+      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...info } : e);
+      if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
       updateCurrentTemplate(mod, null);
     } else if (vueActive === 'planning' || vueActive === 'journee') {
       const monStr = getMondayStr(info.start);
       const currentWeek = customWeeks[monStr] ? [...customWeeks[monStr]] : getEventsForWeek(monStr);
       let mod = currentWeek;
       if (action === 'add') mod.push(info);
-      if (action === 'update') mod = mod.map(e => (String(e.id) === String(info.id) || String(e.id) === String(info.id) + '_' + monStr) ? { ...e, start: info.start, end: info.end } : e);
-      if (action === 'update_content') mod = mod.map(e => (String(e.id) === String(info.id) || String(e.id) === String(info.id) + '_' + monStr) ? { ...e, ...info } : e);
-      if (action === 'delete') mod = mod.filter(e => String(e.id) !== String(info.id) && String(e.id) !== String(info.id) + '_' + monStr);
+      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: info.start, end: info.end } : e);
+      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...info } : e);
+      if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
       setCustomWeeks({ ...customWeeks, [monStr]: mod });
     }
   };
-
   const ajouterAbsenceRetard = (e) => {
     e.preventDefault();
     if (!formAbsence.agentId || !formAbsence.dateDebut) return alert("Sélectionnez un agent et une date.");
@@ -1301,7 +1312,8 @@ const MainApp = ({ t, themeId, changeTheme }) => {
         end: endStr,
         motif: formAbsence.motif,
         deduire: formAbsence.deduireHeures,
-        rattrape: false
+        rattrape: false,
+        journeeComplete: formAbsence.journeeComplete
       });
     });
 
@@ -1331,11 +1343,11 @@ const MainApp = ({ t, themeId, changeTheme }) => {
       nom: ag.nom,
       couleur: ag.couleurFond,
       nbAbs: abs.length,
-      hAbs: abs.reduce((sum, a) => sum + ((new Date(a.end) - new Date(a.start))/3600000), 0),
+      hAbs: abs.reduce((sum, a) => sum + getHeuresAbsence(a), 0),
       nbRet: ret.length,
-      hRet: ret.reduce((sum, a) => sum + ((new Date(a.end) - new Date(a.start))/3600000), 0),
+      hRet: ret.reduce((sum, a) => sum + getHeuresAbsence(a), 0),
       nbRetRat: retNonRat.length,
-      hRetRat: retNonRat.reduce((sum, a) => sum + ((new Date(a.end) - new Date(a.start))/3600000), 0)
+      hRetRat: retNonRat.reduce((sum, a) => sum + getHeuresAbsence(a), 0)
     };
   });
 
@@ -1426,17 +1438,21 @@ const MainApp = ({ t, themeId, changeTheme }) => {
     }
   };
 
-  const gererClicEvenement = (evt) => { 
+const gererClicEvenement = (evt) => { 
     if (evt.extendedProps.isBesoin) {
-      updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id) !== String(evt.id).split('_')[0])); 
+      if (vueActive === 'template') {
+        updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id) !== String(evt.id).split('_')[0])); 
+      } else {
+        alert("Pour supprimer un besoin structurel, veuillez repasser en vue 'Modèle'.");
+      }
     } else if (evt.extendedProps.isAbsence) {
       const cleanId = String(evt.id).replace('abs_', '').split('_')[0];
       supprimerAbsence(cleanId);
     } else {
-      applyAction('delete', { id: evt.id }); 
+      // C'est ici que la magie opère pour la suppression en réel :
+      applyAction('delete', { id: evt.id, start: evt.start }); 
     }
   };
-
   const ouvrirEditionBesoin = (evt) => {
     if (vueActive !== 'template') return alert("Passez en vue 'Modèle' pour modifier les besoins structurels.");
     setModalEditBesoin({ isOpen: true, id: String(evt.id).split('_')[0], posteId: evt.extendedProps.posteId, qte: evt.extendedProps.qte, start: extractTimeStr(evt.start), end: extractTimeStr(evt.end) });
@@ -1484,7 +1500,8 @@ const MainApp = ({ t, themeId, changeTheme }) => {
         end: newEnd,
         motif: formNote || (formTypeAbsence === 'absence' ? 'Absence' : 'Retard'),
         deduire: formAbsenceDeduire,
-        rattrape: false
+        rattrape: false,
+        journeeComplete: (new Date(newEnd) - new Date(newStart)) / 3600000 >= 9
       };
       
       if (isEdit) {
@@ -1512,14 +1529,17 @@ const MainApp = ({ t, themeId, changeTheme }) => {
     const tS = arg.event.start;
     const tE = arg.event.end;
     const timeStr = (tS && tE) ? `${tS.getHours()}h${String(tS.getMinutes()).padStart(2,'0')}-${tE.getHours()}h${String(tE.getMinutes()).padStart(2,'0')}` : '';
+    
+    // VERROUILLAGE : Interdit la suppression ou l'édition si le modèle est validé
+    const isLocked = vueActive === 'template' && currentTemplate.statut === 'valide';
 
     if (arg.event.extendedProps.isBesoin) {
       const isSous = arg.event.extendedProps.isSousEffectif;
       return (
-        <div onClick={() => ouvrirEditionBesoin(arg.event)} className="flex flex-col w-full h-full overflow-hidden rounded text-[11px] shadow-sm relative group cursor-pointer transition-all hover:ring-2 hover:ring-red-400">
+        <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-red-400' : ''}`}>
           <div className="px-1 py-0.5 font-bold text-white flex justify-between items-center" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a' }}>
             <span className="truncate">🎯 {arg.event.extendedProps.posteNom} <span className="text-[9px] font-normal opacity-90 ml-1">({timeStr})</span></span>
-            <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-white/50 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✖</button>
+            {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-white/50 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✖</button>}
           </div>
           <div className="p-1 flex flex-col justify-center items-center flex-1 leading-tight text-center" style={{ backgroundColor: isSous ? '#fee2e2' : '#dcfce7' }}>
             <span className="font-bold text-sm" style={{ color: isSous ? '#991b1b' : '#166534' }}>{arg.event.extendedProps.minCount} / {arg.event.extendedProps.qte} pers.</span>
@@ -1547,10 +1567,10 @@ const MainApp = ({ t, themeId, changeTheme }) => {
     }
     
     return (
-      <div onClick={() => ouvrirEdition(arg.event)} className="flex flex-col w-full h-full overflow-hidden rounded text-[11px] border border-black/10 shadow-sm relative group cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all">
+      <div onClick={() => !isLocked && ouvrirEdition(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] border border-black/10 shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}>
         <div className="px-1 py-0.5 font-bold text-white flex justify-between items-center" style={{ backgroundColor: arg.event.extendedProps.posteCouleur }}>
           <span className="truncate">{arg.event.extendedProps.posteNom} <span className="text-[9px] font-normal opacity-90 ml-1">({timeStr})</span></span>
-          <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-red-500 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✖</button>
+          {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-red-500 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✖</button>}
         </div>
         <div className="p-1 bg-white/95 text-gray-800 flex flex-col flex-1 leading-tight">
           <div className="flex justify-between items-start">
@@ -2044,10 +2064,18 @@ const MainApp = ({ t, themeId, changeTheme }) => {
                 <div>
                   <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20">+</button></div>
                   <ul className="space-y-1">
-                    {agents.map((agent) => (
+                    {statsAgents.map((agent) => (
                       <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ring-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
-                        <span>{agent.nom} {agent.estEtudiant && '🎓'}</span>
-                        <div className="flex gap-1 items-center"><button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className="text-gray-400 hover:text-gray-800 text-xs px-1">⚙️</button><button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button></div>
+                        <div className="flex flex-col leading-tight">
+                          <span>{agent.nom} {agent.estEtudiant && '🎓'}</span>
+                          <span className={`text-[10px] font-mono mt-0.5 ${agent.soldeGlobal > 0 ? 'text-green-600' : (agent.soldeGlobal < 0 ? 'text-red-500' : 'text-gray-500')}`}>
+                            Solde: {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}
+                          </span>
+                        </div>
+                        <div className="flex gap-1 items-center shrink-0">
+                          <button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className="text-gray-400 hover:text-gray-800 text-xs px-1">⚙️</button>
+                          <button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -2230,7 +2258,7 @@ const MainApp = ({ t, themeId, changeTheme }) => {
                     slotDuration="00:15:00"
                     snapDuration="00:05:00"
                     hiddenDays={[0, 6]}
-                    editable={true} 
+                    editable={currentTemplate.statut === 'brouillon'} 
                     selectable={currentTemplate.statut === 'brouillon'}
                     selectMirror={true}
                     dayMaxEvents={true}
@@ -2318,7 +2346,7 @@ const MainApp = ({ t, themeId, changeTheme }) => {
                     <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Dotation Globale</label>
                     <div className="flex items-center gap-1"><input type="number" step="0.1" value={dotation} onChange={e => setDotation(parseFloat(e.target.value)||0)} className={`w-20 p-1 border rounded text-xl font-black text-center ${t.header}`} /><span className="font-bold text-gray-400">ETP</span></div>
                  </div>
-                 <div className="text-3xl font-light text-gray-300">/</div>
+                 <div className="text-3xl font-light text-gray-200">/</div>
                  <div>
                     <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">ETP Répartis (Agents)</label>
                     <div className={`text-2xl font-black flex items-center gap-1 ${agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation && dotation > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{agents.reduce((sum,a)=>sum+(a.quotite/100),0).toFixed(2)}<span className="text-base">ETP</span></div>
@@ -2378,7 +2406,7 @@ const MainApp = ({ t, themeId, changeTheme }) => {
                     {formAbsence.journeeComplete && (<div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin (Optionnel)</label><input type="date" value={formAbsence.dateFin} onChange={e => setFormAbsence({...formAbsence, dateFin: e.target.value})} min={formAbsence.dateDebut} className="w-full border rounded p-2 text-sm bg-white" /></div>)}
                   </div>
                   {!formAbsence.journeeComplete && (<div className="flex gap-4"><div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Heure Début</label><input type="time" required value={formAbsence.heureDebut} onChange={e => setFormAbsence({...formAbsence, heureDebut: e.target.value})} className="w-full border rounded p-2 text-sm font-bold text-center bg-white" /></div><div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Heure Fin</label><input type="time" required value={formAbsence.heureFin} onChange={e => setFormAbsence({...formAbsence, heureFin: e.target.value})} className="w-full border rounded p-2 text-sm font-bold text-center bg-white" /></div></div>)}
-                  <label className="flex items-center gap-2 text-sm font-bold text-red-800 cursor-pointer bg-red-50 p-2 rounded border border-red-200"><input type="checkbox" checked={formAbsence.deduireHeures} onChange={e => setFormAbsence({...formAbsence, deduireHeures: e.target.checked})} className="w-4 h-4 cursor-pointer" />Déduire du bilan (à rattraper)</label>
+                  <label className="flex items-center gap-2 text-sm font-bold text-red-800 cursor-pointer bg-red-50 p-2 rounded border border-red-200"><input type="checkbox" checked={formAbsence.deduireHeures} onChange={e => setFormAbsence({...formAbsence, deduireHeures: e.target.checked})} className="w-4 h-4 cursor-pointer" />Déduire du bilan (à rattraper / sans solde)</label>
                   <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif</label><input type="text" required value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder="Ex: Maladie, Grève, Panne réveil..." className="w-full border rounded p-2 text-sm bg-white" /></div>
                   <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition`}>Créer sur le planning</button>
                 </form>
@@ -2391,12 +2419,13 @@ const MainApp = ({ t, themeId, changeTheme }) => {
                     <thead className={`${t.bgLight} ${t.header} uppercase text-xs border-b border-black/10`}><tr><th className="p-3">Date</th><th className="p-3">Agent</th><th className="p-3">Type</th><th className="p-3 text-center">Durée</th><th className="p-3">Motif</th><th className="p-3 text-center">Statut (Retards)</th><th className="p-3 text-center">Action</th></tr></thead>
                     <tbody className="divide-y divide-black/5">
                       {absences.map(a => {
-                        const ag = agents.find(agent => agent.id === a.agentId); const typeAbs = a.type || 'absence'; let h = a.heures; let m = a.minutes; if (h === undefined) { h = Math.floor(a.dureeTotale || a.duree || 0); m = Math.round(((a.dureeTotale || a.duree || 0) - h) * 60); }
+                        const ag = agents.find(agent => agent.id === a.agentId); const typeAbs = a.type || 'absence'; 
+                        const dureeAbs = getHeuresAbsence(a);
                         return (
                           <tr key={a.id} className={`hover:${t.bgLight}`}>
                             <td className="p-3 font-mono text-xs text-gray-600">{a.start.split('T')[0]}</td><td className={`p-3 font-bold ${t.header}`}>{ag ? ag.nom : 'Inconnu'}</td>
                             <td className="p-3 flex items-center gap-1"><span className={`px-2 py-0.5 rounded text-xs font-bold ${typeAbs === 'absence' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}>{typeAbs.toUpperCase()}</span>{a.deduire && <span className="text-[10px] bg-red-600 text-white px-1 rounded shadow-sm" title="Déduit du bilan">DÉDUIT</span>}</td>
-                            <td className="p-3 text-center font-mono font-bold">{h}h{String(m).padStart(2,'0')}</td><td className="p-3 text-gray-600 italic">{a.motif || ''}</td>
+                            <td className="p-3 text-center font-mono font-bold">{formatHeureTableau(dureeAbs, true)}</td><td className="p-3 text-gray-600 italic">{a.motif || ''}</td>
                             <td className="p-3 text-center">{typeAbs === 'retard' && a.deduire ? ( <button onClick={() => toggleRattrape(a.id)} className={`px-2 py-1 rounded text-xs font-bold transition shadow-sm ${a.rattrape ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-100 text-red-800 border border-red-300 hover:bg-red-200'}`}>{a.rattrape ? '✅ Rattrapé' : '❌ À rattraper'}</button> ) : ( <span className="text-gray-400 text-xs">-</span> )}</td>
                             <td className="p-3 text-center"><button onClick={() => supprimerAbsence(a.id)} className="text-gray-400 hover:text-red-600 px-2 py-1 rounded text-xs font-bold transition">✖</button></td>
                           </tr>
@@ -2441,14 +2470,17 @@ const MainApp = ({ t, themeId, changeTheme }) => {
                         const daysInMonth = new Date(mois.y, mois.m + 1, 0).getDate();
                         if (jourNum > daysInMonth) return <td key={idx} className="border border-gray-400 bg-gray-200"></td>;
                         const dateObj = new Date(mois.y, mois.m, jourNum); const dateStr = `${mois.y}-${String(mois.m+1).padStart(2,'0')}-${String(jourNum).padStart(2,'0')}`;
-                        const mondayStr = getMondayStr(dateObj); const dayOfWeek = dateObj.getDay(); const nomJour = nomsJours[dayOfWeek]; const estWeekEnd = dayOfWeek === 0 || dayOfWeek === 6; const infoPeriode = getInfosPeriode(dateObj);
-                        let hDefaut = 0; let aDesEvenementsReels = false;
-                        const applicableTemplate = [...window.__templateVersions__].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(temp => temp.dateDebut <= dateStr) || window.__templateVersions__[0];
-                        if (customWeeks[mondayStr]) { const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agentConsulte && e.start.startsWith(dateStr) && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin); if (evtsJour.length > 0) { hDefaut = evtsJour.reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0); aDesEvenementsReels = true; } }
-                        if (!aDesEvenementsReels) { if (infoPeriode) { if (infoPeriode.type === 'ferie') hDefaut = gabarits[applicableTemplate?.id]?.[agentConsulte]?.[dayOfWeek] || 0; else hDefaut = 0; } else { if (customWeeks[mondayStr]) hDefaut = 0; else if (!estWeekEnd) hDefaut = gabarits[applicableTemplate?.id]?.[agentConsulte]?.[dayOfWeek] || 0; } }
-                        const exc = exceptions[`${agentConsulte}_${dateStr}`]; let hFinal = exc ? exc.h : hDefaut;
-                        const absDuJour = absences.filter(a => a.agentId === agentConsulte && a.start.startsWith(dateStr)); const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + ((new Date(a.end) - new Date(a.start))/3600000), 0); hFinal = Math.max(0, hFinal - hDeduct);
-                        let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : ''); if (absDuJour.length > 0) { const txtAbs = absDuJour.map(a => `${a.type.toUpperCase()}${a.deduire?' (-h)':''}`).join(', '); noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs; }
+                        const dayOfWeek = dateObj.getDay(); const nomJour = nomsJours[dayOfWeek]; const infoPeriode = getInfosPeriode(dateObj);
+                        
+                        const exc = exceptions[`${agentConsulte}_${dateStr}`]; 
+                        let hFinal = exc ? exc.h : getHeuresTheoriquesJour(agentConsulte, dateStr);
+                        
+                        const absDuJour = absences.filter(a => a.agentId === agentConsulte && a.start.startsWith(dateStr)); 
+                        const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + getHeuresAbsence(a), 0); 
+                        hFinal = Math.max(0, hFinal - hDeduct);
+                        
+                        let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : ''); 
+                        if (absDuJour.length > 0) { const txtAbs = absDuJour.map(a => `${a.type.toUpperCase()}${a.deduire?' (-h)':''}`).join(', '); noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs; }
                         let bgJour = "bg-white"; if (dayOfWeek === 0) bgJour = "bg-gray-100"; if (dayOfWeek === 6) bgJour = "bg-gray-50";  
                         if (infoPeriode) { if (infoPeriode.type === 'ferie') bgJour = "bg-green-100 text-green-900 font-bold"; else bgJour = `${t.bgLight} ${t.header}`; }
                         if (absDuJour.length > 0) bgJour = "bg-red-100 text-red-900 font-bold";
@@ -2469,7 +2501,7 @@ const MainApp = ({ t, themeId, changeTheme }) => {
             </div>
 
             <div className="hidden print:block w-full">
-              <PrintAgentYearlyView agent={agents.find(a=>a.id===agentConsulte)} baseYear={baseYear} anneeScolaire={anneeScolaire} getMondayStr={getMondayStr} getInfosPeriode={getInfosPeriode} customWeeks={customWeeks} gabarits={gabarits} exceptions={exceptions} formatHeureTableau={formatHeureTableau} absences={absences} />
+              <PrintAgentYearlyView agent={agents.find(a=>a.id===agentConsulte)} baseYear={baseYear} anneeScolaire={anneeScolaire} getMondayStr={getMondayStr} getInfosPeriode={getInfosPeriode} exceptions={exceptions} formatHeureTableau={formatHeureTableau} absences={absences} getHeuresTheoriquesJour={getHeuresTheoriquesJour} getHeuresAbsence={getHeuresAbsence} />
             </div>
           </div>
         )}
