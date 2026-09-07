@@ -414,58 +414,65 @@ const SetupWizard = ({ onComplete, t }) => {
             </div>
           )}
 
-          {step === 3 && (
-            <div className="space-y-6 animate-in fade-in">
-              <h2 className={`text-xl font-bold ${t.header} border-b pb-2`}>2. Équipe AED & Dotation</h2>
-              <p className="text-sm text-gray-500">Saisissez la dotation globale de votre établissement, puis ajoutez les agents.</p>
-              
-              <div className={`p-5 rounded-xl border flex justify-between items-center transition-all ${dotation > 0 && agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation ? 'bg-red-900/10 border-red-500/50' : `${t.bgLight} ${t.borderLight} shadow-sm`}`}>
-                <div>
-                  <label className={`text-[10px] font-bold ${t.header} uppercase tracking-wider block mb-1`}>Dotation Globale (Budget)</label>
-                  <div className="flex items-center gap-2">
-                    <input type="number" step="0.5" value={dotation || ''} onChange={e => setDotation(parseFloat(e.target.value) || 0)} placeholder="Ex: 5.5" className={`border ${t.borderLight} p-2 w-24 text-center rounded-lg font-black text-2xl ${t.header} bg-transparent outline-none focus:ring-2 transition-all`} />
-                    <span className="font-bold text-gray-500">ETP</span>
+          {step === 3 && (() => {
+            // Calcul parfait sécurisé contre les erreurs de décimales JS
+            const totalETP = Math.round(agents.reduce((sum, a) => sum + Number(a.quotite), 0)) / 100;
+            const isOverflow = dotation > 0 && totalETP > dotation;
+            const isExact = dotation > 0 && totalETP === dotation;
+
+            return (
+              <div className="space-y-6 animate-in fade-in">
+                <h2 className={`text-xl font-bold ${t.header} border-b pb-2`}>2. Équipe AED & Dotation</h2>
+                <p className="text-sm text-gray-500">Saisissez la dotation globale de votre établissement, puis ajoutez les agents.</p>
+                
+                <div className={`p-5 rounded-xl border flex justify-between items-center transition-all ${isOverflow ? 'bg-red-900/10 border-red-500/50' : `${t.bgLight} ${t.borderLight} shadow-sm`}`}>
+                  <div>
+                    <label className={`text-[10px] font-bold ${t.header} uppercase tracking-wider block mb-1`}>Dotation Globale (Budget)</label>
+                    <div className="flex items-center gap-2">
+                      <input type="number" step="0.5" value={dotation || ''} onChange={e => setDotation(parseFloat(e.target.value) || 0)} placeholder="Ex: 5.5" className={`border ${t.borderLight} p-2 w-24 text-center rounded-lg font-black text-2xl ${t.header} bg-transparent outline-none focus:ring-2 transition-all`} />
+                      <span className="font-bold text-gray-500">ETP</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-right flex flex-col justify-center">
+                    <label className={`text-[10px] font-bold ${t.header} uppercase tracking-wider block mb-1`}>Budget Consommé</label>
+                    <div className="flex items-end justify-end gap-1">
+                      <span className={`text-4xl font-black leading-none ${isOverflow ? 'text-red-500' : (isExact ? 'text-emerald-500' : t.textAccent)}`}>
+                        {totalETP.toFixed(2)}
+                      </span>
+                      <span className="text-sm font-bold text-gray-500 mb-1">/ {dotation || '?'} ETP</span>
+                    </div>
+                    {dotation > 0 && (
+                      <span className={`text-xs font-bold mt-1 ${isOverflow ? 'text-red-500' : 'text-emerald-500'}`}>
+                        {isOverflow 
+                          ? `⚠️ Dépassement : +${(totalETP - dotation).toFixed(2)} ETP` 
+                          : `✅ Reste à pourvoir : ${(dotation - totalETP).toFixed(2)} ETP`}
+                      </span>
+                    )}
                   </div>
                 </div>
-                
-                <div className="text-right flex flex-col justify-center">
-                  <label className={`text-[10px] font-bold ${t.header} uppercase tracking-wider block mb-1`}>Budget Consommé</label>
-                  <div className="flex items-end justify-end gap-1">
-                    <span className={`text-4xl font-black leading-none ${agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation && dotation > 0 ? 'text-red-500' : (dotation > 0 && agents.reduce((sum,a)=>sum+(a.quotite/100),0) === dotation ? 'text-emerald-500' : t.textAccent)}`}>
-                      {agents.reduce((sum,a)=>sum+(a.quotite/100),0).toFixed(2)}
-                    </span>
-                    <span className="text-sm font-bold text-gray-500 mb-1">/ {dotation || '?'} ETP</span>
+
+                <div className={`${t.bgLight} p-4 rounded-xl border ${t.borderLight} grid grid-cols-12 gap-3 items-end`}>
+                  <div className="col-span-4"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Nom</label><input type="text" value={formAgent.nom} onChange={e=>handleAgentChange('nom', e.target.value)} className="w-full p-2 text-sm rounded border bg-transparent" placeholder="Ex: Célia" /></div>
+                  <div className="col-span-2"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Quot. (%)</label><input type="number" step="0.1" value={formAgent.quotite} onChange={e=>handleAgentChange('quotite', e.target.value)} className="w-full p-2 text-sm rounded border bg-transparent font-bold text-center" /></div>
+                  <div className="col-span-3 flex items-center justify-center pb-2"><label className={`flex items-center gap-1 text-[10px] font-bold ${t.header} cursor-pointer bg-transparent px-2 py-1.5 border rounded shadow-sm`}><input type="checkbox" checked={formAgent.estEtudiant} onChange={e=>handleAgentChange('estEtudiant', e.target.checked)} className="w-3 h-3" />🎓 Étudiant</label></div>
+                  <div className="col-span-3"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Contrat</label><input type="text" value={typeof formAgent.hContrat === 'number' ? formatHeureMinutes(formAgent.hContrat) : formAgent.hContrat} onChange={e=>setFormAgent({...formAgent, hContrat: e.target.value})} onBlur={e=>setFormAgent({...formAgent, hContrat: parseHeureSaisie(e.target.value)})} className="w-full p-2 text-sm rounded border font-mono text-center bg-transparent" /></div>
+                  
+                  <div className="col-span-2"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Coul.</label><input type="color" value={formAgent.couleurFond} onChange={e=>setFormAgent({...formAgent, couleurFond: e.target.value})} className="w-full h-9 rounded cursor-pointer p-0 border-0" /></div>
+                  <div className="col-span-10 mt-1">
+                    <button type="button" onClick={() => { if(formAgent.nom) { const hC = typeof formAgent.hContrat === 'string' ? parseHeureSaisie(formAgent.hContrat) : formAgent.hContrat; setAgents([...agents, {id: Date.now(), nom: formAgent.nom, quotite: parseFloat(formAgent.quotite), estEtudiant: formAgent.estEtudiant, hContrat: hC, couleurFond: formAgent.couleurFond}]); setFormAgent({...formAgent, nom: '', estEtudiant: false}); } }} className={`w-full ${t.btnPrimary} px-4 py-2 rounded text-sm font-bold shadow`}>Ajouter cet agent</button>
                   </div>
-                  {dotation > 0 && (
-                    <span className={`text-xs font-bold mt-1 ${agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation ? 'text-red-500' : 'text-emerald-500'}`}>
-                      {agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation 
-                        ? `⚠️ Dépassement : +${(agents.reduce((sum,a)=>sum+(a.quotite/100),0) - dotation).toFixed(2)} ETP` 
-                        : `✅ Reste à pourvoir : ${(dotation - agents.reduce((sum,a)=>sum+(a.quotite/100),0)).toFixed(2)} ETP`}
-                    </span>
-                  )}
                 </div>
-              </div>
 
-              <div className={`${t.bgLight} p-4 rounded-xl border ${t.borderLight} grid grid-cols-12 gap-3 items-end`}>
-                <div className="col-span-4"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Nom</label><input type="text" value={formAgent.nom} onChange={e=>handleAgentChange('nom', e.target.value)} className="w-full p-2 text-sm rounded border bg-transparent" placeholder="Ex: Célia" /></div>
-                <div className="col-span-2"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Quot. (%)</label><input type="number" step="0.1" value={formAgent.quotite} onChange={e=>handleAgentChange('quotite', e.target.value)} className="w-full p-2 text-sm rounded border bg-transparent font-bold text-center" /></div>
-                <div className="col-span-3 flex items-center justify-center pb-2"><label className={`flex items-center gap-1 text-[10px] font-bold ${t.header} cursor-pointer bg-transparent px-2 py-1.5 border rounded shadow-sm`}><input type="checkbox" checked={formAgent.estEtudiant} onChange={e=>handleAgentChange('estEtudiant', e.target.checked)} className="w-3 h-3" />🎓 Étudiant</label></div>
-                <div className="col-span-3"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Contrat</label><input type="text" value={typeof formAgent.hContrat === 'number' ? formatHeureMinutes(formAgent.hContrat) : formAgent.hContrat} onChange={e=>setFormAgent({...formAgent, hContrat: e.target.value})} onBlur={e=>setFormAgent({...formAgent, hContrat: parseHeureSaisie(e.target.value)})} className="w-full p-2 text-sm rounded border font-mono text-center bg-transparent" /></div>
-                
-                <div className="col-span-2"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Coul.</label><input type="color" value={formAgent.couleurFond} onChange={e=>setFormAgent({...formAgent, couleurFond: e.target.value})} className="w-full h-9 rounded cursor-pointer p-0 border-0" /></div>
-                <div className="col-span-10 mt-1">
-                  <button type="button" onClick={() => { if(formAgent.nom) { const hC = typeof formAgent.hContrat === 'string' ? parseHeureSaisie(formAgent.hContrat) : formAgent.hContrat; setAgents([...agents, {id: Date.now(), nom: formAgent.nom, quotite: parseFloat(formAgent.quotite), estEtudiant: formAgent.estEtudiant, hContrat: hC, couleurFond: formAgent.couleurFond}]); setFormAgent({...formAgent, nom: '', estEtudiant: false}); } }} className={`w-full ${t.btnPrimary} px-4 py-2 rounded text-sm font-bold shadow`}>Ajouter cet agent</button>
+                <div className="flex flex-wrap gap-2">
+                  {agents.map(a => <span key={a.id} className="text-sm text-white px-3 py-1 rounded-full flex items-center gap-2 shadow-sm" style={{backgroundColor: a.couleurFond}}>{a.nom} {a.estEtudiant && '🎓'} ({a.quotite}%) <button onClick={()=>setAgents(agents.filter(x=>x.id!==a.id))} className="text-white hover:text-red-200">✖</button></span>)}
                 </div>
+
+                <div className="flex justify-between pt-4 mt-8 border-t border-black/10"><button onClick={() => setStep(2)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => { if(agents.length === 0 && !window.confirm("Aucun agent ajouté. Continuer ?")) return; setStep(4); }} className={`${t.btnPrimary} px-6 py-2 rounded-lg font-bold shadow`}>Suivant ➔</button></div>
               </div>
-
-              <div className="flex flex-wrap gap-2">
-                {agents.map(a => <span key={a.id} className="text-sm text-white px-3 py-1 rounded-full flex items-center gap-2 shadow-sm" style={{backgroundColor: a.couleurFond}}>{a.nom} {a.estEtudiant && '🎓'} ({a.quotite}%) <button onClick={()=>setAgents(agents.filter(x=>x.id!==a.id))} className="text-white hover:text-red-200">✖</button></span>)}
-              </div>
-
-              <div className="flex justify-between pt-4 mt-8 border-t border-black/10"><button onClick={() => setStep(2)} className="text-gray-500 font-bold px-4 py-2">⬅ Retour</button><button onClick={() => { if(agents.length === 0 && !window.confirm("Aucun agent ajouté. Continuer ?")) return; setStep(4); }} className={`${t.btnPrimary} px-6 py-2 rounded-lg font-bold shadow`}>Suivant ➔</button></div>
-            </div>
-          )}
-
+            );
+          })()}
+          
           {step === 4 && (
             <div className="space-y-6 animate-in fade-in">
               <h2 className={`text-xl font-bold ${t.header} border-b pb-2`}>3. Postes / Lieux</h2>
@@ -1213,17 +1220,16 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     })
   ];
 
-  const declencherImpression = (e) => {
-    e.preventDefault();
-    setModalPrint(false);
+const declencherImpression = (e) => {
+    if (e) e.preventDefault();
+    setPrintFilter({ type: 'all', id: null }); // Force la vue globale par défaut
     setIsPrinting(true); 
     setTimeout(() => { 
       window.print(); 
       setIsPrinting(false); 
-      setPrintFilter({ type: 'all', id: null }); 
     }, 800);
   };
-
+  
   const updateCurrentTemplate = (newEvents, newBesoins) => {
     const newVersions = templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, events: newEvents || tv.events, besoins: newBesoins || tv.besoins } : tv);
     setTemplateVersions(newVersions);
@@ -1895,30 +1901,6 @@ const renderEventContent = (arg) => {
         </div>
       )}
 
-{modalPrint && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-md overflow-hidden border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">🖨️ Impression (A4 Paysage)</h3></div>
-            <form onSubmit={declencherImpression}>
-              <div className="p-6 space-y-4">
-                {(vueActive === 'template' || vueActive === 'planning') ? (
-                  <>
-                    <label className={`flex items-center gap-3 p-3 border ${t.borderLight} rounded-lg cursor-pointer hover:bg-black/5 transition-colors`}><input type="radio" checked={printFilter.type === 'all'} onChange={() => setPrintFilter({ type: 'all', id: null })} className="w-4 h-4" /><span className={`font-semibold ${t.header}`}>Vue Globale (Équipe)</span></label>
-                    <label className={`flex flex-col gap-2 p-3 border ${t.borderLight} rounded-lg cursor-pointer hover:bg-black/5 transition-colors`}><div className="flex items-center gap-3"><input type="radio" checked={printFilter.type === 'agent'} onChange={() => setPrintFilter({ type: 'agent', id: agents[0]?.id })} className="w-4 h-4" /><span className={`font-semibold ${t.header}`}>Filtrer par Agent</span></div>{printFilter.type === 'agent' && (<select value={printFilter.id || ''} onChange={(e) => setPrintFilter({ type: 'agent', id: Number(e.target.value) })} className="ml-7 p-2 border rounded text-sm w-64 bg-transparent outline-none">{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select>)}</label>
-                    <label className={`flex flex-col gap-2 p-3 border ${t.borderLight} rounded-lg cursor-pointer hover:bg-black/5 transition-colors`}><div className="flex items-center gap-3"><input type="radio" checked={printFilter.type === 'poste'} onChange={() => setPrintFilter({ type: 'poste', id: postes[0]?.id })} className="w-4 h-4" /><span className={`font-semibold ${t.header}`}>Filtrer par Poste</span></div>{printFilter.type === 'poste' && (<select value={printFilter.id || ''} onChange={(e) => setPrintFilter({ type: 'poste', id: Number(e.target.value) })} className="ml-7 p-2 border rounded text-sm w-64 bg-transparent outline-none">{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select>)}</label>
-                  </>
-                ) : vueActive === 'agent' ? (
-                  <div className="text-center py-4"><span className="text-4xl mb-3 block">✅</span><p className="text-gray-500">Impression du calendrier individuel (2 pages par agent).</p></div>
-                ) : (
-                  <div className="text-center py-4"><span className="text-4xl mb-3 block">✅</span><p className="text-gray-500">Adaptation automatique sur 1 seule page.</p></div>
-                )}
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}><button type="button" onClick={() => setModalPrint(false)} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button><button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium shadow flex items-center gap-2`}>🖨️ Lancer</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* MODALE CRÉATION AFFECTATION */}
       {modalCreation.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
@@ -2078,8 +2060,7 @@ const renderEventContent = (arg) => {
             </button>
             <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
             <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Paramètres">⚙️</button>
-            <button onClick={() => setModalPrint(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs font-bold border transition-colors flex-1 flex justify-center`} title="Imprimer">🖨️</button>
-            <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
+<button onClick={declencherImpression} className={`${t.sidebarIconBtn} p-2 rounded text-xs font-bold border transition-colors flex-1 flex justify-center`} title="Imprimer">🖨️</button>            <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
           </div>
           <div className="flex flex-col bg-black/10 rounded p-1 shadow-inner gap-1 mt-2">
             <button onClick={() => setVueActive('journee')} className={`text-sm py-1.5 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
@@ -2393,45 +2374,48 @@ const renderEventContent = (arg) => {
           </div>
         )}
 
-        {vueActive === 'dashboard' && (
-          <div className={`flex-1 p-8 overflow-auto ${t.bgMain} print-dashboard-table`}>
-            <div className="flex justify-between items-end mb-6">
-              <h2 className={`text-2xl font-bold ${t.header}`}>Bilan Annuel Global ({baseYear}-{baseYear+1})</h2>
-              <div className={`${t.cardBg} px-5 py-3 rounded-xl shadow-sm border ${t.borderLight} flex items-center gap-6`}>
-                 <div>
-                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Dotation Globale</label>
-                    <div className="flex items-center gap-1"><input type="number" step="0.1" value={dotation} onChange={e => setDotation(parseFloat(e.target.value)||0)} className={`w-20 p-1 border rounded text-xl font-black text-center bg-transparent ${t.header}`} /><span className="font-bold text-gray-500">ETP</span></div>
-                 </div>
-                 <div className="text-3xl font-light text-gray-400">/</div>
-                 <div>
-                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">ETP Répartis (Agents)</label>
-                    <div className={`text-2xl font-black flex items-center gap-1 ${agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation && dotation > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{agents.reduce((sum,a)=>sum+(a.quotite/100),0).toFixed(2)}<span className="text-base">ETP</span></div>
-                 </div>
+{vueActive === 'dashboard' && (() => {
+          const totalETP = Math.round(agents.reduce((sum, a) => sum + Number(a.quotite), 0)) / 100;
+          
+          return (
+            <div className={`flex-1 p-8 overflow-auto ${t.bgMain} print-dashboard-table`}>
+              <div className="flex justify-between items-end mb-6">
+                <h2 className={`text-2xl font-bold ${t.header}`}>Bilan Annuel Global ({baseYear}-{baseYear+1})</h2>
+                <div className={`${t.cardBg} px-5 py-3 rounded-xl shadow-sm border ${t.borderLight} flex items-center gap-6`}>
+                   <div>
+                      <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Dotation Globale</label>
+                      <div className="flex items-center gap-1"><input type="number" step="0.1" value={dotation} onChange={e => setDotation(parseFloat(e.target.value)||0)} className={`w-20 p-1 border rounded text-xl font-black text-center bg-transparent ${t.header}`} /><span className="font-bold text-gray-500">ETP</span></div>
+                   </div>
+                   <div className="text-3xl font-light text-gray-400">/</div>
+                   <div>
+                      <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">ETP Répartis (Agents)</label>
+                      <div className={`text-2xl font-black flex items-center gap-1 ${totalETP > dotation && dotation > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{totalETP.toFixed(2)}<span className="text-base">ETP</span></div>
+                   </div>
+                </div>
+              </div>
+
+              <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden`}>
+                <table className="w-full text-sm text-left">
+                  <thead className={`${t.headerBg} ${t.headerText} font-medium uppercase text-xs`}>
+                    <tr><th className="p-4 border-r border-black/10">Agent</th><th className="p-4 border-r border-black/10 text-center">%</th><th className="p-4 border-r border-black/10 text-center bg-black/10">H. Contrat</th><th className="p-4 border-r border-black/10 text-center">H. Type Hebdo</th><th className="p-4 border-r border-black/10 text-center bg-black/10">H. Consommées</th><th className="p-4 text-center">Solde Final</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/5">
+                    {statsAgents.map(agent => (
+                      <tr key={agent.id} className={`hover:${t.bgLight} transition-colors`}>
+                        <td className={`p-4 font-bold border-r ${t.borderLight} ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</td>
+                        <td className={`p-4 text-center border-r ${t.borderLight}`} style={{ color: agent.couleurFond }}>{agent.quotite}%</td>
+                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.header}`}>{formatHeureTableau(agent.hContrat, true)}</td>
+                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono text-gray-500`}>{formatHeureTableau(agent.hHebdoType, true)}</td>
+                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.bgLight} ${t.header}`}>{formatHeureTableau(agent.heuresConsommees, true)}</td>
+                        <td className={`p-4 text-center font-mono font-black text-lg ${agent.soldeGlobal > 0 ? 'bg-green-500/20 text-green-600' : (agent.soldeGlobal < 0 ? 'bg-red-500/20 text-red-500' : 'bg-emerald-500/10 text-emerald-500')}`}>{agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-
-            <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden`}>
-              <table className="w-full text-sm text-left">
-                <thead className={`${t.headerBg} ${t.headerText} font-medium uppercase text-xs`}>
-                  <tr><th className="p-4 border-r border-black/10">Agent</th><th className="p-4 border-r border-black/10 text-center">%</th><th className="p-4 border-r border-black/10 text-center bg-black/10">H. Contrat</th><th className="p-4 border-r border-black/10 text-center">H. Type Hebdo</th><th className="p-4 border-r border-black/10 text-center bg-black/10">H. Consommées</th><th className="p-4 text-center">Solde Final</th></tr>
-                </thead>
-                <tbody className="divide-y divide-black/5">
-                  {statsAgents.map(agent => (
-                    <tr key={agent.id} className={`hover:${t.bgLight} transition-colors`}>
-                      <td className={`p-4 font-bold border-r ${t.borderLight} ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</td>
-                      <td className={`p-4 text-center border-r ${t.borderLight}`} style={{ color: agent.couleurFond }}>{agent.quotite}%</td>
-                      <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.header}`}>{formatHeureTableau(agent.hContrat, true)}</td>
-                      <td className={`p-4 text-center border-r ${t.borderLight} font-mono text-gray-500`}>{formatHeureTableau(agent.hHebdoType, true)}</td>
-                      <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.bgLight} ${t.header}`}>{formatHeureTableau(agent.heuresConsommees, true)}</td>
-                      <td className={`p-4 text-center font-mono font-black text-lg ${agent.soldeGlobal > 0 ? 'bg-green-500/20 text-green-600' : (agent.soldeGlobal < 0 ? 'bg-red-500/20 text-red-500' : 'bg-emerald-500/10 text-emerald-500')}`}>{agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
+          );
+        })()}
         {vueActive === 'absences' && (
           <div className={`flex-1 p-6 overflow-auto ${t.bgMain}`}>
             <h2 className={`text-2xl font-bold ${t.header} mb-6`}>Gestion des Absences et Retards</h2>
@@ -2641,38 +2625,37 @@ export default function App() {
           ` : ''}
         }
 
-        @media print {
-          @page { size: A4 landscape; margin: 8mm; }
+@media print {
+          @page { size: A4 landscape; margin: 5mm; }
           
           body, html, #root { 
             background: white !important; 
-            height: auto !important; 
-            min-height: 0 !important; /* Annule le 100vh qui causait la 2ème page */
             margin: 0 !important; 
             padding: 0 !important;
-            overflow: visible !important; 
             -webkit-print-color-adjust: exact !important; 
             print-color-adjust: exact !important; 
           }
           
+          /* Neutraliser les classes de hauteur d'écran et de marges qui causent la page blanche */
+          .h-screen { height: auto !important; min-height: 0 !important; }
+          .w-screen { width: auto !important; min-width: 0 !important; }
+          .pb-4 { padding-bottom: 0 !important; }
+          .px-4 { padding-left: 0 !important; padding-right: 0 !important; }
+          
           .no-print, .w-80, .md\\:hidden { display: none !important; }
           
           #print-area { 
-            position: relative !important; /* Le relative empêche les débordements invisibles */
-            left: 0; top: 0; 
-            width: 100% !important; 
-            height: auto !important; 
-            overflow: visible !important; 
-            display: block !important; 
-            background: white !important; 
-            z-index: 9999; 
+            position: absolute !important; left: 0; top: 0; 
+            width: 100% !important; height: auto !important; 
+            margin: 0 !important; padding: 0 !important;
+            display: block !important; background: white !important; z-index: 9999; 
           }
           
-          /* Verrouillage strict de la hauteur pour le planning Hebdo / Quotidien */
+          /* Coupe stricte "au massicot" pour le planning Hebdo / Quotidien */
           .print-weekly-page { 
             width: 100%; 
-            height: 185mm !important; 
-            max-height: 185mm !important; 
+            height: 180mm !important; /* Hauteur sécurisée pour 1 seule page */
+            max-height: 180mm !important; 
             overflow: hidden !important; 
             box-sizing: border-box; 
             page-break-after: avoid !important;
@@ -2681,14 +2664,7 @@ export default function App() {
           
           /* Conserve le saut de page uniquement pour le calendrier annuel des agents */
           .print-agent-page { 
-            width: 100%; 
-            height: 185mm !important; 
-            display: flex; 
-            flex-direction: column; 
-            overflow: hidden; 
-            box-sizing: border-box; 
-            page-break-after: always; 
-            break-after: page; 
+            width: 100%; height: 185mm !important; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; page-break-after: always; break-after: page; 
           }
           .print-agent-page:last-child { page-break-after: auto; break-after: auto; }
           
