@@ -13,6 +13,7 @@ import {
   detecterChevauchements // 👈 AJOUTEZ CECI
 } from './utils';
 import { SetupWizard } from './SetupWizard';
+import { PrintTimeGridView, PrintDailyView, PrintAgentYearlyView } from './PrintViews';
 
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
   const [vueActive, setVueActive] = useState('template'); 
