@@ -2333,13 +2333,33 @@ const renderEventContent = (arg) => {
               <div className="animate-in fade-in">
                 <div>
                   <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600">+</button></div>
-                  <ul className="space-y-1">
-                    {statsAgents.map((agent) => (
+<ul className="space-y-1">
+                  {statsAgents.map((agent) => {
+                    // Calcul des heures de la semaine affichée pour cet agent
+                    const weekEvents = getEventsForWeek(targetMonday);
+                    const agentWeekMins = weekEvents.filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence).reduce((acc, evt) => {
+                      return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
+                    }, 0);
+                    const agentWeekHours = agentWeekMins / 60;
+                    
+                    // Objectif hebdomadaire théorique (Contrat annuel / 36 semaines)
+                    const objectifHebdoAgent = agent.hContrat / 36;
+                    const diffAgentHebdo = agentWeekHours - objectifHebdoAgent;
+
+                    return (
                       <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 border-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
                         <div className="flex flex-col leading-tight">
                           <span className={t.header}>{agent.nom} {agent.estEtudiant && '🎓'}</span>
+                          <div className="flex gap-2 mt-0.5">
+                            <span className="text-[10px] font-mono text-gray-500 font-semibold" title="Total planifié cette semaine">
+                              Sem: {formatHeureTableau(agentWeekHours, true)}
+                            </span>
+                            <span className={`text-[10px] font-mono font-bold ${diffAgentHebdo >= 0 ? 'text-emerald-600' : 'text-orange-500'}`} title="Écart par rapport à l'objectif hebdo théorique">
+                              ({diffAgentHebdo > 0 ? '+' : ''}{formatHeureTableau(diffAgentHebdo, true)})
+                            </span>
+                          </div>
                           <span className={`text-[10px] font-mono mt-0.5 ${agent.soldeGlobal > 0 ? 'text-green-600' : (agent.soldeGlobal < 0 ? 'text-red-500' : 'text-gray-500')}`}>
-                            Solde: {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}
+                            Solde global: {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}
                           </span>
                         </div>
                         <div className="flex gap-1 items-center shrink-0">
@@ -2347,9 +2367,9 @@ const renderEventContent = (arg) => {
                           <button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
                         </div>
                       </li>
-                    ))}
-                  </ul>
-                </div>
+                    );
+                  })}
+                </ul>                </div>
                 <div className="mt-4">
                   <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Postes</h2><button onClick={() => setModalNewPoste({ isOpen: true, nom: '' })} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600">+</button></div>
                   <ul className="space-y-1">
@@ -2424,55 +2444,101 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
                             ))}
                           </div>
 
-                          {agents.map(agent => {
+{agents.map(agent => {
                             const mondayStr = getMondayStr(jourConsulte);
                             const allEvents = getEventsForWeek(mondayStr);
                             const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
                             const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(jourConsulte));
 
+                            // Calcul des heures travaillées dans la journée
+                            const totalMinsJour = eventsDuJour.reduce((acc, evt) => {
+                              return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
+                            }, 0);
+                            const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
+
                             return (
                               <div key={agent.id} className={`flex border-b ${t.borderLight} min-h-[50px] relative group hover:bg-black/5 transition-colors`}>
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 ${t.cardBg} group-hover:bg-transparent transition-colors`}>
                                   <span className={`text-xs font-bold ${t.header} text-right leading-tight`}>{agent.nom}</span>
+                                  <span className="text-[10px] font-mono text-gray-500 font-semibold">{heuresJourStr}</span>
                                 </div>
-<div className="flex-1 relative my-1 cursor-pointer group/timeline" onClick={(e) => {
+                                <div className="flex-1 relative my-1" onClick={(e) => {
                                   if (e.target === e.currentTarget) {
-                                    // Calcul mathématique de l'heure selon la position de la souris
                                     const rect = e.currentTarget.getBoundingClientRect();
                                     const percent = (e.clientX - rect.left) / rect.width;
                                     const clickedMins = Math.floor(limitesHeures.baseMins + (percent * limitesHeures.span));
-                                    
-                                    // Arrondi au quart d'heure précédent
                                     const startMins = clickedMins - (clickedMins % 15);
                                     const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                    
-                                    setFormTypeEvent('affectation');
-                                    setFormTypeAbsence('absence');
-                                    setFormAbsenceDeduire(false);
-                                    setFormAgent(agent.id);
-                                    setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
-                                    setFormNote('');
-                                    // Ouvre le créneau pour 1h par défaut
+                                    setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsenceDeduire(false);
+                                    setFormAgent(agent.id); setFormPoste(posteActif || postes[0]?.id); setFormNote('');
                                     setModalCreation({ isOpen: true, eventId: null, date: jourConsulte, start: formatTime(startMins), end: formatTime(startMins + 60) });
                                   }
                                 }}>
-                                  {/* Feedback visuel discret au survol pour indiquer la zone cliquable */}
-                                  <div className="absolute inset-0 hidden group-hover/timeline:block bg-blue-500/5 z-0 rounded pointer-events-none border border-dashed border-blue-500/30"></div>                                  {eventsDuJour.map(evt => {
+                                  {eventsDuJour.map(evt => {
                                     const startD = new Date(evt.start); const endD = new Date(evt.end);
                                     const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
                                     const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
                                     const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
-                                    const isShort = (endMins - startMins) <= 20;
                                     
                                     return (
-                                      <div key={evt.id} className="absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-10"
+                                      <div key={evt.id} className="absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-10 group/item"
                                         style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evt.extendedProps?.posteCouleur || '#3b82f6', borderColor: 'rgba(0,0,0,0.1)', color: getContrastYIQ(evt.extendedProps?.posteCouleur || '#3b82f6') }}
-                                        onClick={() => ouvrirEdition(evt)} title={`${evt.extendedProps?.posteNom} (${extractTimeStr(evt.start)} - ${extractTimeStr(evt.end)})`}>
-                                        <div className="flex justify-between items-center w-full">
+                                        onClick={(e) => { e.stopPropagation(); ouvrirEdition(evt); }}>
+                                        
+{/* Poignée gauche (Début) */}
+                                        <div className="absolute left-0 inset-y-0 w-3 cursor-w-resize hover:bg-black/30 z-20" title="Glisser pour modifier l'heure de début"
+                                          onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            const startX = e.clientX;
+                                            const trackWidth = e.currentTarget.parentElement.clientWidth;
+                                            const initialStartMins = startMins;
+
+                                            const onMouseMove = (moveEvent) => {
+                                              const deltaX = moveEvent.clientX - startX;
+                                              const deltaMins = Math.round((deltaX / trackWidth) * limitesHeures.span / 5) * 5;
+                                              let newStart = initialStartMins + deltaMins;
+                                              newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5));
+                                              
+                                              const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                              applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(newStart)}:00`, end: evt.end });
+                                            };
+                                            const onMouseUp = () => {
+                                              window.removeEventListener('mousemove', onMouseMove);
+                                              window.removeEventListener('mouseup', onMouseUp);
+                                            };
+                                            window.addEventListener('mousemove', onMouseMove);
+                                            window.addEventListener('mouseup', onMouseUp);
+                                          }}></div>
+
+                                        <div className="flex justify-between items-center w-full px-1 pointer-events-none">
                                           <span className="font-bold truncate leading-tight">{evt.extendedProps?.posteNom}</span>
-                                          {isShort && <span className="text-[7px] opacity-90 truncate ml-1 shrink-0">{extractTimeStr(evt.start)}-{extractTimeStr(evt.end)}</span>}
+                                          <span className="text-[7px] opacity-90">{extractTimeStr(evt.start)}-{extractTimeStr(evt.end)}</span>
                                         </div>
-                                        {!isShort && <span className="text-[8px] opacity-80 truncate leading-none mt-0.5">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>}
+
+                                        {/* Poignée droite (Fin) */}
+                                        <div className="absolute right-0 inset-y-0 w-3 cursor-e-resize hover:bg-black/30 z-20" title="Glisser pour modifier l'heure de fin"
+                                          onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            const startX = e.clientX;
+                                            const trackWidth = e.currentTarget.parentElement.clientWidth;
+                                            const initialEndMins = endMins;
+
+                                            const onMouseMove = (moveEvent) => {
+                                              const deltaX = moveEvent.clientX - startX;
+                                              const deltaMins = Math.round((deltaX / trackWidth) * limitesHeures.span / 5) * 5;
+                                              let newEnd = initialEndMins + deltaMins;
+                                              newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span));
+                                              
+                                              const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                              applyAction('update', { id: evt.id, start: evt.start, end: `${jourConsulte}T${formatTime(newEnd)}:00` });
+                                            };
+                                            const onMouseUp = () => {
+                                              window.removeEventListener('mousemove', onMouseMove);
+                                              window.removeEventListener('mouseup', onMouseUp);
+                                            };
+                                            window.addEventListener('mousemove', onMouseMove);
+                                            window.addEventListener('mouseup', onMouseUp);
+                                          }}></div>
                                       </div>
                                     );
                                   })}
@@ -2480,7 +2546,7 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
                               </div>
                             );
                           })}
-                        </div>
+                            </div>
                       </div>
                     </div>
                   </div>
@@ -2534,6 +2600,7 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
                       snapDuration="00:05:00"
                       hiddenDays={[0, 6]}
                       editable={currentTemplate.statut === 'brouillon'} 
+                      durationEditable={true}
                       selectable={currentTemplate.statut === 'brouillon'}
                       selectMirror={true}
                       dayMaxEvents={true}
@@ -2561,6 +2628,33 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
                   {printFilter.type === 'agent' && ` - Filtré pour : ${agents.find(a=>a.id===printFilter.id)?.nom}`}
                   {printFilter.type === 'poste' && ` - Filtré pour le poste : ${postes.find(p=>p.id===printFilter.id)?.nom}`}
                 </h2>
+                {/* BILAN HEBDOMADAIRE & SOLDE */}
+              {(() => {
+                const weekEvents = getEventsForWeek(currentViewMonday);
+                const totalMinsHebdo = weekEvents.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => {
+                  return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
+                }, 0);
+                const totalHeuresHebdo = totalMinsHebdo / 60;
+
+                // Objectif hebdo théorique de l'équipe (basé sur les contrats / nb de semaines estimé à 36 ou calcul global)
+                const objectifHebdoEquipe = agents.reduce((sum, a) => sum + (a.hContrat / 36), 0);
+                const diffHebdo = totalHeuresHebdo - objectifHebdoEquipe;
+
+                return (
+                  <div className={`flex items-center justify-between ${t.cardBg} px-4 py-2 rounded-lg border ${t.borderLight} mb-3 text-xs shadow-sm`}>
+                    <div className="flex items-center gap-4">
+                      <div><span className="text-gray-500 font-bold uppercase">Total Semaine :</span> <span className="font-mono font-black text-sm ml-1">{formatHeureTableau(totalHeuresHebdo, true)}</span></div>
+                      <div className="text-gray-400">|</div>
+                      <div><span className="text-gray-500 font-bold uppercase">Objectif Hebdo (Contrats / 36) :</span> <span className="font-mono font-bold text-gray-700 dark:text-gray-300 ml-1">{formatHeureTableau(objectifHebdoEquipe, true)}</span></div>
+                    </div>
+                    <div>
+                      <span className={`px-2 py-1 rounded font-mono font-bold ${diffHebdo >= 0 ? 'bg-emerald-500/20 text-emerald-600' : 'bg-orange-500/20 text-orange-600'}`}>
+                        Écart : {diffHebdo > 0 ? '+' : ''}{formatHeureTableau(diffHebdo, true)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
                 <div className="flex gap-2 items-center">
                   {currentViewMonday && (
                     <>
@@ -2593,12 +2687,16 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
                     datesSet={(arg) => setCurrentViewMonday(getMondayStr(arg.start))}
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
                     allDaySlot={false}
+                    editable={true}
+                    durationEditable={true}
+                    eventResizableFromStart={true}
                     slotMinTime={limitesHeures.minStr}
                     slotMaxTime={limitesHeures.maxStr}
                     slotDuration="00:05:00"
                     snapDuration="00:05:00"
                     hiddenDays={[0, 6]}
                     editable={true}
+                    durationEditable={true}
                     selectable={true}
                     selectMirror={true}
                     dayMaxEvents={true}
