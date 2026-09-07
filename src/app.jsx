@@ -656,32 +656,29 @@ const layoutDayEvents = (dayEvents) => {
 // ============================================================================
 // MOTEUR DE GRILLE ÉPURÉ
 // ============================================================================
-const generateGrid = (limitesHeures, sonneries, amplitude) => {
+const generateGrid = (limitesHeures, sonneries = [], amplitude) => {
   const gridLines = [];
   const gridLabelsWeekly = []; 
   const gridLabelsDaily = []; 
-  
-  const [startH, startM] = (amplitude?.start || '07:30').split(':').map(Number);
-  const startDayMins = startH * 60 + startM;
 
   for (let i = limitesHeures.baseMins; i <= limitesHeures.baseMins + limitesHeures.span; i += 5) {
      const h = String(Math.floor(i/60)).padStart(2,'0');
      const m = String(i%60).padStart(2,'0');
      const timeStr = `${h}:${m}`;
      const isSonnerie = sonneries.includes(timeStr);
-     const isStartDay = (i === startDayMins);
      const is15Min = i % 15 === 0;
      const isHeurePleine = i % 60 === 0;
+     const topPercent = ((i - limitesHeures.baseMins) / limitesHeures.span) * 100;
      
-     if (isSonnerie || is15Min || isStartDay) {
-         const topPercent = ((i - limitesHeures.baseMins) / limitesHeures.span) * 100;
-         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent, isHeurePleine, is15Min, isStartDay });
-         
-         // Étiquettes d'impression : Heures pleines OU heure exacte d'ouverture paramétrée
-         if (isHeurePleine || isStartDay) {
-             gridLabelsWeekly.push({ timeStr, mins: i, topPercent });
-             gridLabelsDaily.push({ timeStr, mins: i, topPercent });
-         }
+     // On évite de tracer une ligne à 0% car c'est déjà la bordure sous les jours
+     if ((isSonnerie || is15Min) && topPercent > 0.5) {
+         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent, isHeurePleine, is15Min });
+     }
+
+     // Étiquettes d'impression : uniquement les heures pleines (08:00, 09:00...)
+     if (isHeurePleine) {
+         gridLabelsWeekly.push({ timeStr, mins: i, topPercent });
+         gridLabelsDaily.push({ timeStr, mins: i, topPercent });
      }
   }
   return { gridLines, gridLabelsWeekly, gridLabelsDaily };
@@ -701,56 +698,84 @@ const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { ba
         <p className="text-gray-600 font-bold text-xs">Édité le {new Date().toLocaleDateString('fr-FR')}</p>
       </div>
 
-      <div className="flex flex-1 border border-black relative overflow-hidden bg-white">
-        {/* Axe des heures */}
-        <div className="w-16 flex flex-col border-r border-black bg-gray-100 text-[10px] font-bold text-black shrink-0 relative">
-          {gridLabelsWeekly.map(lbl => (
-            <div key={lbl.timeStr} className="absolute w-full pr-2 text-right" style={{ top: `${lbl.topPercent}%`, transform: 'translateY(-50%)' }}>
-               <span className="text-black font-black bg-gray-200 px-1 rounded border border-black text-[9px]">{lbl.timeStr}</span>
-            </div>
-          ))}
+      {/* Cadre global d'impression */}
+      <div className="flex flex-col flex-1 border-2 border-black relative overflow-hidden bg-white">
+        
+        {/* 1. Ligne d'en-tête commune (alignement horizontal parfait) */}
+        <div className="flex border-b-2 border-black bg-gray-200 shrink-0 h-7 items-stretch">
+          {/* Coin supérieur gauche (affiche l'heure de début configurée) */}
+          <div className="w-16 shrink-0 border-r-2 border-black flex items-center justify-center text-[10px] font-black text-gray-800 font-mono">
+            {amplitude?.start || ''}
+          </div>
+          {/* Noms des 5 jours */}
+          <div className="flex-1 grid grid-cols-5">
+            {nomsJours.map((nom, idx) => (
+              <div key={idx} className="border-r border-black last:border-r-0 font-black text-center uppercase text-xs text-black flex items-center justify-center">
+                {nom}
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="flex-1 grid grid-cols-5 relative bg-white">
-          {[1, 2, 3, 4, 5].map(day => {
-            const dayEvents = planningEvents.filter(e => new Date(e.start).getDay() === day);
-            const layoutedEvents = layoutDayEvents(dayEvents); 
-
-            return (
-              <div key={day} className="flex flex-col border-r border-black last:border-r-0 relative">
-                <div className="bg-gray-200 font-black text-center py-1 border-b border-black uppercase text-xs text-black shrink-0">{nomsJours[day - 1]}</div>
-                <div className="flex-1 relative bg-white">
-                  {/* Lignes horizontales */}
-                  {gridLines.map(line => (
-                    <div key={line.timeStr} className="absolute w-full pointer-events-none z-0" 
-                      style={{ top: `${line.topPercent}%`, borderBottom: line.isHeurePleine || line.isSonnerie || line.isStartDay ? '2px solid rgba(0,0,0,0.5)' : '1px dashed rgba(0,0,0,0.2)' }}></div>
-                  ))}
-
-                  {layoutedEvents.map(item => {
-                    const { evt, startMins, endMins, col, totalCols } = item;
-                    const startD = new Date(evt.start); const endD = new Date(evt.end);
-                    const top = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                    const height = Math.min(100 - top, ((endMins - startMins) / limitesHeures.span) * 100);
-                    const isAbs = evt.extendedProps?.isAbsence;
-                    const couleur = isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? '#ef4444' : '#f59e0b') : (evt.borderColor || '#3b82f6');
-                    
-                    const widthPercent = 100 / totalCols;
-                    const leftPercent = col * widthPercent;
-
-                    return (
-                      <div key={evt.id} className="absolute rounded p-1 border border-black/40 overflow-hidden shadow-xs bg-gray-50 text-black"
-                        style={{ top: `${top}%`, height: `${Math.max(height, 3)}%`, left: `${leftPercent}%`, width: `${widthPercent}%`, borderLeftColor: couleur, borderLeftWidth: '4px', fontSize: '9px', lineHeight: '1.1', zIndex: 10 }}
-                      >
-                        <div className="font-black truncate text-[9px]" style={{ color: couleur }}>{isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? 'ABSENCE' : 'RETARD') : evt.extendedProps?.posteNom}</div>
-                        <div className="font-bold truncate text-[8px] text-black">{evt.extendedProps?.agentName || evt.extendedProps?.agentNom}</div>
-                        <div className="text-[7px] text-gray-700 font-mono">{startD.getHours()}h{String(startD.getMinutes()).padStart(2,'0')}-{endD.getHours()}h{String(endD.getMinutes()).padStart(2,'0')}</div>
-                      </div>
-                    );
-                  })}
-                </div>
+        {/* 2. Corps du planning : le haut correspond exactement à l'heure d'ouverture */}
+        <div className="flex flex-1 relative overflow-hidden bg-white">
+          
+          {/* Axe vertical des heures pleines */}
+          <div className="w-16 shrink-0 border-r-2 border-black bg-gray-100 relative">
+            {gridLabelsWeekly.map(lbl => (
+              <div key={lbl.timeStr} className="absolute w-full pr-1.5 text-right pointer-events-none" style={{ top: `${lbl.topPercent}%`, transform: 'translateY(-50%)' }}>
+                <span className="text-black font-black bg-white px-1 py-0.5 rounded border border-black text-[9px] shadow-xs">
+                  {lbl.timeStr}
+                </span>
               </div>
-            );
-          })}
+            ))}
+          </div>
+
+          {/* Grille des 5 jours */}
+          <div className="flex-1 grid grid-cols-5 relative bg-white">
+            {[1, 2, 3, 4, 5].map(day => {
+              const dayEvents = planningEvents.filter(e => new Date(e.start).getDay() === day);
+              const layoutedEvents = layoutDayEvents(dayEvents); 
+
+              return (
+                <div key={day} className="flex flex-col border-r border-black last:border-r-0 relative h-full">
+                  <div className="flex-1 relative bg-white h-full">
+                    {/* Lignes horizontales de repère */}
+                    {gridLines.map(line => (
+                      <div key={line.timeStr} className="absolute w-full pointer-events-none z-0" 
+                        style={{ 
+                          top: `${line.topPercent}%`, 
+                          borderBottom: line.isHeurePleine || line.isSonnerie ? '1.5px solid rgba(0,0,0,0.6)' : '1px dashed rgba(0,0,0,0.2)' 
+                        }}></div>
+                    ))}
+
+                    {/* Créneaux */}
+                    {layoutedEvents.map(item => {
+                      const { evt, startMins, endMins, col, totalCols } = item;
+                      const startD = new Date(evt.start); const endD = new Date(evt.end);
+                      const top = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
+                      const height = Math.min(100 - top, ((endMins - startMins) / limitesHeures.span) * 100);
+                      const isAbs = evt.extendedProps?.isAbsence;
+                      const couleur = isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? '#ef4444' : '#f59e0b') : (evt.borderColor || '#3b82f6');
+                      
+                      const widthPercent = 100 / totalCols;
+                      const leftPercent = col * widthPercent;
+
+                      return (
+                        <div key={evt.id} className="absolute rounded p-1 border border-black/40 overflow-hidden shadow-xs bg-gray-50 text-black"
+                          style={{ top: `${top}%`, height: `${Math.max(height, 3)}%`, left: `${leftPercent}%`, width: `${widthPercent}%`, borderLeftColor: couleur, borderLeftWidth: '4px', fontSize: '9px', lineHeight: '1.1', zIndex: 10 }}
+                        >
+                          <div className="font-black truncate text-[9px]" style={{ color: couleur }}>{isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? 'ABSENCE' : 'RETARD') : evt.extendedProps?.posteNom}</div>
+                          <div className="font-bold truncate text-[8px] text-black">{evt.extendedProps?.agentName || evt.extendedProps?.agentNom}</div>
+                          <div className="text-[7px] text-gray-700 font-mono">{startD.getHours()}h{String(startD.getMinutes()).padStart(2,'0')}-{endD.getHours()}h{String(endD.getMinutes()).padStart(2,'0')}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
