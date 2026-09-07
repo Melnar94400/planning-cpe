@@ -69,17 +69,6 @@ const THEMES = {
 
 // --- CALCULATRICE BETTY ---
 const calculerContratBetty = (quotite, estEtudiant) => {
-  // --- FORMATAGE ET PARSING DES HEURES ---
-const formatHeureMinutes = (decimal) => {
-  if (decimal === undefined || decimal === null || Number.isNaN(Number(decimal))) return "";
-  const arrondi = Math.round(Number(decimal) * 60) / 60; 
-  const absVal = Math.abs(arrondi);
-  let h = Math.floor(absVal);
-  let m = Math.round((absVal - h) * 60);
-  if (m === 60) { h += 1; m = 0; }
-  return `${arrondi < 0 ? "-" : ""}${h}h${m.toString().padStart(2, '0')}min`;
-};
-
 const parseHeureSaisie = (chaine) => {
   if (chaine === undefined || chaine === null) return 0;
   const clean = String(chaine).toLowerCase().replace('min', '').replace('h', ':').replace(',', '.').trim();
@@ -165,6 +154,16 @@ const importerDonnees = (e) => {
     return;
   }
   executeImport(file);
+};
+  // --- FORMATAGE ET PARSING DES HEURES ---
+const formatHeureMinutes = (decimal) => {
+  if (decimal === undefined || decimal === null || Number.isNaN(Number(decimal))) return "";
+  const arrondi = Math.round(Number(decimal) * 60) / 60; 
+  const absVal = Math.abs(arrondi);
+  let h = Math.floor(absVal);
+  let m = Math.round((absVal - h) * 60);
+  if (m === 60) { h += 1; m = 0; }
+  return `${arrondi < 0 ? "-" : ""}${h}h${m.toString().padStart(2, '0')}min`;
 };
 
 // --- MOTEUR DE CALCUL DES JOURS FÉRIÉS ---
@@ -306,7 +305,7 @@ const SetupWizard = ({ onComplete, t }) => {
     <div className={`min-h-screen ${t.bgMain} flex flex-col items-center py-12 px-4`}>
       <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl overflow-hidden border border-gray-100">
         <div className={`${t.headerBg} p-6 text-white text-center`}>
-          <h1 className="text-3xl font-black tracking-wider">EDT CPE</h1><p className="opacity-80 mt-1">Configuration Initiale ({step}/4)</p>
+          <h1 className="text-3xl font-black tracking-wider">Planning CPE</h1><p className="opacity-80 mt-1">Configuration Initiale ({step}/4)</p>
         </div>
         
         <div className="p-8">
@@ -1961,7 +1960,7 @@ const validerAgentModal = (e) => {
       <div className={`w-80 ${t.sidebar} shadow-lg flex flex-col z-20 border-r border-gray-200 no-print shrink-0 transition-colors`}>
         <div className="p-4 text-white flex flex-col gap-3">
           <div className="flex justify-between items-center">
-            <h1 className="text-xl font-bold tracking-wider">EDT CPE</h1>
+            <h1 className="text-xl font-bold tracking-wider">Planning CPE</h1>
             <div className="flex gap-1 flex-wrap justify-end max-w-[140px]">
               <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
               
