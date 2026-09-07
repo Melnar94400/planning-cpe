@@ -578,23 +578,24 @@ const layoutDayEvents = (dayEvents) => {
 // ============================================================================
 const generateGrid = (limitesHeures, sonneries) => {
   const gridLines = [];
-  const gridLabelsWeekly = []; // Uniquement les sonneries pour le planning hebdo
-  const gridLabelsDaily = []; // Uniquement les heures pleines pour la vue quotidienne
+  const gridLabelsWeekly = []; 
+  const gridLabelsDaily = []; 
   
   for (let i = limitesHeures.baseMins; i <= limitesHeures.baseMins + limitesHeures.span; i += 5) {
      const h = String(Math.floor(i/60)).padStart(2,'0');
      const m = String(i%60).padStart(2,'0');
      const timeStr = `${h}:${m}`;
      const isSonnerie = sonneries.includes(timeStr);
+     const isStartDay = (i === limitesHeures.baseMins); // Le tout début de la journée configurée
      const is15Min = i % 15 === 0;
      const isHeurePleine = i % 60 === 0;
      
-     if (isSonnerie || is15Min) {
+     if (isSonnerie || is15Min || isStartDay) {
          const topPercent = ((i - limitesHeures.baseMins) / limitesHeures.span) * 100;
-         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent, isHeurePleine, is15Min });
+         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent, isHeurePleine, is15Min, isStartDay });
          
-         if (isSonnerie) gridLabelsWeekly.push({ timeStr, mins: i, topPercent });
-         if (isHeurePleine) gridLabelsDaily.push({ timeStr, mins: i, topPercent });
+         if (isSonnerie || isStartDay) gridLabelsWeekly.push({ timeStr, mins: i, topPercent });
+         if (isHeurePleine || isStartDay) gridLabelsDaily.push({ timeStr, mins: i, topPercent });
      }
   }
   return { gridLines, gridLabelsWeekly, gridLabelsDaily };
@@ -912,15 +913,20 @@ const renderSlotLabel = (arg) => {
     const h = String(arg.date.getHours()).padStart(2,'0');
     const m = String(arg.date.getMinutes()).padStart(2,'0');
     const timeStr = `${h}:${m}`;
+    const slotMins = arg.date.getHours() * 60 + arg.date.getMinutes();
 
-    // Le planning Hebdo / Modèle n'affiche QUE les horaires explicitement configurés
-    if (sonneries.includes(timeStr)) {
+    const [startH, startM] = (amplitude.start || '07:40').split(':').map(Number);
+    const startDayMins = startH * 60 + startM;
+
+    // Affiche la sonnerie OU l'heure de début exacte de la journée configurée
+    if (sonneries.includes(timeStr) || slotMins === startDayMins) {
       return { html: `<div class="font-bold text-black dark:text-white text-[11px] bg-black/10 dark:bg-white/10 px-1 rounded mx-auto" style="border-bottom: 2px solid currentColor">${timeStr}</div>` };
     }
     
     return { html: '' };
   };
 
+  
   // Détermination de l'année scolaire de référence dynamique
   const getSchoolYearBase = () => {
      if (templateVersions.length > 0 && templateVersions[0].dateDebut) {
