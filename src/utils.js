@@ -324,3 +324,28 @@ export const layoutDayEventsByAgent = (dayEvents, agentsList, dayIndex) => {
     })
   };
 };
+
+export const detecterChevauchements = (eventsList) => {
+  const idsEnConflit = new Set();
+  const affectations = eventsList.filter(e => !e.extendedProps?.isBesoin && !e.extendedProps?.isAbsence && e.extendedProps?.agentId);
+
+  for (let i = 0; i < affectations.length; i++) {
+    for (let j = i + 1; j < affectations.length; j++) {
+      const e1 = affectations[i];
+      const e2 = affectations[j];
+
+      if (Number(e1.extendedProps.agentId) === Number(e2.extendedProps.agentId)) {
+        const start1 = new Date(e1.start).getTime();
+        const end1 = new Date(e1.end).getTime();
+        const start2 = new Date(e2.start).getTime();
+        const end2 = new Date(e2.end).getTime();
+
+        if (start1 < end2 && start2 < end1) {
+          idsEnConflit.add(String(e1.id).split('_')[0]);
+          idsEnConflit.add(String(e2.id).split('_')[0]);
+        }
+      }
+    }
+  }
+  return idsEnConflit;
+};

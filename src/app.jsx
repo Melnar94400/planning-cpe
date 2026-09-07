@@ -9,8 +9,9 @@ import {
   THEMES, hexToRgb, getContrastYIQ, 
   formatHeureTableau, parseHeureSaisie, extractTimeStr, getMondayStr,
   resetAllData, exporterDonnees, importerDonnees,
-  generateGrid, calculerContratBetty, formatHeureMinutes
-} from './utils';import { PrintTimeGridView, PrintDailyView, PrintAgentYearlyView } from './PrintViews';
+  generateGrid, calculerContratBetty, formatHeureMinutes,
+  detecterChevauchements // 👈 AJOUTEZ CECI
+} from './utils';
 import { SetupWizard } from './SetupWizard';
 
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
@@ -400,6 +401,11 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   });
 
   const allCalendarEvents = modeEdition === 'besoins' ? besoinsEvents : currentRealEvents;
+
+  const conflitsIds = useMemo(() => {
+    return detecterChevauchements(allCalendarEvents);
+  }, [allCalendarEvents]);
+
   const displayEvents = [
     ...allCalendarEvents.filter(e => {
       if (printFilter.type === 'all') return true;
@@ -423,7 +429,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     })
   ];
 
-  const activeAlerts = useMemo(() => {
+const activeAlerts = useMemo(() => {
     const alerts = [];
     const nomsJoursAlert = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM']; 
     
@@ -434,6 +440,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const applicableT = [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= targetMon) || templateVersions[0];
     const besoins = (applicableT?.besoins || []).map(b => shiftEventToWeek(b, targetMon));
 
+    // 1. Vérification des sous-effectifs
     besoins.forEach(b => {
       const { isSousEffectif, minCount, missingAgents } = checkCoverage(b, realEvts, absences);
       if (isSousEffectif) {
@@ -447,9 +454,32 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       }
     });
 
+    // 2. 🆕 Vérification des doubles affectations (chevauchements)
+    const affectationsSemaine = realEvts.filter(e => !e.extendedProps?.isBesoin && !e.extendedProps?.isAbsence && e.extendedProps?.agentId);
+    for (let i = 0; i < affectationsSemaine.length; i++) {
+      for (let j = i + 1; j < affectationsSemaine.length; j++) {
+        const e1 = affectationsSemaine[i];
+        const e2 = affectationsSemaine[j];
+        if (Number(e1.extendedProps.agentId) === Number(e2.extendedProps.agentId)) {
+          const start1 = new Date(e1.start).getTime();
+          const end1 = new Date(e1.end).getTime();
+          const start2 = new Date(e2.start).getTime();
+          const end2 = new Date(e2.end).getTime();
+
+          if (start1 < end2 && start2 < end1) {
+            const agentNom = e1.extendedProps.agentNom || 'Agent';
+            const d = new Date(e1.start);
+            alerts.push({
+              title: `Double affectation : ${agentNom}`,
+              message: `${agentNom} est affecté(e) sur 2 postes en même temps le ${nomsJoursAlert[d.getDay()]} !`
+            });
+          }
+        }
+      }
+    }
+
     return alerts;
   }, [agents, currentTemplate, currentViewMonday, customWeeks, absences, templateVersions]);
-
   // --- EFFETS ---
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1001,19 +1031,23 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       );
     }
     
-    const agentColor = arg.event.backgroundColor || '#3b82f6';
+const agentColor = arg.event.backgroundColor || '#3b82f6';
     const bgColorWithOpacity = agentColor + '66';
     const headerColor = arg.event.extendedProps?.posteCouleur || '#3b82f6';
     const headerTextColor = getContrastYIQ(headerColor);
 
+    // 🎯 Utilisation directe de la liste globale des conflits
+    const cleanEvtId = String(arg.event.id).split('_')[0];
+    const estEnConflit = conflitsIds.has(cleanEvtId);
+
     if (isShort) {
       return (
         <div onClick={handleEventClick} 
-             className={`flex items-center w-full h-full overflow-hidden rounded text-xs shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
-             style={{ backgroundColor: headerColor, color: headerTextColor, border: `1px solid ${agentColor}` }}
-             title="Clic pour modifier • Ctrl+Clic pour copier">
+             className={`flex items-center w-full h-full overflow-hidden rounded text-xs shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''} ${estEnConflit ? 'ring-4 ring-red-600 animate-pulse bg-red-500/40' : ''}`}
+             style={{ backgroundColor: estEnConflit ? '#dc2626' : headerColor, color: headerTextColor, border: `1px solid ${estEnConflit ? '#991b1b' : agentColor}` }}
+             title={estEnConflit ? "⚠️ CONFLIT : Double affectation !" : "Clic pour modifier • Ctrl+Clic pour copier"}>
           <div className="flex-1 truncate px-1.5 flex justify-between items-center">
-            <span><strong>{arg.event.extendedProps?.posteNom}</strong> <span className="opacity-80 hidden md:inline">({arg.event.extendedProps?.agentNom})</span></span>
+            <span><strong>{estEnConflit ? '⚠️ ' : ''}{arg.event.extendedProps?.posteNom}</strong> <span className="opacity-80 hidden md:inline">({arg.event.extendedProps?.agentNom})</span></span>
             <span className="font-mono text-[10px] opacity-90 ml-1 shrink-0">{timeStr}</span>
           </div>
         </div>
@@ -1022,11 +1056,13 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
     return (
       <div onClick={handleEventClick} 
-           className={`flex flex-col w-full h-full overflow-hidden rounded text-xs border border-black/10 shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
-           style={{ backgroundColor: bgColorWithOpacity, border: `1px solid ${agentColor}`, color: textColor }}
-           title="Clic pour modifier • Ctrl+Clic pour copier">
-        <div className="px-1.5 py-1 font-bold flex justify-between items-center" style={{ backgroundColor: headerColor, color: headerTextColor }}>
-          <span className="truncate">{arg.event.extendedProps?.posteNom} <span className="text-[10px] font-normal opacity-90 ml-1">({timeStr})</span></span>
+           className={`flex flex-col w-full h-full overflow-hidden rounded text-xs border shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''} ${estEnConflit ? 'ring-4 ring-red-600 animate-pulse' : ''}`}
+           style={{ backgroundColor: estEnConflit ? '#fee2e2' : bgColorWithOpacity, border: `1px solid ${estEnConflit ? '#dc2626' : agentColor}`, color: textColor }}
+           title={estEnConflit ? "⚠️ CONFLIT : Double affectation !" : "Clic pour modifier • Ctrl+Clic pour copier"}>
+        <div className="px-1.5 py-1 font-bold flex justify-between items-center" style={{ backgroundColor: estEnConflit ? '#dc2626' : headerColor, color: headerTextColor }}>
+          <span className="truncate">
+            {estEnConflit ? '⚠️ CONFLIT ! ' : ''}{arg.event.extendedProps?.posteNom} <span className="text-[10px] font-normal opacity-90 ml-1">({timeStr})</span>
+          </span>
           {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print bg-black/20 hover:bg-red-500 rounded px-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: headerTextColor }}>✖</button>}
         </div>
         <div className="p-1.5 flex flex-col flex-1 leading-tight">
@@ -2014,30 +2050,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   {printFilter.type === 'agent' && ` - Filtré pour : ${agents.find(a=>a.id===printFilter.id)?.nom}`}
                   {printFilter.type === 'poste' && ` - Filtré pour le poste : ${postes.find(p=>p.id===printFilter.id)?.nom}`}
                 </h2>
-                {(() => {
-                  const weekEvents = getEventsForWeek(currentViewMonday);
-                  const totalMinsHebdo = weekEvents.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => {
-                    return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
-                  }, 0);
-                  const totalHeuresHebdo = totalMinsHebdo / 60;
-                  const objectifHebdoEquipe = agents.reduce((sum, a) => sum + (a.hContrat / 36), 0);
-                  const diffHebdo = totalHeuresHebdo - objectifHebdoEquipe;
-
-                  return (
-                    <div className={`flex items-center justify-between ${t.cardBg} px-4 py-2 rounded-lg border ${t.borderLight} mb-3 text-xs shadow-sm`}>
-                      <div className="flex items-center gap-4">
-                        <div><span className="text-gray-500 font-bold uppercase">Total Semaine :</span> <span className="font-mono font-black text-sm ml-1">{formatHeureTableau(totalHeuresHebdo, true)}</span></div>
-                        <div className="text-gray-400">|</div>
-                        <div><span className="text-gray-500 font-bold uppercase">Objectif Hebdo (Contrats / 36) :</span> <span className="font-mono font-bold text-gray-700 dark:text-gray-300 ml-1">{formatHeureTableau(objectifHebdoEquipe, true)}</span></div>
-                      </div>
-                      <div>
-                        <span className={`px-2 py-1 rounded font-mono font-bold ${diffHebdo >= 0 ? 'bg-emerald-500/20 text-emerald-600' : 'bg-orange-500/20 text-orange-600'}`}>
-                          Écart : {diffHebdo > 0 ? '+' : ''}{formatHeureTableau(diffHebdo, true)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })()}
+            
                 <div className="flex gap-2 items-center">
                   {currentViewMonday && (
                     <>
