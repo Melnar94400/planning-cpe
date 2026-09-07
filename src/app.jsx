@@ -11,64 +11,89 @@ const BASE_HEURES_PLEINES = 1607;
 const THEMES = {
   menthe_terracotta: {
     nom: "Menthe & Terracotta",
-    sidebar: "bg-[#25443B]", 
-    headerBg: "bg-[#25443B]",
-    header: "text-[#25443B]",
-    textMenuMuted: "text-[#8CAE9E]",
-    bgMain: "bg-[#F4F7F6]",
-    bgLight: "bg-[#E8EFEA]",
-    borderLight: "border-[#D1E0DC]",
+    sidebar: "bg-[#c3dbb7]", 
+    sidebarText: "text-[#2A3B32]",
+    sidebarIconBtn: "bg-black/5 hover:bg-black/10 border-black/10",
+    headerBg: "bg-[#c3dbb7]",
+    headerText: "text-[#2A3B32]",
+    header: "text-[#4A6B53]",
+    textMenuMuted: "text-[#6B8572]",
+    bgMain: "bg-[#E1ECE0]",     // Fond global : Vert d'eau doux
+    bgLight: "bg-[#D4E2D3]",    // Bordures et accents
+    borderLight: "border-[#C5D6C6]",
+    cardBg: "bg-[#F0F5EE]",     // Fond des cartes et calendriers : Vert ultra-pâle (remplace le blanc pur)
     btnPrimary: "bg-[#CB7659] hover:bg-[#B3634B] text-white transition-colors",
     textAccent: "text-[#CB7659]",
-    activeTab: "bg-white text-[#CB7659] font-bold shadow-sm",
-    fcPrimary: "#CB7659", fcPrimaryHover: "#B3634B", fcToday: "rgba(203, 118, 89, 0.08)"
+    activeTab: "bg-[#F0F5EE] text-[#CB7659] font-bold shadow-sm border border-[#D4E2D3]",
+    fcPrimary: "#CB7659", fcPrimaryHover: "#B3634B", fcToday: "rgba(203, 118, 89, 0.12)"
   },
   sauge_poudre: {
     nom: "Sauge & Poudré",
     sidebar: "bg-[#5C6656]", 
+    sidebarText: "text-white",
+    sidebarIconBtn: "bg-white/10 hover:bg-white/20 border-white/20",
     headerBg: "bg-[#5C6656]",
+    headerText: "text-white",
     header: "text-[#5C6656]",
     textMenuMuted: "text-[#A9B3A4]",
-    bgMain: "bg-[#F9FAF9]",
-    bgLight: "bg-[#EDF0EB]",
-    borderLight: "border-[#DDE2DC]",
+    bgMain: "bg-[#E6EBE5]",
+    bgLight: "bg-[#D8DED7]",
+    borderLight: "border-[#C6CDC5]",
+    cardBg: "bg-[#F0F2F0]",
     btnPrimary: "bg-[#D49A9A] hover:bg-[#BF8787] text-white transition-colors",
     textAccent: "text-[#D49A9A]",
-    activeTab: "bg-white text-[#D49A9A] font-bold shadow-sm",
-    fcPrimary: "#D49A9A", fcPrimaryHover: "#BF8787", fcToday: "rgba(212, 154, 154, 0.08)"
+    activeTab: "bg-[#F0F2F0] text-[#D49A9A] font-bold shadow-sm border border-[#D8DED7]",
+    fcPrimary: "#D49A9A", fcPrimaryHover: "#BF8787", fcToday: "rgba(212, 154, 154, 0.12)"
   },
   lavande_moutarde: {
     nom: "Myrtille & Moutarde",
     sidebar: "bg-[#413C58]", 
+    sidebarText: "text-white",
+    sidebarIconBtn: "bg-white/10 hover:bg-white/20 border-white/20",
     headerBg: "bg-[#413C58]",
+    headerText: "text-white",
     header: "text-[#413C58]",
     textMenuMuted: "text-[#A39EBC]",
-    bgMain: "bg-[#F8F7FA]",
-    bgLight: "bg-[#ECEBF2]",
-    borderLight: "border-[#DEDCF0]",
+    bgMain: "bg-[#E8E7ED]",
+    bgLight: "bg-[#DCDAED]",
+    borderLight: "border-[#C8C5DD]",
+    cardBg: "bg-[#F2F1F5]",
     btnPrimary: "bg-[#DDAA3D] hover:bg-[#C29431] text-white transition-colors", 
     textAccent: "text-[#DDAA3D]",
-    activeTab: "bg-white text-[#DDAA3D] font-bold shadow-sm",
-    fcPrimary: "#DDAA3D", fcPrimaryHover: "#C29431", fcToday: "rgba(221, 170, 61, 0.08)"
+    activeTab: "bg-[#F2F1F5] text-[#DDAA3D] font-bold shadow-sm border border-[#DCDAED]",
+    fcPrimary: "#DDAA3D", fcPrimaryHover: "#C29431", fcToday: "rgba(221, 170, 61, 0.12)"
   },
   classique: {
     nom: "Bleu Classique",
     sidebar: "bg-[#1E3A8A]", 
+    sidebarText: "text-white",
+    sidebarIconBtn: "bg-white/10 hover:bg-white/20 border-white/20",
     headerBg: "bg-[#1E3A8A]",
+    headerText: "text-white",
     header: "text-[#1E3A8A]",
     textMenuMuted: "text-[#93C5FD]", 
-    bgMain: "bg-[#EFF6FF]",
+    bgMain: "bg-[#E0E7FF]",
     bgLight: "bg-[#DBEAFE]", 
     borderLight: "border-[#BFDBFE]", 
+    cardBg: "bg-[#EEF2FF]",
     btnPrimary: "bg-[#2563EB] hover:bg-[#1D4ED8] text-white transition-colors", 
     textAccent: "text-[#1E40AF]", 
-    activeTab: "bg-white text-[#1E3A8A] font-bold shadow-sm",
-    fcPrimary: "#2563EB", fcPrimaryHover: "#1D4ED8", fcToday: "rgba(37, 99, 235, 0.08)"
+    activeTab: "bg-[#EEF2FF] text-[#1E3A8A] font-bold shadow-sm border border-[#DBEAFE]",
+    fcPrimary: "#2563EB", fcPrimaryHover: "#1D4ED8", fcToday: "rgba(37, 99, 235, 0.12)"
   }
 };
 
-// --- CALCULATRICE BETTY ---
-const calculerContratBetty = (quotite, estEtudiant) => {
+// --- FORMATAGE ET PARSING DES HEURES ---
+const formatHeureMinutes = (decimal) => {
+  if (decimal === undefined || decimal === null || Number.isNaN(Number(decimal))) return "";
+  const arrondi = Math.round(Number(decimal) * 60) / 60; 
+  const absVal = Math.abs(arrondi);
+  let h = Math.floor(absVal);
+  let m = Math.round((absVal - h) * 60);
+  if (m === 60) { h += 1; m = 0; }
+  return `${arrondi < 0 ? "-" : ""}${h}h${m.toString().padStart(2, '0')}min`;
+};
+
 const parseHeureSaisie = (chaine) => {
   if (chaine === undefined || chaine === null) return 0;
   const clean = String(chaine).toLowerCase().replace('min', '').replace('h', ':').replace(',', '.').trim();
@@ -78,6 +103,9 @@ const parseHeureSaisie = (chaine) => {
   }
   return parseFloat(clean) || 0;
 };
+
+// --- CALCULATRICE BETTY ---
+const calculerContratBetty = (quotite, estEtudiant) => {
   const q = (parseFloat(String(quotite).replace(',', '.')) || 100) / 100;
   const baseLegale = BASE_HEURES_PLEINES - 14; 
   let hDecimale = baseLegale * q;
@@ -154,16 +182,6 @@ const importerDonnees = (e) => {
     return;
   }
   executeImport(file);
-};
-  // --- FORMATAGE ET PARSING DES HEURES ---
-const formatHeureMinutes = (decimal) => {
-  if (decimal === undefined || decimal === null || Number.isNaN(Number(decimal))) return "";
-  const arrondi = Math.round(Number(decimal) * 60) / 60; 
-  const absVal = Math.abs(arrondi);
-  let h = Math.floor(absVal);
-  let m = Math.round((absVal - h) * 60);
-  if (m === 60) { h += 1; m = 0; }
-  return `${arrondi < 0 ? "-" : ""}${h}h${m.toString().padStart(2, '0')}min`;
 };
 
 // --- MOTEUR DE CALCUL DES JOURS FÉRIÉS ---
@@ -304,7 +322,7 @@ const SetupWizard = ({ onComplete, t }) => {
   return (
     <div className={`min-h-screen ${t.bgMain} flex flex-col items-center py-12 px-4`}>
       <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl overflow-hidden border border-gray-100">
-        <div className={`${t.headerBg} p-6 text-white text-center`}>
+        <div className={`${t.headerBg} p-6 ${t.headerText} text-center`}>
           <h1 className="text-3xl font-black tracking-wider">Planning CPE</h1><p className="opacity-80 mt-1">Configuration Initiale ({step}/4)</p>
         </div>
         
@@ -398,12 +416,13 @@ const SetupWizard = ({ onComplete, t }) => {
                 <div className="col-span-4"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Nom</label><input type="text" value={formAgent.nom} onChange={e=>handleAgentChange('nom', e.target.value)} className="w-full p-2 text-sm rounded border bg-white" placeholder="Ex: Célia" /></div>
                 <div className="col-span-2"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Quot. (%)</label><input type="number" step="0.1" value={formAgent.quotite} onChange={e=>handleAgentChange('quotite', e.target.value)} className="w-full p-2 text-sm rounded border bg-white font-bold text-center" /></div>
                 <div className="col-span-3 flex items-center justify-center pb-2"><label className={`flex items-center gap-1 text-[10px] font-bold ${t.header} cursor-pointer bg-white px-2 py-1.5 border rounded shadow-sm`}><input type="checkbox" checked={formAgent.estEtudiant} onChange={e=>handleAgentChange('estEtudiant', e.target.checked)} className="w-3 h-3" />🎓 Étudiant</label></div>
-                <div className="col-span-3"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Contrat</label><input type="number" step="0.01" value={formAgent.hContrat} onChange={e=>setFormAgent({...formAgent, hContrat: e.target.value})} className="w-full p-2 text-sm rounded border font-mono text-center bg-white" /></div>
+                <div className="col-span-3"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Contrat</label><input type="text" value={typeof formAgent.hContrat === 'number' ? formatHeureMinutes(formAgent.hContrat) : formAgent.hContrat} onChange={e=>setFormAgent({...formAgent, hContrat: e.target.value})} onBlur={e=>setFormAgent({...formAgent, hContrat: parseHeureSaisie(e.target.value)})} className="w-full p-2 text-sm rounded border font-mono text-center bg-white" /></div>
                 
                 <div className="col-span-2"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Coul.</label><input type="color" value={formAgent.couleurFond} onChange={e=>setFormAgent({...formAgent, couleurFond: e.target.value})} className="w-full h-9 rounded cursor-pointer p-0 border-0" /></div>
-<div className="col-span-10 mt-1">
-  <button type="button" onClick={() => { if(formAgent.nom) { const hC = typeof formAgent.hContrat === 'string' ? parseHeureSaisie(formAgent.hContrat) : formAgent.hContrat; setAgents([...agents, {id: Date.now(), nom: formAgent.nom, quotite: parseFloat(formAgent.quotite), estEtudiant: formAgent.estEtudiant, hContrat: hC, couleurFond: formAgent.couleurFond}]); setFormAgent({...formAgent, nom: '', estEtudiant: false}); } }} className={`w-full ${t.btnPrimary} px-4 py-2 rounded text-sm font-bold shadow`}>Ajouter cet agent</button>
-</div>              </div>
+                <div className="col-span-10 mt-1">
+                  <button type="button" onClick={() => { if(formAgent.nom) { const hC = typeof formAgent.hContrat === 'string' ? parseHeureSaisie(formAgent.hContrat) : formAgent.hContrat; setAgents([...agents, {id: Date.now(), nom: formAgent.nom, quotite: parseFloat(formAgent.quotite), estEtudiant: formAgent.estEtudiant, hContrat: hC, couleurFond: formAgent.couleurFond}]); setFormAgent({...formAgent, nom: '', estEtudiant: false}); } }} className={`w-full ${t.btnPrimary} px-4 py-2 rounded text-sm font-bold shadow`}>Ajouter cet agent</button>
+                </div>
+              </div>
 
               <div className="flex flex-wrap gap-2">
                 {agents.map(a => <span key={a.id} className="text-sm text-white px-3 py-1 rounded-full flex items-center gap-2 shadow-sm" style={{backgroundColor: a.couleurFond}}>{a.nom} {a.estEtudiant && '🎓'} ({a.quotite}%) <button onClick={()=>setAgents(agents.filter(x=>x.id!==a.id))} className="text-white hover:text-red-200">✖</button></span>)}
@@ -647,7 +666,7 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
                   if (!aDesEvenementsReels) {
                     if (infoPeriode) {
                       if (infoPeriode.type === 'ferie') hDefaut = gabarits[applicableTemplate?.id]?.[agent.id]?.[dayOfWeek] || 0;
-                      else hDefaut = 0;
+                      else hDefaut = 0; // Vacances
                     } else {
                       if (customWeeks[mondayStr]) hDefaut = 0; 
                       else if (!estWeekEnd) hDefaut = gabarits[applicableTemplate?.id]?.[agent.id]?.[dayOfWeek] || 0;
@@ -672,8 +691,8 @@ const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, ge
                   if (dayOfWeek === 6) bgJour = "bg-yellow-50";  
                   
                   if (infoPeriode) {
-                    if (infoPeriode.type === 'ferie') bgJour = "bg-green-200 text-green-900 font-bold";
-                    else bgJour = "bg-blue-100 text-blue-900"; 
+                    if (infoPeriode.type === 'ferie') bgJour = "bg-green-100 text-green-900 font-bold";
+                    else bgJour = "bg-blue-100 text-blue-900";
                   }
 
                   if (absDuJour.length > 0) bgJour = "bg-red-200 text-red-900 font-bold";
@@ -925,6 +944,16 @@ const MainApp = ({ t, themeId, changeTheme }) => {
     let m = Math.round((absVal - h) * 60);
     if (m === 60) { h += 1; m = 0; }
     return `${arrondi < 0 ? "-" : ""}${h}h${m.toString().padStart(2, '0')}`;
+  };
+
+  const parseHeureSaisie = (chaine) => {
+    if (!chaine) return 0;
+    const clean = chaine.replace('h', ':').replace(',', '.');
+    if (clean.includes(':')) {
+      const parts = clean.split(':');
+      return parseFloat(parts[0]) + (parseFloat(parts[1]) / 60);
+    }
+    return parseFloat(clean) || 0;
   };
 
   const getMondayStr = (dInput) => {
@@ -1541,7 +1570,7 @@ const MainApp = ({ t, themeId, changeTheme }) => {
     setModalAgent(newAgent);
   };
 
-const validerAgentModal = (e) => {
+  const validerAgentModal = (e) => {
     e.preventDefault();
     if (!modalAgent.nom.trim()) return alert('Obligatoire.');
     const q = parseFloat(String(modalAgent.quotite).replace(',', '.')) || 100;
@@ -1555,7 +1584,8 @@ const validerAgentModal = (e) => {
     }
     setModalAgent({ ...modalAgent, isOpen: false });
   };
-    const supprimerAgent = (id, n, e) => { e.stopPropagation(); if(confirm(`Supprimer l'agent ${n} ?`)) { setAgents(agents.filter(a => a.id !== id)); updateCurrentTemplate(currentTemplate.events.filter(e => e.extendedProps?.agentId !== id), null); if (agentActif === id) setAgentActif(null); } };
+
+  const supprimerAgent = (id, n, e) => { e.stopPropagation(); if(confirm(`Supprimer l'agent ${n} ?`)) { setAgents(agents.filter(a => a.id !== id)); updateCurrentTemplate(currentTemplate.events.filter(e => e.extendedProps?.agentId !== id), null); if (agentActif === id) setAgentActif(null); } };
   
   const validerNouveauPoste = (e) => {
     e.preventDefault();
@@ -1638,6 +1668,9 @@ const validerAgentModal = (e) => {
       
       <style>{`
         :root {
+          --fc-page-bg-color: transparent;
+          --fc-neutral-bg-color: rgba(0, 0, 0, 0.04);
+          --fc-list-event-hover-bg-color: rgba(0, 0, 0, 0.02);
           --fc-button-bg-color: ${t.fcPrimary};
           --fc-button-border-color: ${t.fcPrimary};
           --fc-button-hover-bg-color: ${t.fcPrimaryHover};
@@ -1665,7 +1698,7 @@ const validerAgentModal = (e) => {
       {modalNewVersion.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">➕ Créer une évolution</h3></div>
+            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">➕ Créer une évolution</h3></div>
             <form onSubmit={validerCreationVersionModal}>
               <div className="p-5 space-y-4">
                 <div>
@@ -1690,7 +1723,7 @@ const validerAgentModal = (e) => {
       {modalNewPoste.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">➕ Ajouter un poste</h3></div>
+            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">➕ Ajouter un poste</h3></div>
             <form onSubmit={validerNouveauPoste}>
               <div className="p-5 space-y-4">
                 <div>
@@ -1711,7 +1744,7 @@ const validerAgentModal = (e) => {
       {modalException.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">Modifier le jour ({modalException.dateStr})</h3></div>
+            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">Modifier le jour ({modalException.dateStr})</h3></div>
             <form onSubmit={validerExceptionJourModal}>
               <div className="p-5 space-y-4">
                 <div>
@@ -1796,7 +1829,7 @@ const validerAgentModal = (e) => {
       {modalPrint && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">🖨️ Impression (A4 Paysage)</h3></div>
+            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">🖨️ Impression (A4 Paysage)</h3></div>
             <form onSubmit={declencherImpression}>
               <div className="p-6 space-y-4">
                 {(vueActive === 'template' || vueActive === 'planning') ? (
@@ -1817,7 +1850,7 @@ const validerAgentModal = (e) => {
       {modalCreation.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200">
-            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">{modalCreation.eventId ? 'Modifier l\'affectation' : 'Nouvelle affectation'}</h3></div>
+            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">{modalCreation.eventId ? 'Modifier l\'affectation' : 'Nouvelle affectation'}</h3></div>
             <form onSubmit={validerCreationModal}>
               <div className="p-5 space-y-4">
                 {(vueActive === 'planning' || vueActive === 'journee') && !modalCreation.eventId && (
@@ -1935,7 +1968,7 @@ const validerAgentModal = (e) => {
       {modalAgent.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className={`${t.headerBg} text-white p-4`}><h3 className="font-bold text-lg">{modalAgent.id ? 'Modifier un agent' : 'Nouvel agent'}</h3></div>
+            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">{modalAgent.id ? 'Modifier un agent' : 'Nouvel agent'}</h3></div>
             <form onSubmit={validerAgentModal}>
               <div className="p-5 space-y-4">
                 <div><label className="block text-sm font-semibold mb-1">Nom complet</label><input type="text" required value={modalAgent.nom} onChange={e => setModalAgent({...modalAgent, nom: e.target.value})} className="w-full border rounded p-2" autoFocus /></div>
@@ -1944,10 +1977,11 @@ const validerAgentModal = (e) => {
                   <div className="flex-1 flex flex-col justify-end"><label className={`flex items-center gap-2 p-2 border ${t.borderLight} ${t.bgLight} rounded cursor-pointer font-bold text-sm`}><input type="checkbox" checked={modalAgent.estEtudiant} onChange={e => handleEditAgentChange('estEtudiant', e.target.checked)} className="w-4 h-4" />🎓 Statut Étudiant</label></div>
                 </div>
                 <div className="flex gap-4">
-<div className="flex-1">
-  <label className="block text-sm font-semibold mb-1">Contrat (Calculé)</label>
-  <input type="text" required value={typeof modalAgent.hContrat === 'number' ? formatHeureMinutes(modalAgent.hContrat) : modalAgent.hContrat} onChange={e => setModalAgent({...modalAgent, hContrat: e.target.value})} onBlur={e => setModalAgent({...modalAgent, hContrat: parseHeureSaisie(e.target.value)})} className="w-full border rounded p-2 font-mono text-center bg-white" />
-</div>                  <div className="flex-1"><label className="block text-sm font-semibold mb-1">Couleur</label><div className="flex items-center gap-3"><input type="color" value={modalAgent.couleurFond} onChange={e => setModalAgent({...modalAgent, couleurFond: e.target.value})} className="w-10 h-10 p-1 border rounded cursor-pointer" /><span className="text-sm uppercase">{modalAgent.couleurFond}</span></div></div>
+                  <div className="flex-1">
+                    <label className="block text-sm font-semibold mb-1">Contrat (Calculé)</label>
+                    <input type="text" required value={typeof modalAgent.hContrat === 'number' ? formatHeureMinutes(modalAgent.hContrat) : modalAgent.hContrat} onChange={e => setModalAgent({...modalAgent, hContrat: e.target.value})} onBlur={e => setModalAgent({...modalAgent, hContrat: parseHeureSaisie(e.target.value)})} className="w-full border rounded p-2 font-mono text-center bg-white" />
+                  </div>
+                  <div className="flex-1"><label className="block text-sm font-semibold mb-1">Couleur</label><div className="flex items-center gap-3"><input type="color" value={modalAgent.couleurFond} onChange={e => setModalAgent({...modalAgent, couleurFond: e.target.value})} className="w-10 h-10 p-1 border rounded cursor-pointer" /><span className="text-sm uppercase">{modalAgent.couleurFond}</span></div></div>
                 </div>
               </div>
               <div className="p-4 bg-gray-50 border-t flex justify-end gap-3"><button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-600 hover:bg-gray-200">Annuler</button><button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded`}>{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button></div>
@@ -1958,60 +1992,60 @@ const validerAgentModal = (e) => {
 
       {/* PANNEAU LATÉRAL (Fixe) */}
       <div className={`w-80 ${t.sidebar} shadow-lg flex flex-col z-20 border-r border-gray-200 no-print shrink-0 transition-colors`}>
-        <div className="p-4 text-white flex flex-col gap-3">
+        <div className={`p-4 ${t.sidebarText} flex flex-col gap-3`}>
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold tracking-wider">Planning CPE</h1>
             <div className="flex gap-1 flex-wrap justify-end max-w-[140px]">
               <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
               
-              <button onClick={() => document.getElementById('import-file').click()} className="bg-white/10 hover:bg-white/20 px-2 py-1.5 rounded text-xs shadow border border-white/20" title="Restaurer une sauvegarde">⬆️</button>
+              <button onClick={() => document.getElementById('import-file').click()} className={`${t.sidebarIconBtn} px-2 py-1.5 rounded text-xs shadow border transition-colors`} title="Restaurer une sauvegarde">⬆️</button>
               
-              <button onClick={handleExport} className={`relative px-2 py-1.5 rounded text-xs shadow border transition-colors ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500' : 'bg-white/10 hover:bg-white/20 border-white/20'}`} title="Sauvegarder les données (Fichier JSON)">
+              <button onClick={handleExport} className={`relative px-2 py-1.5 rounded text-xs shadow border transition-colors ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500 text-white' : t.sidebarIconBtn}`} title="Sauvegarder les données (Fichier JSON)">
                 ⬇️{needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
               </button>
 
-              <button onClick={() => setModalParametres(true)} className="bg-white/10 hover:bg-white/20 px-2 py-1.5 rounded text-xs shadow border border-white/20" title="Paramètres">⚙️</button>
-              <button onClick={() => setModalPrint(true)} className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded text-xs font-bold border border-white/20">🖨️</button>
+              <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} px-2 py-1.5 rounded text-xs shadow border transition-colors`} title="Paramètres">⚙️</button>
+              <button onClick={() => setModalPrint(true)} className={`${t.sidebarIconBtn} px-3 py-1.5 rounded text-xs font-bold border transition-colors`}>🖨️</button>
               <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 px-2 py-1.5 rounded text-xs font-bold border border-red-500 text-white text-center" title="Tout réinitialiser">🗑️</button>
             </div>
           </div>
-          <div className="flex flex-col bg-black/20 rounded p-1 shadow-inner gap-1 mt-2">
-            <button onClick={() => setVueActive('journee')} className={`text-sm py-1.5 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>⏱️ Vue Quotidienne</button>
-            <button onClick={() => setVueActive('template')} className={`text-sm py-1.5 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>📐 Modèle : Semaine Type</button>
-            <button onClick={() => setVueActive('planning')} className={`text-sm py-1.5 rounded transition ${vueActive === 'planning' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>📅 Planning Hebdo (Réel)</button>
-            <button onClick={() => setVueActive('dashboard')} className={`text-sm py-1.5 rounded transition ${vueActive === 'dashboard' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>📊 Bilan Équipe</button>
-            <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-sm py-1.5 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>👤 Calendriers Individuels</button>
-            <button onClick={() => setVueActive('absences')} className={`text-sm py-1.5 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:text-white`}`}>📋 Absences & Retards</button>
+          <div className="flex flex-col bg-black/10 rounded p-1 shadow-inner gap-1 mt-2">
+            <button onClick={() => setVueActive('journee')} className={`text-sm py-1.5 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
+            <button onClick={() => setVueActive('template')} className={`text-sm py-1.5 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
+            <button onClick={() => setVueActive('planning')} className={`text-sm py-1.5 rounded transition ${vueActive === 'planning' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📅 Planning Hebdo (Réel)</button>
+            <button onClick={() => setVueActive('dashboard')} className={`text-sm py-1.5 rounded transition ${vueActive === 'dashboard' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📊 Bilan Équipe</button>
+            <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-sm py-1.5 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>👤 Calendriers Individuels</button>
+            <button onClick={() => setVueActive('absences')} className={`text-sm py-1.5 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📋 Absences & Retards</button>
           </div>
         </div>
         
         {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
-          <div className="p-4 flex-1 overflow-y-auto space-y-4 bg-white">
+          <div className={`p-4 flex-1 overflow-y-auto space-y-4 ${t.bgMain}`}>
             
             {vueActive === 'template' && currentTemplate.statut === 'brouillon' && (
-              <div className="flex bg-gray-200 rounded p-1 mb-2">
+              <div className="flex bg-gray-200/50 rounded p-1 mb-2">
                 <button onClick={() => setModeEdition('agents')} className={`flex-1 text-xs py-1.5 rounded transition ${modeEdition === 'agents' ? `bg-white font-bold ${t.textAccent} shadow-sm` : 'text-gray-600 hover:text-black'}`}>🖌️ Agents</button>
                 <button onClick={() => setModeEdition('besoins')} className={`flex-1 text-xs py-1.5 rounded transition ${modeEdition === 'besoins' ? 'bg-white font-bold text-red-600 shadow-sm' : 'text-gray-600 hover:text-black'}`}>🎯 Besoins</button>
               </div>
             )}
 
             {vueActive === 'template' && currentTemplate.statut === 'valide' && (
-              <div className="bg-gray-100 border border-gray-300 p-4 rounded text-center mb-4">
+              <div className="bg-gray-100/50 border border-gray-300 p-4 rounded text-center mb-4">
                 <span className="text-2xl block mb-1">🔒</span>
                 <p className="text-sm font-bold text-gray-700">Modèle Validé</p>
                 <p className="text-xs text-gray-500 mt-1">Structure verrouillée pour protéger le compte d'heures passé.</p>
                 <button onClick={() => setModalNewVersion({ isOpen: true, dateDebut: `${baseYear+1}-01-04`, nom: 'Évolution Hiver' })} className={`mt-3 ${t.btnPrimary} text-xs font-bold px-3 py-2 rounded shadow w-full flex items-center justify-center gap-1`}>➕ Créer une évolution</button>
-                <button onClick={deverrouillerModele} className="mt-2 text-xs text-gray-400 hover:text-gray-800 underline">🔓 Déverrouiller (Corriger erreur)</button>
+                <button onClick={deverrouillerModele} className="mt-2 text-xs text-gray-500 hover:text-gray-800 underline">🔓 Déverrouiller (Corriger erreur)</button>
               </div>
             )}
 
             {(vueActive === 'planning' || vueActive === 'journee' || (vueActive === 'template' && currentTemplate.statut === 'brouillon')) && modeEdition === 'agents' && (
               <div className="animate-in fade-in">
                 <div>
-                  <div className="flex justify-between items-center mb-2"><h2 className="font-bold text-gray-700 text-sm">Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-gray-200 w-5 h-5 rounded-full text-xs font-bold">+</button></div>
+                  <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20">+</button></div>
                   <ul className="space-y-1">
                     {agents.map((agent) => (
-                      <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ring-black/10` : 'bg-gray-50 hover:bg-gray-100'}`} style={{ borderLeftColor: agent.couleurFond }}>
+                      <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ring-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
                         <span>{agent.nom} {agent.estEtudiant && '🎓'}</span>
                         <div className="flex gap-1 items-center"><button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className="text-gray-400 hover:text-gray-800 text-xs px-1">⚙️</button><button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button></div>
                       </li>
@@ -2019,10 +2053,10 @@ const validerAgentModal = (e) => {
                   </ul>
                 </div>
                 <div className="mt-4">
-                  <div className="flex justify-between items-center mb-2"><h2 className="font-bold text-gray-700 text-sm">Postes</h2><button onClick={() => setModalNewPoste({ isOpen: true, nom: '' })} className="bg-gray-200 w-5 h-5 rounded-full text-xs font-bold">+</button></div>
+                  <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Postes</h2><button onClick={() => setModalNewPoste({ isOpen: true, nom: '' })} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20">+</button></div>
                   <ul className="space-y-1">
                     {postes.map((poste) => (
-                      <li key={poste.id} onClick={() => setPosteActif(posteActif === poste.id ? null : poste.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${posteActif === poste.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ring-black/10` : 'bg-gray-50 hover:bg-gray-100'}`} style={{ borderLeftColor: poste.couleur }}>
+                      <li key={poste.id} onClick={() => setPosteActif(posteActif === poste.id ? null : poste.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${posteActif === poste.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ring-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: poste.couleur }}>
                         <span>{poste.nom}</span><button onClick={(e) => supprimerPoste(poste.id, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
                       </li>
                     ))}
@@ -2051,26 +2085,26 @@ const validerAgentModal = (e) => {
       <div id="print-area" className="flex-1 flex flex-col h-full overflow-hidden bg-white">
         
         {vueActive === 'journee' && (
-          <div className="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
+          <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
             <div className="p-4 pb-2 no-print shrink-0">
               <div className="flex justify-between items-center mb-2">
                 <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>
                   ⏱️ Vue Quotidienne
                 </h2>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => changeJourQuotidien(-1)} className="px-3 py-1 rounded text-sm font-bold bg-white border border-gray-300 hover:bg-gray-100 shadow-sm transition-colors">◀ Jour Précédent</button>
-                  <input type="date" value={jourConsulte} onChange={(e) => setJourConsulte(e.target.value)} className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold bg-white outline-none shadow-sm`} />
-                  <button onClick={() => changeJourQuotidien(1)} className="px-3 py-1 rounded text-sm font-bold bg-white border border-gray-300 hover:bg-gray-100 shadow-sm transition-colors">Jour Suivant ▶</button>
+                  <button onClick={() => changeJourQuotidien(-1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>◀ Jour Précédent</button>
+                  <input type="date" value={jourConsulte} onChange={(e) => setJourConsulte(e.target.value)} className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold ${t.cardBg} outline-none shadow-sm`} />
+                  <button onClick={() => changeJourQuotidien(1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>Jour Suivant ▶</button>
                 </div>
               </div>
             </div>
             
             <div className="flex-1 overflow-auto px-4 pb-4">
-              <div className="bg-white rounded-xl shadow border border-gray-200 min-w-[800px] flex flex-col h-full">
+              <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} min-w-[800px] flex flex-col h-full`}>
                 {/* En-tête des heures */}
-                <div className={`flex border-b border-gray-200 ${t.bgLight} shrink-0 ml-32 relative h-8 rounded-t-xl`}>
+                <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 rounded-t-xl`}>
                   {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map(h => (
-                    <div key={h} className="absolute text-[10px] font-bold text-gray-500 top-2" style={{ left: `${((h * 60 - 460) / 600) * 100}%`, transform: 'translateX(-50%)' }}>
+                    <div key={h} className={`absolute text-[10px] font-bold ${t.header} top-2`} style={{ left: `${((h * 60 - 460) / 600) * 100}%`, transform: 'translateX(-50%)' }}>
                       {h}h00
                     </div>
                   ))}
@@ -2081,7 +2115,7 @@ const validerAgentModal = (e) => {
                   {/* Lignes verticales de fond */}
                   <div className="absolute top-0 bottom-0 left-32 right-0 pointer-events-none">
                     {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map(h => (
-                      <div key={h} className="absolute top-0 bottom-0 border-l border-gray-100" style={{ left: `${((h * 60 - 460) / 600) * 100}%` }}></div>
+                      <div key={h} className={`absolute top-0 bottom-0 border-l ${t.borderLight} opacity-50`} style={{ left: `${((h * 60 - 460) / 600) * 100}%` }}></div>
                     ))}
                   </div>
 
@@ -2092,10 +2126,10 @@ const validerAgentModal = (e) => {
                     const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(jourConsulte));
 
                     return (
-                      <div key={agent.id} className="flex border-b border-gray-100 min-h-[60px] relative group hover:bg-gray-50 transition-colors">
+                      <div key={agent.id} className={`flex border-b ${t.borderLight} min-h-[60px] relative group hover:bg-black/5 transition-colors`}>
                         {/* Colonne Agent */}
-                        <div className="w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r border-gray-200 z-10 bg-white group-hover:bg-gray-50 transition-colors">
-                          <span className="text-xs font-bold text-gray-800 text-right leading-tight">{agent.nom}</span>
+                        <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 ${t.cardBg} group-hover:bg-transparent transition-colors`}>
+                          <span className={`text-xs font-bold ${t.header} text-right leading-tight`}>{agent.nom}</span>
                         </div>
                         
                         {/* Ligne de temps */}
@@ -2157,7 +2191,7 @@ const validerAgentModal = (e) => {
         )}
 
         {vueActive === 'template' && (
-          <div className="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
+          <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
             <div className="p-4 pb-2 no-print shrink-0">
               <div className="flex justify-between items-center mb-2">
                 <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>
@@ -2169,7 +2203,7 @@ const validerAgentModal = (e) => {
                   {currentTemplate.statut === 'brouillon' && (
                     <button onClick={validerModele} className="bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded hover:bg-green-700 shadow-sm animate-pulse">✅ Valider et Appliquer</button>
                   )}
-                  <select value={activeTemplateId} onChange={e => setActiveTemplateId(Number(e.target.value))} className="border border-gray-300 rounded p-1.5 text-xs font-bold bg-white outline-none">
+                  <select value={activeTemplateId} onChange={e => setActiveTemplateId(Number(e.target.value))} className={`border ${t.borderLight} rounded p-1.5 text-xs font-bold ${t.cardBg} outline-none`}>
                     {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.statut==='valide'?'🔒':'✏️'} {tv.nom}</option>)}
                   </select>
                 </div>
@@ -2181,7 +2215,7 @@ const validerAgentModal = (e) => {
               {isPrinting ? (
                 <PrintTimeGridView events={displayEvents} titre={`Modèle : ${currentTemplate.nom} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
               ) : (
-                <div className={`bg-white rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-gray-400 border-dashed border-2' : 'border-gray-200'}`}>
+                <div className={`${t.cardBg} rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-gray-400 border-dashed border-2' : t.borderLight}`}>
                   <FullCalendar
                     plugins={[timeGridPlugin, interactionPlugin]}
                     initialView="timeGridWeek"
@@ -2214,7 +2248,7 @@ const validerAgentModal = (e) => {
         )}
 
         {vueActive === 'planning' && (
-          <div className="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
+          <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
             <div className="p-4 pb-2 no-print shrink-0">
               <div className="flex justify-between items-center mb-2">
                 <h2 className={`text-lg font-bold ${t.header}`}>
@@ -2225,7 +2259,7 @@ const validerAgentModal = (e) => {
                 <div className="flex gap-2 items-center">
                   {currentViewMonday && (
                     <>
-                      <select onChange={(e) => { if(e.target.value) importerModele(e.target.value); e.target.value=''; }} className={`bg-white ${t.textAccent} px-2 py-1 rounded text-xs font-bold border ${t.borderLight} shadow-sm outline-none cursor-pointer ${t.bgLight}`}>
+                      <select onChange={(e) => { if(e.target.value) importerModele(e.target.value); e.target.value=''; }} className={`${t.cardBg} ${t.textAccent} px-2 py-1 rounded text-xs font-bold border ${t.borderLight} shadow-sm outline-none cursor-pointer hover:opacity-75`}>
                         <option value="">📥 Appliquer un modèle...</option>
                         {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.nom}</option>)}
                       </select>
@@ -2243,7 +2277,7 @@ const validerAgentModal = (e) => {
               {isPrinting ? (
                 <PrintTimeGridView events={displayEvents} titre={`Semaine du ${currentViewMonday} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
               ) : (
-                <div className="bg-white rounded-xl shadow border border-gray-200 h-full p-2">
+                <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} h-full p-2`}>
                   <FullCalendar
                     plugins={[timeGridPlugin, interactionPlugin]}
                     initialView="timeGridWeek"
@@ -2276,15 +2310,15 @@ const validerAgentModal = (e) => {
         )}
 
         {vueActive === 'dashboard' && (
-          <div className="flex-1 p-8 overflow-auto bg-gray-50 print-dashboard-table">
+          <div className={`flex-1 p-8 overflow-auto ${t.bgMain} print-dashboard-table`}>
             <div className="flex justify-between items-end mb-6">
               <h2 className={`text-2xl font-bold ${t.header}`}>Bilan Annuel Global ({baseYear}-{baseYear+1})</h2>
-              <div className="bg-white px-5 py-3 rounded-xl shadow-sm border border-gray-300 flex items-center gap-6">
+              <div className={`${t.cardBg} px-5 py-3 rounded-xl shadow-sm border ${t.borderLight} flex items-center gap-6`}>
                  <div>
                     <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Dotation Globale</label>
                     <div className="flex items-center gap-1"><input type="number" step="0.1" value={dotation} onChange={e => setDotation(parseFloat(e.target.value)||0)} className={`w-20 p-1 border rounded text-xl font-black text-center ${t.header}`} /><span className="font-bold text-gray-400">ETP</span></div>
                  </div>
-                 <div className="text-3xl font-light text-gray-200">/</div>
+                 <div className="text-3xl font-light text-gray-300">/</div>
                  <div>
                     <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">ETP Répartis (Agents)</label>
                     <div className={`text-2xl font-black flex items-center gap-1 ${agents.reduce((sum,a)=>sum+(a.quotite/100),0) > dotation && dotation > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{agents.reduce((sum,a)=>sum+(a.quotite/100),0).toFixed(2)}<span className="text-base">ETP</span></div>
@@ -2292,7 +2326,7 @@ const validerAgentModal = (e) => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow border border-gray-300 overflow-hidden">
+            <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden`}>
               <table className="w-full text-sm text-left">
                 <thead className={`${t.headerBg} text-white font-medium uppercase text-xs`}>
                   <tr><th className="p-4 border-r border-black/20">Agent</th><th className="p-4 border-r border-black/20 text-center">%</th><th className="p-4 border-r border-black/20 text-center bg-black/20">H. Contrat</th><th className="p-4 border-r border-black/20 text-center">H. Type Hebdo</th><th className="p-4 border-r border-black/20 text-center bg-black/20">H. Consommées</th><th className="p-4 text-center">Solde Final</th></tr>
@@ -2300,11 +2334,11 @@ const validerAgentModal = (e) => {
                 <tbody className="divide-y divide-gray-200">
                   {statsAgents.map(agent => (
                     <tr key={agent.id} className={`hover:${t.bgLight}`}>
-                      <td className="p-4 font-bold border-r border-gray-200 text-gray-800">{agent.nom} {agent.estEtudiant && '🎓'}</td>
-                      <td className="p-4 text-center border-r border-gray-200" style={{ color: agent.couleurFond }}>{agent.quotite}%</td>
-                      <td className="p-4 text-center border-r border-gray-200 font-mono font-bold">{formatHeureTableau(agent.hContrat, true)}</td>
-                      <td className="p-4 text-center border-r border-gray-200 font-mono text-gray-500">{formatHeureTableau(agent.hHebdoType, true)}</td>
-                      <td className="p-4 text-center border-r border-gray-200 font-mono font-bold bg-gray-50 text-gray-700">{formatHeureTableau(agent.heuresConsommees, true)}</td>
+                      <td className={`p-4 font-bold border-r ${t.borderLight} ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</td>
+                      <td className={`p-4 text-center border-r ${t.borderLight}`} style={{ color: agent.couleurFond }}>{agent.quotite}%</td>
+                      <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold`}>{formatHeureTableau(agent.hContrat, true)}</td>
+                      <td className={`p-4 text-center border-r ${t.borderLight} font-mono text-gray-500`}>{formatHeureTableau(agent.hHebdoType, true)}</td>
+                      <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.bgLight} text-gray-700`}>{formatHeureTableau(agent.heuresConsommees, true)}</td>
                       <td className={`p-4 text-center font-mono font-black text-lg ${agent.soldeGlobal > 0 ? 'bg-green-100 text-green-700' : (agent.soldeGlobal < 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-50 text-emerald-600')}`}>{agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</td>
                     </tr>
                   ))}
@@ -2315,52 +2349,52 @@ const validerAgentModal = (e) => {
         )}
 
         {vueActive === 'absences' && (
-          <div className="flex-1 p-6 overflow-auto bg-gray-50">
+          <div className={`flex-1 p-6 overflow-auto ${t.bgMain}`}>
             <h2 className={`text-2xl font-bold ${t.header} mb-6`}>Gestion des Absences et Retards</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               {bilanAbsences.map(b => (
-                <div key={b.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 border-l-4" style={{ borderLeftColor: b.couleur }}>
-                  <div className="font-black text-lg text-gray-800 mb-3">{b.nom}</div>
+                <div key={b.id} className={`${t.cardBg} rounded-xl shadow-sm border ${t.borderLight} p-4 border-l-4`} style={{ borderLeftColor: b.couleur }}>
+                  <div className={`font-black text-lg ${t.header} mb-3`}>{b.nom}</div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div><div className="text-gray-500 text-xs font-bold uppercase">Absences</div><div className="font-mono text-red-600 font-bold mt-1">{b.nbAbs} <span className="text-xs text-gray-400">({formatHeureTableau(b.hAbs, true)})</span></div></div>
                     <div><div className="text-gray-500 text-xs font-bold uppercase">Retards</div><div className="font-mono text-orange-500 font-bold mt-1">{b.nbRet} <span className="text-xs text-gray-400">({formatHeureTableau(b.hRet, true)})</span></div></div>
                   </div>
-                  {b.nbRetRat > 0 && (<div className="mt-3 pt-3 border-t border-gray-100 text-xs font-bold text-red-600 bg-red-50 p-2 rounded">⚠️ {b.nbRetRat} retard(s) à rattraper ({formatHeureTableau(b.hRetRat, true)})</div>)}
-                  {b.nbRet > 0 && b.nbRetRat === 0 && (<div className="mt-3 pt-3 border-t border-gray-100 text-xs font-bold text-green-600 bg-green-50 p-2 rounded">✅ Tous les retards sont rattrapés.</div>)}
+                  {b.nbRetRat > 0 && (<div className="mt-3 pt-3 border-t border-gray-200 text-xs font-bold text-red-600 bg-red-50 p-2 rounded">⚠️ {b.nbRetRat} retard(s) à rattraper ({formatHeureTableau(b.hRetRat, true)})</div>)}
+                  {b.nbRet > 0 && b.nbRetRat === 0 && (<div className="mt-3 pt-3 border-t border-gray-200 text-xs font-bold text-green-600 bg-green-50 p-2 rounded">✅ Tous les retards sont rattrapés.</div>)}
                 </div>
               ))}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow border border-gray-200 h-fit">
+              <div className={`lg:col-span-1 ${t.cardBg} p-6 rounded-xl shadow border ${t.borderLight} h-fit`}>
                 <h3 className={`font-bold text-md ${t.header} mb-4 pb-2 border-b`}>Déclarer un événement</h3>
                 <form onSubmit={ajouterAbsenceRetard} className="space-y-4">
-                  <div><label className="block text-sm font-semibold mb-1">Agent concerné</label><select required value={formAbsence.agentId} onChange={e => setFormAbsence({...formAbsence, agentId: e.target.value})} className="w-full border rounded p-2 bg-white text-sm"><option value="" disabled>-- Choisir un agent --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></div>
-                  <div><label className="block text-sm font-semibold mb-1">Type</label><select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', deduireHeures: e.target.value === 'retard'})} className="w-full border rounded p-2 bg-white text-sm"><option value="absence">Absence</option><option value="retard">Retard</option></select></div>
+                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Agent concerné</label><select required value={formAbsence.agentId} onChange={e => setFormAbsence({...formAbsence, agentId: e.target.value})} className="w-full border rounded p-2 bg-white text-sm"><option value="" disabled>-- Choisir un agent --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></div>
+                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Type</label><select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', deduireHeures: e.target.value === 'retard'})} className="w-full border rounded p-2 bg-white text-sm"><option value="absence">Absence</option><option value="retard">Retard</option></select></div>
                   {formAbsence.type === 'absence' && (<label className={`flex items-center gap-2 text-sm font-bold ${t.textAccent} cursor-pointer ${t.bgLight} p-2 rounded border ${t.borderLight}`}><input type="checkbox" checked={formAbsence.journeeComplete} onChange={e => setFormAbsence({...formAbsence, journeeComplete: e.target.checked})} className="w-4 h-4 cursor-pointer" />Journée(s) complète(s)</label>)}
                   <div className="flex gap-4">
-                    <div className="flex-1"><label className="block text-sm font-semibold mb-1">{formAbsence.journeeComplete ? 'Début' : 'Date'}</label><input type="date" required value={formAbsence.dateDebut} onChange={e => setFormAbsence({...formAbsence, dateDebut: e.target.value})} className="w-full border rounded p-2 text-sm" /></div>
-                    {formAbsence.journeeComplete && (<div className="flex-1"><label className="block text-sm font-semibold mb-1">Fin (Optionnel)</label><input type="date" value={formAbsence.dateFin} onChange={e => setFormAbsence({...formAbsence, dateFin: e.target.value})} min={formAbsence.dateDebut} className="w-full border rounded p-2 text-sm" /></div>)}
+                    <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>{formAbsence.journeeComplete ? 'Début' : 'Date'}</label><input type="date" required value={formAbsence.dateDebut} onChange={e => setFormAbsence({...formAbsence, dateDebut: e.target.value})} className="w-full border rounded p-2 text-sm bg-white" /></div>
+                    {formAbsence.journeeComplete && (<div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin (Optionnel)</label><input type="date" value={formAbsence.dateFin} onChange={e => setFormAbsence({...formAbsence, dateFin: e.target.value})} min={formAbsence.dateDebut} className="w-full border rounded p-2 text-sm bg-white" /></div>)}
                   </div>
-                  {!formAbsence.journeeComplete && (<div className="flex gap-4"><div className="flex-1"><label className="block text-sm font-semibold mb-1">Heure Début</label><input type="time" required value={formAbsence.heureDebut} onChange={e => setFormAbsence({...formAbsence, heureDebut: e.target.value})} className="w-full border rounded p-2 text-sm font-bold text-center" /></div><div className="flex-1"><label className="block text-sm font-semibold mb-1">Heure Fin</label><input type="time" required value={formAbsence.heureFin} onChange={e => setFormAbsence({...formAbsence, heureFin: e.target.value})} className="w-full border rounded p-2 text-sm font-bold text-center" /></div></div>)}
-                  <label className="flex items-center gap-2 text-sm font-bold text-red-800 cursor-pointer bg-red-50 p-2 rounded border border-red-100"><input type="checkbox" checked={formAbsence.deduireHeures} onChange={e => setFormAbsence({...formAbsence, deduireHeures: e.target.checked})} className="w-4 h-4 cursor-pointer" />Déduire du bilan (à rattraper / sans solde)</label>
-                  <div><label className="block text-sm font-semibold mb-1">Motif</label><input type="text" required value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder="Ex: Maladie, Grève, Panne réveil..." className="w-full border rounded p-2 text-sm" /></div>
+                  {!formAbsence.journeeComplete && (<div className="flex gap-4"><div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Heure Début</label><input type="time" required value={formAbsence.heureDebut} onChange={e => setFormAbsence({...formAbsence, heureDebut: e.target.value})} className="w-full border rounded p-2 text-sm font-bold text-center bg-white" /></div><div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Heure Fin</label><input type="time" required value={formAbsence.heureFin} onChange={e => setFormAbsence({...formAbsence, heureFin: e.target.value})} className="w-full border rounded p-2 text-sm font-bold text-center bg-white" /></div></div>)}
+                  <label className="flex items-center gap-2 text-sm font-bold text-red-800 cursor-pointer bg-red-50 p-2 rounded border border-red-200"><input type="checkbox" checked={formAbsence.deduireHeures} onChange={e => setFormAbsence({...formAbsence, deduireHeures: e.target.checked})} className="w-4 h-4 cursor-pointer" />Déduire du bilan (à rattraper)</label>
+                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif</label><input type="text" required value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder="Ex: Maladie, Grève, Panne réveil..." className="w-full border rounded p-2 text-sm bg-white" /></div>
                   <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition`}>Créer sur le planning</button>
                 </form>
               </div>
 
-              <div className="lg:col-span-2 bg-white rounded-xl shadow border border-gray-200 overflow-hidden flex flex-col">
+              <div className={`lg:col-span-2 ${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden flex flex-col`}>
                 <div className={`${t.headerBg} text-white p-4 font-bold text-sm`}>Historique complet des événements</div>
                 <div className="overflow-x-auto flex-1">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-100 text-gray-700 uppercase text-xs border-b"><tr><th className="p-3">Date</th><th className="p-3">Agent</th><th className="p-3">Type</th><th className="p-3 text-center">Durée</th><th className="p-3">Motif</th><th className="p-3 text-center">Statut (Retards)</th><th className="p-3 text-center">Action</th></tr></thead>
-                    <tbody className="divide-y divide-gray-200">
+                    <thead className={`${t.bgLight} ${t.header} uppercase text-xs border-b border-black/10`}><tr><th className="p-3">Date</th><th className="p-3">Agent</th><th className="p-3">Type</th><th className="p-3 text-center">Durée</th><th className="p-3">Motif</th><th className="p-3 text-center">Statut (Retards)</th><th className="p-3 text-center">Action</th></tr></thead>
+                    <tbody className="divide-y divide-black/5">
                       {absences.map(a => {
                         const ag = agents.find(agent => agent.id === a.agentId); const typeAbs = a.type || 'absence'; let h = a.heures; let m = a.minutes; if (h === undefined) { h = Math.floor(a.dureeTotale || a.duree || 0); m = Math.round(((a.dureeTotale || a.duree || 0) - h) * 60); }
                         return (
-                          <tr key={a.id} className="hover:bg-gray-50">
-                            <td className="p-3 font-mono text-xs text-gray-600">{a.start.split('T')[0]}</td><td className="p-3 font-bold text-gray-800">{ag ? ag.nom : 'Inconnu'}</td>
+                          <tr key={a.id} className={`hover:${t.bgLight}`}>
+                            <td className="p-3 font-mono text-xs text-gray-600">{a.start.split('T')[0]}</td><td className={`p-3 font-bold ${t.header}`}>{ag ? ag.nom : 'Inconnu'}</td>
                             <td className="p-3 flex items-center gap-1"><span className={`px-2 py-0.5 rounded text-xs font-bold ${typeAbs === 'absence' ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'}`}>{typeAbs.toUpperCase()}</span>{a.deduire && <span className="text-[10px] bg-red-600 text-white px-1 rounded shadow-sm" title="Déduit du bilan">DÉDUIT</span>}</td>
                             <td className="p-3 text-center font-mono font-bold">{h}h{String(m).padStart(2,'0')}</td><td className="p-3 text-gray-600 italic">{a.motif || ''}</td>
                             <td className="p-3 text-center">{typeAbs === 'retard' && a.deduire ? ( <button onClick={() => toggleRattrape(a.id)} className={`px-2 py-1 rounded text-xs font-bold transition shadow-sm ${a.rattrape ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-100 text-red-800 border border-red-300 hover:bg-red-200'}`}>{a.rattrape ? '✅ Rattrapé' : '❌ À rattraper'}</button> ) : ( <span className="text-gray-400 text-xs">-</span> )}</td>
@@ -2381,7 +2415,7 @@ const validerAgentModal = (e) => {
           <div className="flex-1 flex flex-col h-full bg-gray-800 text-white print:h-auto print:bg-white print:text-black">
             <div className="flex justify-between items-center p-3 bg-gray-900 border-b border-gray-700 no-print shrink-0">
               <div className="flex gap-4 items-center">
-                <select value={agentConsulte} onChange={(e) => setAgentConsulte(Number(e.target.value))} className={`bg-white ${t.header} font-bold p-2 rounded shadow outline-none`}>{agents.map(a => <option key={a.id} value={a.id}>{a.nom} ({a.quotite}%)</option>)}</select>
+                <select value={agentConsulte} onChange={(e) => setAgentConsulte(Number(e.target.value))} className={`bg-white text-gray-900 font-bold p-2 rounded shadow outline-none`}>{agents.map(a => <option key={a.id} value={a.id}>{a.nom} ({a.quotite}%)</option>)}</select>
                 <span className="text-sm font-medium text-gray-300">Année Scolaire {baseYear}-{baseYear+1}</span>
               </div>
               <div className="hidden print:block text-xl font-bold">Bilan Annuel : {agents.find(a=>a.id===agentConsulte)?.nom} ({baseYear}-{baseYear+1})</div>
@@ -2399,7 +2433,7 @@ const validerAgentModal = (e) => {
 
             <div className="flex-1 overflow-auto p-2 bg-white print:hidden">
               <table className="w-full text-center border-collapse text-xs table-fixed min-w-[1200px] text-black">
-                <thead><tr>{anneeScolaire.map((mois, i) => (<th key={i} className="border-2 border-black bg-gray-200 py-1 uppercase">{mois.nom}</th>))}</tr></thead>
+                <thead><tr>{anneeScolaire.map((mois, i) => (<th key={i} className="border-2 border-black bg-yellow-400 py-1 uppercase">{mois.nom}</th>))}</tr></thead>
                 <tbody>
                   {Array.from({ length: 31 }, (_, i) => i + 1).map(jourNum => (
                     <tr key={jourNum}>
