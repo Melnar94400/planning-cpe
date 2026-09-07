@@ -1394,7 +1394,8 @@ const applyAction = (action, info) => {
     setModalEditBesoin({ ...modalEditBesoin, isOpen: false });
   };
 
-  const gererSelection = (selectInfo) => {
+const gererSelection = (selectInfo) => {
+    if (vueActive === 'template' && currentTemplate.statut === 'valide') return;
     selectInfo.view.calendar.unselect();
     
     let dateJour = selectInfo.startStr;
@@ -1425,6 +1426,10 @@ const applyAction = (action, info) => {
   };
 
   const gererModificationEvenement = (changeInfo) => { 
+    if (vueActive === 'template' && currentTemplate.statut === 'valide') {
+      changeInfo.revert();
+      return;
+    }
     if (changeInfo.event.extendedProps.isBesoin) {
       const cleanId = String(changeInfo.event.id).split('_')[0];
       const newBesoins = currentTemplate.besoins.map(b => String(b.id) === cleanId ? { ...b, start: changeInfo.event.startStr, end: changeInfo.event.endStr } : b);
@@ -1438,19 +1443,15 @@ const applyAction = (action, info) => {
     }
   };
 
-const gererClicEvenement = (evt) => { 
+  const gererClicEvenement = (evt) => { 
+    if (vueActive === 'template' && currentTemplate.statut === 'valide') return;
     if (evt.extendedProps.isBesoin) {
-      if (vueActive === 'template') {
-        updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id) !== String(evt.id).split('_')[0])); 
-      } else {
-        alert("Pour supprimer un besoin structurel, veuillez repasser en vue 'Modèle'.");
-      }
+      updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id) !== String(evt.id).split('_')[0])); 
     } else if (evt.extendedProps.isAbsence) {
       const cleanId = String(evt.id).replace('abs_', '').split('_')[0];
       supprimerAbsence(cleanId);
     } else {
-      // C'est ici que la magie opère pour la suppression en réel :
-      applyAction('delete', { id: evt.id, start: evt.start }); 
+      applyAction('delete', { id: evt.id }); 
     }
   };
   const ouvrirEditionBesoin = (evt) => {
@@ -2063,6 +2064,8 @@ const gererClicEvenement = (evt) => {
               <div className="animate-in fade-in">
                 <div>
                   <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20">+</button></div>
+
+
                   <ul className="space-y-1">
                     {statsAgents.map((agent) => (
                       <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ring-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
@@ -2078,8 +2081,7 @@ const gererClicEvenement = (evt) => {
                         </div>
                       </li>
                     ))}
-                  </ul>
-                </div>
+                  </ul>                </div>
                 <div className="mt-4">
                   <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Postes</h2><button onClick={() => setModalNewPoste({ isOpen: true, nom: '' })} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20">+</button></div>
                   <ul className="space-y-1">
@@ -2244,6 +2246,8 @@ const gererClicEvenement = (evt) => {
                 <PrintTimeGridView events={displayEvents} titre={`Modèle : ${currentTemplate.nom} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
               ) : (
                 <div className={`${t.cardBg} rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-gray-400 border-dashed border-2' : t.borderLight}`}>
+                  {/* VERROUILLAGE PHYSIQUE : Désactive la souris et grise légèrement si validé */}
+                  <div className={`h-full transition-all duration-300 ${currentTemplate.statut === 'valide' ? 'pointer-events-none opacity-85 grayscale-[15%]' : ''}`}>
                   <FullCalendar
                     plugins={[timeGridPlugin, interactionPlugin]}
                     initialView="timeGridWeek"
@@ -2269,6 +2273,7 @@ const gererClicEvenement = (evt) => {
                     eventChange={gererModificationEvenement}
                     eventContent={renderEventContent}
                   />
+                  </div>
                 </div>
               )}
             </div>
