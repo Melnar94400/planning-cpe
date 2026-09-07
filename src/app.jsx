@@ -586,41 +586,44 @@ const generateGrid = (limitesHeures, sonneries) => {
      const m = String(i%60).padStart(2,'0');
      const timeStr = `${h}:${m}`;
      const isSonnerie = sonneries.includes(timeStr);
-     const isStartDay = (i === limitesHeures.baseMins); // Le tout début de la journée configurée
      const is15Min = i % 15 === 0;
      const isHeurePleine = i % 60 === 0;
      
-     if (isSonnerie || is15Min || isStartDay) {
+     if (isSonnerie || is15Min) {
          const topPercent = ((i - limitesHeures.baseMins) / limitesHeures.span) * 100;
-         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent, isHeurePleine, is15Min, isStartDay });
+         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent, isHeurePleine, is15Min });
          
-         if (isSonnerie || isStartDay) gridLabelsWeekly.push({ timeStr, mins: i, topPercent });
-         if (isHeurePleine || isStartDay) gridLabelsDaily.push({ timeStr, mins: i, topPercent });
+         // Étiquettes : STRICTEMENT les heures pleines
+         if (isHeurePleine) {
+             gridLabelsWeekly.push({ timeStr, mins: i, topPercent });
+             gridLabelsDaily.push({ timeStr, mins: i, topPercent });
+         }
      }
   }
   return { gridLines, gridLabelsWeekly, gridLabelsDaily };
 };
 
 // ============================================================================
-// GRILLES D'IMPRESSION (Alignement parfait avec l'écran)
+// GRILLES D'IMPRESSION PROPRES ET SÉCURISÉES
 // ============================================================================
-const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { baseMins: 460, span: 620 } }) => {
+const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { baseMins: 460, span: 620 }, amplitude = { start: '07:30', end: '18:00' } }) => {
   const planningEvents = events.filter(e => !e.extendedProps?.isBesoin);
   const nomsJours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
-  const { gridLines, gridLabelsWeekly } = generateGrid(limitesHeures, sonneries);
+  const { gridLines, gridLabelsWeekly } = generateGrid(limitesHeures, sonneries, amplitude);
 
   return (
-    <div className="print-weekly-page flex flex-col bg-white p-2">
+    <div className="print-weekly-page flex flex-col bg-white p-2 text-black">
       <div className="text-center mb-2 border-b border-black pb-1 shrink-0">
-        <h2 className="text-xl font-black uppercase tracking-wider text-gray-900">{titre}</h2>
-        <p className="text-gray-500 font-bold text-xs">Édité le {new Date().toLocaleDateString('fr-FR')}</p>
+        <h2 className="text-xl font-black uppercase tracking-wider text-black">{titre}</h2>
+        <p className="text-gray-600 font-bold text-xs">Édité le {new Date().toLocaleDateString('fr-FR')}</p>
       </div>
 
       <div className="flex flex-1 border border-black relative overflow-hidden bg-white">
-        <div className="w-16 flex flex-col border-r border-black bg-gray-100 text-[10px] font-bold text-gray-600 shrink-0 relative">
+        {/* Axe des heures */}
+        <div className="w-16 flex flex-col border-r border-black bg-gray-100 text-[10px] font-bold text-black shrink-0 relative">
           {gridLabelsWeekly.map(lbl => (
             <div key={lbl.timeStr} className="absolute w-full pr-2 text-right" style={{ top: `${lbl.topPercent}%`, transform: 'translateY(-50%)' }}>
-               <span className="text-black font-bold bg-gray-200 px-1 rounded border border-black/30 text-[9px]">{lbl.timeStr}</span>
+               <span className="text-black font-black bg-gray-200 px-1 rounded border border-black text-[9px]">{lbl.timeStr}</span>
             </div>
           ))}
         </div>
@@ -632,11 +635,12 @@ const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { ba
 
             return (
               <div key={day} className="flex flex-col border-r border-black last:border-r-0 relative">
-                <div className="bg-gray-200 font-black text-center py-1 border-b border-black uppercase text-xs text-gray-800 shrink-0">{nomsJours[day - 1]}</div>
+                <div className="bg-gray-200 font-black text-center py-1 border-b border-black uppercase text-xs text-black shrink-0">{nomsJours[day - 1]}</div>
                 <div className="flex-1 relative bg-white">
+                  {/* Lignes horizontales */}
                   {gridLines.map(line => (
                     <div key={line.timeStr} className="absolute w-full pointer-events-none z-0" 
-                      style={{ top: `${line.topPercent}%`, borderBottom: line.isHeurePleine || line.isSonnerie ? '2px solid rgba(0,0,0,0.4)' : '1px dashed rgba(0,0,0,0.15)' }}></div>
+                      style={{ top: `${line.topPercent}%`, borderBottom: line.isHeurePleine || line.isSonnerie || line.isStartDay ? '2px solid rgba(0,0,0,0.5)' : '1px dashed rgba(0,0,0,0.2)' }}></div>
                   ))}
 
                   {layoutedEvents.map(item => {
@@ -646,15 +650,17 @@ const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { ba
                     const height = Math.min(100 - top, ((endMins - startMins) / limitesHeures.span) * 100);
                     const isAbs = evt.extendedProps?.isAbsence;
                     const couleur = isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? '#ef4444' : '#f59e0b') : (evt.borderColor || '#3b82f6');
-                    const bgClass = isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? 'bg-red-50 text-red-900' : 'bg-orange-50 text-orange-900') : 'bg-blue-50 text-blue-900';
+                    
+                    const widthPercent = 100 / totalCols;
+                    const leftPercent = col * widthPercent;
 
                     return (
-                      <div key={evt.id} className={`absolute rounded p-1 border overflow-hidden shadow-xs ${bgClass}`}
-                        style={{ top: `${top}%`, height: `${Math.max(height, 3)}%`, left: `${(col * 100) / totalCols}%`, width: `${100 / totalCols}%`, borderLeftColor: couleur, borderLeftWidth: '4px', fontSize: '9px', lineHeight: '1.1', zIndex: 10 }}
+                      <div key={evt.id} className="absolute rounded p-1 border border-black/40 overflow-hidden shadow-xs bg-gray-50 text-black"
+                        style={{ top: `${top}%`, height: `${Math.max(height, 3)}%`, left: `${leftPercent}%`, width: `${widthPercent}%`, borderLeftColor: couleur, borderLeftWidth: '4px', fontSize: '9px', lineHeight: '1.1', zIndex: 10 }}
                       >
                         <div className="font-black truncate text-[9px]" style={{ color: couleur }}>{isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? 'ABSENCE' : 'RETARD') : evt.extendedProps?.posteNom}</div>
-                        <div className="font-bold truncate text-[8px] text-gray-800">{evt.extendedProps?.agentName || evt.extendedProps?.agentNom}</div>
-                        <div className="text-[7px] opacity-75 font-mono">{startD.getHours()}h{String(startD.getMinutes()).padStart(2,'0')}-{endD.getHours()}h{String(endD.getMinutes()).padStart(2,'0')}</div>
+                        <div className="font-bold truncate text-[8px] text-black">{evt.extendedProps?.agentName || evt.extendedProps?.agentNom}</div>
+                        <div className="text-[7px] text-gray-700 font-mono">{startD.getHours()}h{String(startD.getMinutes()).padStart(2,'0')}-{endD.getHours()}h{String(endD.getMinutes()).padStart(2,'0')}</div>
                       </div>
                     );
                   })}
@@ -667,7 +673,8 @@ const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { ba
     </div>
   );
 };
-const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absences, sonneries = [], limitesHeures = { baseMins: 460, span: 620 }, postes, getMondayStr }) => {
+
+const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absences, sonneries = [], limitesHeures = { baseMins: 460, span: 620 }, postes, getMondayStr, amplitude = { start: '07:30', end: '18:00' } }) => {
   const mondayStr = getMondayStr(jourConsulte);
   const allEvents = getEventsForWeek(mondayStr);
   const extTime = (iso) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
@@ -913,20 +920,25 @@ const renderSlotLabel = (arg) => {
     const h = String(arg.date.getHours()).padStart(2,'0');
     const m = String(arg.date.getMinutes()).padStart(2,'0');
     const timeStr = `${h}:${m}`;
-    const slotMins = arg.date.getHours() * 60 + arg.date.getMinutes();
+    const isFullHour = m === '00';
+    const isSonnerie = sonneries.includes(timeStr);
 
-    const [startH, startM] = (amplitude.start || '07:40').split(':').map(Number);
-    const startDayMins = startH * 60 + startM;
+    // À l'écran : affiche les heures pleines ET les sonneries configurées
+    if (isFullHour || isSonnerie) {
+      const isDarkTheme = t.isDark;
+      const bgColor = isDarkTheme ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)';
+      const textColor = isDarkTheme ? '#ffffff' : '#111827';
+      const borderColor = isDarkTheme ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
 
-    // Affiche la sonnerie OU l'heure de début exacte de la journée configurée
-    if (sonneries.includes(timeStr) || slotMins === startDayMins) {
-      return { html: `<div class="font-bold text-black dark:text-white text-[11px] bg-black/10 dark:bg-white/10 px-1 rounded mx-auto" style="border-bottom: 2px solid currentColor">${timeStr}</div>` };
+      return { 
+        html: `<div class="font-black text-[11px] px-1.5 py-0.5 rounded mx-auto shadow-xs" style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${borderColor};">${timeStr}</div>` 
+      };
     }
     
     return { html: '' };
   };
 
-  
+
   // Détermination de l'année scolaire de référence dynamique
   const getSchoolYearBase = () => {
      if (templateVersions.length > 0 && templateVersions[0].dateDebut) {
@@ -2408,7 +2420,7 @@ const renderEventContent = (arg) => {
       <div id="print-area" className={`flex-1 flex flex-col h-full overflow-hidden ${t.cardBg}`}>
         
 {vueActive === 'journee' && (() => {
-const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
+const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
           return (
             <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
               <div className="p-4 pb-2 no-print shrink-0">
@@ -2424,7 +2436,7 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
               
               <div className="flex-1 overflow-hidden px-4 pb-4">
                 {isPrinting ? (
-                  <PrintDailyView agents={agents} jourConsulte={jourConsulte} getEventsForWeek={getEventsForWeek} absences={absences} sonneries={sonneries} limitesHeures={limitesHeures} postes={postes} getMondayStr={getMondayStr} />
+                  <PrintDailyView agents={agents} jourConsulte={jourConsulte} getEventsForWeek={getEventsForWeek} absences={absences}  limitesHeures={limitesHeures} postes={postes} getMondayStr={getMondayStr} />
                 ) : (
                   <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} h-full flex flex-col overflow-hidden`}>
                     <div className={`flex flex-wrap gap-2 p-3 border-b ${t.borderLight} ${t.bgLight} justify-center shrink-0`}>
@@ -2647,8 +2659,7 @@ return (
 
             <div className="flex-1 overflow-hidden px-4 pb-4">
 {isPrinting ? (
-                <PrintTimeGridView events={displayEvents} sonneries={sonneries} limitesHeures={limitesHeures} titre={`Modèle : ${currentTemplate.nom} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
-              ) : (
+  <PrintTimeGridView events={displayEvents}  limitesHeures={limitesHeures} amplitude={amplitude} titre={`Modèle : ${currentTemplate.nom} ...`} />              ) : (
                 <div className={`${t.cardBg} rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-[#3B82F6] border-dashed border-2' : t.borderLight}`}>
                   <div className={`h-full transition-all duration-300 ${currentTemplate.statut === 'valide' ? 'pointer-events-none opacity-85 grayscale-[15%]' : ''}`}>
                     <FullCalendar
@@ -2669,7 +2680,7 @@ return (
                       snapDuration="00:05:00"
                       hiddenDays={[0, 6]}
                       editable={currentTemplate.statut === 'brouillon'} 
-                      durationEditable={true}
+                      eventDurationEditable={true}
                       eventResizableFromStart={true}
                       selectable={currentTemplate.statut === 'brouillon'}
                       selectMirror={true}
@@ -2680,7 +2691,7 @@ return (
                       select={gererSelection}
                       eventChange={gererModificationEvenement}
                       eventContent={renderEventContent}
-                      sonneries={sonneries}
+                      
                     />
                   </div>
                 </div>
@@ -2743,9 +2754,8 @@ return (
             </div>
             
             <div className="flex-1 overflow-hidden px-4 pb-4">
-            {isPrinting ? (
-                <PrintTimeGridView events={displayEvents} sonneries={sonneries} titre={`Semaine du ${currentViewMonday} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
-              ) : (
+{isPrinting ? (
+  <PrintTimeGridView events={displayEvents}  limitesHeures={limitesHeures} amplitude={amplitude} titre={`Modèle : ${currentTemplate.nom} ...`} />              ) : (
               <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} h-full p-2`}>
               <FullCalendar
                     key={`cal-planning-${isDarkMode}`}
@@ -2758,7 +2768,7 @@ return (
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
                     allDaySlot={false}
                     editable={true}
-                    durationEditable={true}
+                    eventDurationEditable={true}
                     eventResizableFromStart={true}
                     slotMinTime={limitesHeures.minStr}
                     slotMaxTime={limitesHeures.maxStr}
