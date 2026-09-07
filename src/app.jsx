@@ -867,7 +867,100 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       type: p.type || (p.nom.toLowerCase().includes('vacance') ? 'vacances' : 'ferie')
     }));
   });
-  
+  const [modalPoste, setModalPoste] = useState({
+    isOpen: false,
+    id: null,
+    nom: '',
+    couleur: '#8B5CF6',
+    qte: 1,
+    slots: []
+  });
+
+  const ouvrirCreationPoste = () => {
+    setModalPoste({
+      isOpen: true,
+      id: null,
+      nom: '',
+      couleur: '#8B5CF6',
+      qte: 1,
+      slots: [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]
+    });
+  };
+
+  const ouvrirEditionPoste = (poste) => {
+    const defaultSlots = poste.slots && poste.slots.length > 0 ? poste.slots : [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }];
+    setModalPoste({
+      isOpen: true,
+      id: poste.id,
+      nom: poste.nom,
+      couleur: poste.couleur || '#8B5CF6',
+      qte: poste.qte || 1,
+      slots: defaultSlots
+    });
+  };
+
+  const generateBesoinsFromSlots = (posteId, posteNom, qte, slots) => {
+    const baseMonday = new Date(getMondayStr(currentTemplate?.dateDebut || new Date()));
+    const newBesoins = [];
+    slots.forEach(slot => {
+      if (slot.start && slot.end) {
+        [1, 2, 3, 4, 5].forEach(dayIndex => {
+          if (slot.days[dayIndex]) {
+            const d = new Date(baseMonday);
+            d.setDate(d.getDate() + dayIndex - 1);
+            const pad = n => String(n).padStart(2, '0');
+            const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+            newBesoins.push({
+              id: String(Date.now() + Math.random()),
+              start: `${dateStr}T${slot.start}:00`,
+              end: `${dateStr}T${slot.end}:00`,
+              extendedProps: { posteId, posteNom, qte: Number(qte) }
+            });
+          }
+        });
+      }
+    });
+    return newBesoins;
+  };
+
+  const validerPosteModal = (e) => {
+    e.preventDefault();
+    if (!modalPoste.nom.trim()) return alert('Le nom du poste est obligatoire.');
+    
+    const posteId = modalPoste.id || Date.now();
+    const updatedPoste = {
+      id: posteId,
+      nom: modalPoste.nom.trim(),
+      couleur: modalPoste.couleur,
+      qte: Number(modalPoste.qte) || 1,
+      slots: modalPoste.slots || []
+    };
+
+    if (modalPoste.id) {
+      // Édition d'un poste existant
+      setPostes(postes.map(p => p.id === modalPoste.id ? updatedPoste : p));
+      
+      // Régénération des besoins associés dans le modèle
+      const filteredBesoins = currentTemplate.besoins.filter(b => b.extendedProps?.posteId !== posteId);
+      const generatedBesoins = generateBesoinsFromSlots(posteId, updatedPoste.nom, updatedPoste.qte, updatedPoste.slots);
+      updateCurrentTemplate(null, [...filteredBesoins, ...generatedBesoins]);
+
+      // Mise à jour du nom/couleur dans les affectations existantes du modèle
+      const updatedEvents = currentTemplate.events.map(evt => evt.extendedProps?.posteId === posteId ? {
+        ...evt,
+        extendedProps: { ...evt.extendedProps, posteNom: updatedPoste.nom, posteCouleur: updatedPoste.couleur }
+      } : evt);
+      updateCurrentTemplate(updatedEvents, null);
+    } else {
+      // Création d'un nouveau poste
+      setPostes([...postes, updatedPoste]);
+      const generatedBesoins = generateBesoinsFromSlots(posteId, updatedPoste.nom, updatedPoste.qte, updatedPoste.slots);
+      updateCurrentTemplate(null, [...currentTemplate.besoins, ...generatedBesoins]);
+    }
+
+    setModalPoste({ isOpen: false, id: null, nom: '', couleur: '#8B5CF6', qte: 1, slots: [] });
+  };
   const [dotation, setDotation] = useState(() => parseFloat(localStorage.getItem('edt-dotation')) || 0);
 
   const [templateVersions, setTemplateVersions] = useState(() => {
@@ -1958,27 +2051,82 @@ const renderEventContent = (arg) => {
         </div>
       )}
 
-      {/* MODALE NOUVEAU POSTE */}
-      {modalNewPoste.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">➕ Ajouter un poste</h3></div>
-            <form onSubmit={validerNouveauPoste}>
-              <div className="p-5 space-y-4">
-                <div>
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nom du poste</label>
-                  <input type="text" required value={modalNewPoste.nom} onChange={e => setModalNewPoste({isOpen: true, nom: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} autoFocus />
+{/* MODALE CRÉATION / ÉDITION POSTE & GRILLE DE BESOINS */}
+      {modalPoste.isOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 no-print">
+          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
+            <div className={`${t.headerBg} ${t.headerText} p-4 shrink-0 flex justify-between items-center`}>
+              <h3 className="font-bold text-lg">{modalPoste.id ? 'Modifier le poste' : 'Nouveau poste & Grille de besoins'}</h3>
+              <button type="button" onClick={() => setModalPoste({...modalPoste, isOpen: false})} className="hover:opacity-75 font-bold text-lg">✖</button>
+            </div>
+            <form onSubmit={validerPosteModal} className="flex flex-col overflow-hidden">
+              <div className="p-5 space-y-4 overflow-y-auto">
+                <div className="flex gap-4">
+                  <div className="flex-[2]">
+                    <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Nom du poste</label>
+                    <input type="text" required value={modalPoste.nom} onChange={e => setModalPoste({...modalPoste, nom: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold`} placeholder="Ex: Loge, Cantine..." autoFocus />
+                  </div>
+                  <div className="flex-1">
+                    <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Effectif (Qte)</label>
+                    <input type="number" min="1" required value={modalPoste.qte} onChange={e => setModalPoste({...modalPoste, qte: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm text-center font-bold bg-transparent`} />
+                  </div>
+                  <div>
+                    <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Couleur</label>
+                    <input type="color" value={modalPoste.couleur} onChange={e => setModalPoste({...modalPoste, couleur: e.target.value})} className="w-10 h-10 rounded cursor-pointer p-0 border-0" />
+                  </div>
+                </div>
+                
+                <div className={`border ${t.borderLight} rounded-xl p-4 ${t.bgLight}`}>
+                  <div className="flex justify-between items-center mb-3">
+                    <div>
+                      <h4 className={`font-bold text-sm ${t.header}`}>Grille horaire des besoins</h4>
+                      <p className="text-[11px] text-gray-500">Définissez les créneaux récurrents de ce poste pour la semaine type.</p>
+                    </div>
+                    <button type="button" onClick={() => setModalPoste({...modalPoste, slots: [...modalPoste.slots, { id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]})} className={`text-xs ${t.btnPrimary} px-2.5 py-1.5 rounded font-bold shadow-sm`}>➕ Ajouter une plage</button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {modalPoste.slots.map((slot, idx) => (
+                      <div key={idx} className={`p-3 rounded-lg border ${t.borderLight} ${t.cardBg} flex flex-col gap-2 shadow-xs`}>
+                        <div className="flex items-center gap-2">
+                          <input type="time" required value={slot.start} onChange={e => {
+                            const ns = [...modalPoste.slots]; ns[idx].start = e.target.value; setModalPoste({...modalPoste, slots: ns});
+                          }} className={`border ${t.borderLight} p-1.5 text-xs rounded bg-transparent w-28 text-center font-bold ${t.header}`} />
+                          <span className="text-gray-400 text-xs font-bold">à</span>
+                          <input type="time" required value={slot.end} onChange={e => {
+                            const ns = [...modalPoste.slots]; ns[idx].end = e.target.value; setModalPoste({...modalPoste, slots: ns});
+                          }} className={`border ${t.borderLight} p-1.5 text-xs rounded bg-transparent w-28 text-center font-bold ${t.header}`} />
+                          
+                          <button type="button" onClick={() => {
+                            const ns = [...modalPoste.slots]; ns.splice(idx, 1); setModalPoste({...modalPoste, slots: ns});
+                          }} className="text-red-500 hover:text-red-700 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ml-auto" title="Retirer cette plage">✖</button>
+                        </div>
+                        <div className="flex gap-1.5 mt-1">
+                          {[1, 2, 3, 4, 5].map(day => (
+                            <label key={day} className={`flex-1 flex items-center justify-center py-1 rounded border text-[11px] font-bold cursor-pointer transition-colors ${slot.days[day] ? `${t.btnPrimary} border-transparent shadow-xs` : `bg-transparent text-gray-500 border-black/10 hover:bg-black/5`}`}>
+                              <input type="checkbox" className="hidden" checked={slot.days[day]} onChange={e => {
+                                const ns = [...modalPoste.slots]; ns[idx].days[day] = e.target.checked; setModalPoste({...modalPoste, slots: ns});
+                              }} />
+                              {nomsJours[day % 7]}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {modalPoste.slots.length === 0 && (
+                      <p className="text-xs italic text-gray-500 text-center py-2">Aucune plage horaire définie. Cliquez sur "Ajouter une plage".</p>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
-                <button type="button" onClick={() => setModalNewPoste({isOpen: false, nom: ''})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
-                <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>Ajouter</button>
+              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} shrink-0 flex justify-end gap-3`}>
+                <button type="button" onClick={() => setModalPoste({...modalPoste, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium text-sm">Annuler</button>
+                <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-bold text-sm shadow`}>{modalPoste.id ? 'Mettre à jour' : 'Créer le poste'}</button>
               </div>
             </form>
           </div>
         </div>
       )}
-
       {/* MODALE EXCEPTION JOUR AGENT */}
       {modalException.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
@@ -2390,12 +2538,19 @@ const renderEventContent = (arg) => {
                     );
                   })}
                 </ul>                </div>
-                <div className="mt-4">
-                  <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Postes</h2><button onClick={() => setModalNewPoste({ isOpen: true, nom: '' })} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600">+</button></div>
+<div className="mt-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h2 className={`font-bold ${t.header} text-sm`}>Postes</h2>
+                    <button onClick={ouvrirCreationPoste} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600 flex items-center justify-center">+</button>
+                  </div>
                   <ul className="space-y-1">
                     {postes.map((poste) => (
                       <li key={poste.id} onClick={() => setPosteActif(posteActif === poste.id ? null : poste.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${posteActif === poste.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 border-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: poste.couleur }}>
-                        <span className={t.header}>{poste.nom}</span><button onClick={(e) => supprimerPoste(poste.id, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
+                        <span className={t.header}>{poste.nom}</span>
+                        <div className="flex gap-1 items-center shrink-0">
+                          <button onClick={(e) => { e.stopPropagation(); ouvrirEditionPoste(poste); }} className="text-gray-400 hover:text-gray-800 text-xs px-1">⚙️</button>
+                          <button onClick={(e) => supprimerPoste(poste.id, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -2444,9 +2599,10 @@ const renderEventContent = (arg) => {
                   <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
                     <div className={`flex flex-wrap gap-2 p-3 border-b ${t.borderLight} ${t.bgLight} justify-center items-center shrink-0`}>
                       <span className="text-xs font-bold text-gray-500 mr-2 uppercase tracking-wider">Légende & Postes :</span>
-                      {postes.map(p => (
+{postes.map(p => (
                         <span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold shadow-sm flex items-center gap-1.5" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>
                           {p.nom}
+                          <button onClick={() => ouvrirEditionPoste(p)} className="hover:opacity-75 text-xs ml-0.5 cursor-pointer" title="Modifier ce poste">⚙️</button>
                           <button onClick={() => {
                             if (confirm(`Voulez-vous vraiment supprimer le poste "${p.nom}" ?`)) {
                               setPostes(postes.filter(x => x.id !== p.id));
@@ -2454,7 +2610,7 @@ const renderEventContent = (arg) => {
                           }} className="hover:opacity-60 text-xs font-black ml-0.5 cursor-pointer" title="Supprimer ce poste">✖</button>
                         </span>
                       ))}
-                      <button onClick={() => setModalNewPoste({ isOpen: true, nom: '' })} className={`ml-2 px-2.5 py-1 rounded text-xs font-bold ${t.btnPrimary} shadow-sm transition-transform hover:scale-105`}>
+                      <button onClick={ouvrirCreationPoste} className={`ml-2 px-2.5 py-1 rounded text-xs font-bold ${t.btnPrimary} shadow-sm transition-transform hover:scale-105`}>
                         ➕ Ajouter un poste
                       </button>
                     </div>
