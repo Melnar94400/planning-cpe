@@ -601,7 +601,7 @@ const generateGrid = (limitesHeures, sonneries) => {
 };
 
 // ============================================================================
-// GRILLES D'IMPRESSION
+// GRILLES D'IMPRESSION (Alignement parfait avec l'écran)
 // ============================================================================
 const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { baseMins: 460, span: 620 } }) => {
   const planningEvents = events.filter(e => !e.extendedProps?.isBesoin);
@@ -616,10 +616,10 @@ const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { ba
       </div>
 
       <div className="flex flex-1 border border-black relative overflow-hidden bg-white">
-        <div className="w-14 flex flex-col border-r border-black bg-gray-100 text-[10px] font-bold text-gray-600 shrink-0 relative">
+        <div className="w-16 flex flex-col border-r border-black bg-gray-100 text-[10px] font-bold text-gray-600 shrink-0 relative">
           {gridLabelsWeekly.map(lbl => (
             <div key={lbl.timeStr} className="absolute w-full pr-2 text-right" style={{ top: `${lbl.topPercent}%`, transform: 'translateY(-50%)' }}>
-               <span className="text-black font-black bg-black/10 px-1 rounded border-b-2 border-black">{lbl.timeStr}</span>
+               <span className="text-black font-bold bg-gray-200 px-1 rounded border border-black/30 text-[9px]">{lbl.timeStr}</span>
             </div>
           ))}
         </div>
@@ -635,7 +635,7 @@ const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { ba
                 <div className="flex-1 relative bg-white">
                   {gridLines.map(line => (
                     <div key={line.timeStr} className="absolute w-full pointer-events-none z-0" 
-                      style={{ top: `${line.topPercent}%`, borderBottom: line.isHeurePleine || line.isSonnerie ? '2px solid rgba(0,0,0,0.3)' : '1px dashed rgba(0,0,0,0.15)' }}></div>
+                      style={{ top: `${line.topPercent}%`, borderBottom: line.isHeurePleine || line.isSonnerie ? '2px solid rgba(0,0,0,0.4)' : '1px dashed rgba(0,0,0,0.15)' }}></div>
                   ))}
 
                   {layoutedEvents.map(item => {
@@ -666,7 +666,6 @@ const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { ba
     </div>
   );
 };
-
 const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absences, sonneries = [], limitesHeures = { baseMins: 460, span: 620 }, postes, getMondayStr }) => {
   const mondayStr = getMondayStr(jourConsulte);
   const allEvents = getEventsForWeek(mondayStr);
@@ -2429,9 +2428,9 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
 
                     <div className="flex-1 overflow-x-auto overflow-y-auto">
 <div className="min-w-[800px] flex flex-col min-h-full relative">
-                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8`}>
+<div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8`}>
                           {gridLabelsDaily.map(lbl => (
-                            <div key={lbl.timeStr} className="absolute text-[12px] font-bold text-gray-700 dark:text-gray-200 top-1.5" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
+                            <div key={lbl.timeStr} className={`absolute text-[12px] font-black ${t.header} top-1.5`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
                               {lbl.timeStr}
                             </div>
                           ))}
@@ -2805,8 +2804,11 @@ return (
                     {statsAgents.map(agent => (
                       <tr key={agent.id} className={`hover:${t.bgLight} transition-colors`}>
                         <td className={`p-4 font-bold border-r ${t.borderLight} ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</td>
-                        <td className={`p-4 text-center border-r ${t.borderLight}`} style={{ color: agent.couleurFond }}>{agent.quotite}%</td>
-                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.header}`}>{formatHeureTableau(agent.hContrat, true)}</td>
+<td className={`p-4 text-center border-r ${t.borderLight}`}>
+                          <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
+                            {agent.quotite}%
+                          </span>
+                        </td>                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.header}`}>{formatHeureTableau(agent.hContrat, true)}</td>
                         <td className={`p-4 text-center border-r ${t.borderLight} font-mono text-gray-500`}>{formatHeureTableau(agent.hHebdoType, true)}</td>
                         <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.bgLight} ${t.header}`}>{formatHeureTableau(agent.heuresConsommees, true)}</td>
                         <td className={`p-4 text-center font-mono font-black text-lg ${agent.soldeGlobal > 0 ? 'bg-green-500/20 text-green-600' : (agent.soldeGlobal < 0 ? 'bg-red-500/20 text-red-500' : 'bg-emerald-500/10 text-emerald-500')}`}>{agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</td>
