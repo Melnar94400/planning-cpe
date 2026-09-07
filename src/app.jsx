@@ -1848,7 +1848,6 @@ const renderEventContent = (arg) => {
         </div>
       )}
 
-      {/* MODALES PARAMETRES ET IMPRESSION */}
 {/* MODALES PARAMETRES ET IMPRESSION */}
       {modalParametres && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 no-print">
@@ -2014,10 +2013,29 @@ const renderEventContent = (arg) => {
                   <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin</label><input type="time" required value={extractTimeStr(modalCreation.end)} onChange={e => setModalCreation({...modalCreation, end: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div>
                 </div>
                 <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>📝 {formTypeEvent === 'absence' ? 'Motif' : 'Note'}</label><input type="text" value={formNote} onChange={e => setFormNote(e.target.value)} placeholder={formTypeEvent === 'absence' ? "Ex: Maladie..." : "Ex: Réunion..."} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} autoFocus={!!modalCreation.eventId} /></div>
+</div>
+              
+              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center`}>
+                <div>
+                  {modalCreation.eventId && (
+                    <button type="button" onClick={() => {
+                      if(window.confirm('Voulez-vous vraiment supprimer cet élément ?')) {
+                        if (formTypeEvent === 'absence') supprimerAbsence(String(modalCreation.eventId).replace('abs_','').split('_')[0]);
+                        else applyAction('delete', { id: modalCreation.eventId });
+                        setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' });
+                      }
+                    }} className="px-3 py-2 bg-red-500/10 text-red-600 hover:bg-red-500/20 rounded font-bold transition-colors text-sm shadow-sm flex items-center gap-1">
+                      🗑️ Supprimer
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
+                  <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>{modalCreation.eventId ? 'Enregistrer' : 'Créer'}</button>
+                </div>
               </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}><button type="button" onClick={() => setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button><button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>{modalCreation.eventId ? 'Enregistrer' : 'Créer'}</button></div>
-            </form>
-          </div>
+
+            </form>          </div>
         </div>
       )}
 
@@ -2349,10 +2367,10 @@ const renderEventContent = (arg) => {
             </div>
 
             <div className="flex-1 overflow-hidden px-4 pb-4">
-              {isPrinting ? (
-                <PrintTimeGridView events={displayEvents} titre={`Modèle : ${currentTemplate.nom} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
+                {isPrinting ? (
+                <PrintTimeGridView events={displayEvents} sonneries={sonneries} titre={`Modèle : ${currentTemplate.nom} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
               ) : (
-                <div className={`${t.cardBg} rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-[#3B82F6] border-dashed border-2' : t.borderLight}`}>
+                  <div className={`${t.cardBg} rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-[#3B82F6] border-dashed border-2' : t.borderLight}`}>
                   <div className={`h-full transition-all duration-300 ${currentTemplate.statut === 'valide' ? 'pointer-events-none opacity-85 grayscale-[15%]' : ''}`}>
                     <FullCalendar
                       key={`cal-template-${activeTemplateId}-${currentTemplate.statut}-${isDarkMode}`}
@@ -2417,10 +2435,10 @@ const renderEventContent = (arg) => {
             </div>
             
             <div className="flex-1 overflow-hidden px-4 pb-4">
-              {isPrinting ? (
-                <PrintTimeGridView events={displayEvents} titre={`Semaine du ${currentViewMonday} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
+            {isPrinting ? (
+                <PrintTimeGridView events={displayEvents} sonneries={sonneries} titre={`Semaine du ${currentViewMonday} ${printFilter.type !== 'all' ? '(Filtré)' : ''}`} />
               ) : (
-                <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} h-full p-2`}>
+              <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} h-full p-2`}>
                   <FullCalendar
                     key={`cal-planning-${isDarkMode}`}
                     plugins={[timeGridPlugin, interactionPlugin]}
