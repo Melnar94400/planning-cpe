@@ -2486,7 +2486,7 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
                                         onClick={(e) => { e.stopPropagation(); ouvrirEdition(evt); }}>
                                         
 {/* Poignée gauche (Début) */}
-                                        <div className="absolute left-0 inset-y-0 w-3 cursor-w-resize hover:bg-black/30 z-20" title="Glisser pour modifier l'heure de début"
+                                        <div className="absolute left-0 inset-y-0 w-3 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier l'heure de début"
                                           onMouseDown={(e) => {
                                             e.stopPropagation();
                                             const startX = e.clientX;
@@ -2516,7 +2516,7 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
                                         </div>
 
                                         {/* Poignée droite (Fin) */}
-                                        <div className="absolute right-0 inset-y-0 w-3 cursor-e-resize hover:bg-black/30 z-20" title="Glisser pour modifier l'heure de fin"
+                                        <div className="absolute right-0 inset-y-0 w-3 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier l'heure de fin"
                                           onMouseDown={(e) => {
                                             e.stopPropagation();
                                             const startX = e.clientX;
@@ -2601,6 +2601,7 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
                       hiddenDays={[0, 6]}
                       editable={currentTemplate.statut === 'brouillon'} 
                       durationEditable={true}
+                      eventResizableFromStart={true}
                       selectable={currentTemplate.statut === 'brouillon'}
                       selectMirror={true}
                       dayMaxEvents={true}
@@ -2695,8 +2696,6 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
                     slotDuration="00:05:00"
                     snapDuration="00:05:00"
                     hiddenDays={[0, 6]}
-                    editable={true}
-                    durationEditable={true}
                     selectable={true}
                     selectMirror={true}
                     dayMaxEvents={true}
@@ -2947,23 +2946,24 @@ export default function App() {
         ` : ''}
 
         .fc-event-main { pointer-events: auto !important; }
-        .fc-timegrid-event-harness { pointer-events: none !important; }
-        .fc-timegrid-slot { height: 20px !important; }
-        .fc-timegrid-slot-lane { border-bottom: 1px dotted rgba(128,128,128,0.15) !important; }
-        .fc-timegrid-slot-label { border-bottom: none !important; }
-        /* NOUVEAU : On empêche FullCalendar de forcer un fond opaque */
-        .fc-timegrid-event { background: transparent !important; border: none !important; box-shadow: none !important; }
+        .fc-timegrid-event-harness { pointer-events: auto !important; }
+        .fc-timegrid-event { background: transparent !important; border: none !important; box-shadow: none !important; overflow: visible !important; }
+        
+        /* Poignées de redimensionnement FullCalendar bien visibles et cliquables */
         .fc-event-resizer {
-          bottom: 0 !important;
+          display: block !important;
+          width: 100% !important;
           height: 8px !important;
-          background: rgba(0,0,0,0.2) !important;
-          border-radius: 0 0 4px 4px;
+          background: rgba(0,0,0,0.3) !important;
           opacity: 0;
           transition: opacity 0.2s;
           cursor: ns-resize !important;
-          z-index: 10 !important;
+          z-index: 99 !important;
         }
+        .fc-event-resizer-start { top: 0 !important; border-radius: 4px 4px 0 0; }
+        .fc-event-resizer-end { bottom: 0 !important; border-radius: 0 0 4px 4px; }
         .fc-timegrid-event:hover .fc-event-resizer { opacity: 1; }
+
         @media screen {
           ${t.isDark ? `
             .fc, table { color: ${t.hexText} !important; }
