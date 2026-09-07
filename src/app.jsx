@@ -2064,7 +2064,7 @@ const renderEventContent = (arg) => {
         <div className={`p-4 ${t.sidebarText} flex flex-col gap-3`}>
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold tracking-wider">Planning CPE</h1>
-            <div className="flex gap-1 flex-wrap justify-end max-w-[140px]">
+<div className="flex gap-1 flex-wrap justify-end max-w-[140px]">
               <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
               <button onClick={() => document.getElementById('import-file').click()} className={`${t.sidebarIconBtn} px-2 py-1.5 rounded text-xs shadow border transition-colors`} title="Restaurer une sauvegarde">⬆️</button>
               <button onClick={handleExport} className={`relative px-2 py-1.5 rounded text-xs shadow border transition-colors ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500 text-white' : t.sidebarIconBtn}`} title="Sauvegarder les données (Fichier JSON)">
@@ -2073,8 +2073,7 @@ const renderEventContent = (arg) => {
               <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} px-2 py-1.5 rounded text-xs shadow border transition-colors`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
               <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} px-2 py-1.5 rounded text-xs shadow border transition-colors`} title="Paramètres">⚙️</button>
               <button onClick={() => setModalPrint(true)} className={`${t.sidebarIconBtn} px-3 py-1.5 rounded text-xs font-bold border transition-colors`}>🖨️</button>
-            </div>
-          </div>
+            </div>          </div>
           <div className="flex flex-col bg-black/10 rounded p-1 shadow-inner gap-1 mt-2">
             <button onClick={() => setVueActive('journee')} className={`text-sm py-1.5 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
             <button onClick={() => setVueActive('template')} className={`text-sm py-1.5 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
