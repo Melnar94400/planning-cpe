@@ -1583,11 +1583,38 @@ const declencherImpression = (e) => {
     }, 800);
   };
   
-  const updateCurrentTemplate = (newEvents, newBesoins) => {
-    const newVersions = templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, events: newEvents || tv.events, besoins: newBesoins || tv.besoins } : tv);
+const updateCurrentTemplate = (newEvents, newBesoins) => {
+    const newVersions = templateVersions.map(tv => 
+      String(tv.id) === String(activeTemplateId) ? { 
+        ...tv, 
+        events: newEvents !== null && newEvents !== undefined ? newEvents : tv.events, 
+        besoins: newBesoins !== null && newBesoins !== undefined ? newBesoins : tv.besoins 
+      } : tv
+    );
     setTemplateVersions(newVersions);
   };
 
+  const applyAction = (action, info) => {
+    const cleanId = String(info.id).split('_')[0]; 
+    if (vueActive === 'template') {
+      let mod = [...currentTemplate.events];
+      if (action === 'add') mod.push({ ...info, id: cleanId });
+      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: info.start, end: info.end } : e);
+      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...info } : e);
+      if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
+      updateCurrentTemplate(mod, null);
+    } 
+    else if (vueActive === 'planning' || vueActive === 'journee') {
+      const monStr = info.start ? getMondayStr(info.start) : (currentViewMonday || getMondayStr(jourConsulte));
+      const currentWeek = customWeeks[monStr] ? [...customWeeks[monStr]] : getEventsForWeek(monStr);
+      let mod = currentWeek;
+      if (action === 'add') mod.push(info);
+      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: info.start, end: info.end } : e);
+      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...info } : e);
+      if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
+      setCustomWeeks({ ...customWeeks, [monStr]: mod });
+    }
+  };
   const validerModele = () => {
     setTemplateVersions(templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, statut: 'valide' } : tv));
     
@@ -1632,26 +1659,6 @@ const declencherImpression = (e) => {
     }
   };
 
-  const applyAction = (action, info) => {
-    const cleanId = String(info.id).split('_')[0]; 
-    if (vueActive === 'template') {
-      let mod = [...currentTemplate.events];
-      if (action === 'add') mod.push({ ...info, id: cleanId });
-      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: info.start, end: info.end } : e);
-      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...info } : e);
-      if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
-      updateCurrentTemplate(mod, null);
-    } else if (vueActive === 'planning' || vueActive === 'journee') {
-      const monStr = getMondayStr(info.start);
-      const currentWeek = customWeeks[monStr] ? [...customWeeks[monStr]] : getEventsForWeek(monStr);
-      let mod = currentWeek;
-      if (action === 'add') mod.push(info);
-      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: info.start, end: info.end } : e);
-      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...info } : e);
-      if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
-      setCustomWeeks({ ...customWeeks, [monStr]: mod });
-    }
-  };
 
   const ajouterAbsenceRetard = (e) => {
     e.preventDefault();
@@ -1829,11 +1836,15 @@ const declencherImpression = (e) => {
     }
   };
 
-  const gererClicEvenement = (evt) => { 
-    if (vueActive === 'template' && currentTemplate.statut === 'valide') return;
+const gererClicEvenement = (evt) => { 
+    if (vueActive === 'template' && currentTemplate.statut === 'valide') {
+      alert("Ce modèle est verrouillé. Cliquez sur '🔓 Déverrouiller' dans le menu latéral pour le modifier.");
+      return;
+    }
     if (evt.extendedProps.isBesoin) {
       if (vueActive === 'template') {
-        updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id) !== String(evt.id).split('_')[0])); 
+        const cleanId = String(evt.id).split('_')[0];
+        updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id).split('_')[0] !== cleanId)); 
       } else {
         alert("Pour supprimer un besoin structurel, veuillez repasser en vue 'Modèle'.");
       }
@@ -1844,7 +1855,6 @@ const declencherImpression = (e) => {
       applyAction('delete', { id: evt.id, start: evt.start }); 
     }
   };
-
   const ouvrirEditionBesoin = (evt) => {
     if (vueActive !== 'template') return alert("Passez en vue 'Modèle' pour modifier les besoins structurels.");
     setModalEditBesoin({ isOpen: true, id: String(evt.id).split('_')[0], posteId: evt.extendedProps.posteId, qte: evt.extendedProps.qte, start: extractTimeStr(evt.start), end: extractTimeStr(evt.end) });
@@ -2441,17 +2451,23 @@ const renderEventContent = (arg) => {
               <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center`}>
                 <div>
                   {modalCreation.eventId && (
-                    <button type="button" onClick={() => {
+<button type="button" onClick={() => {
                       if(window.confirm('Voulez-vous vraiment supprimer cet élément ?')) {
-                        if (formTypeEvent === 'absence') supprimerAbsence(String(modalCreation.eventId).replace('abs_','').split('_')[0]);
-                        else applyAction('delete', { id: modalCreation.eventId });
+                        if (formTypeEvent === 'absence') {
+                          supprimerAbsence(String(modalCreation.eventId).replace('abs_','').split('_')[0]);
+                        } else {
+                          applyAction('delete', { 
+                            id: modalCreation.eventId, 
+                            start: `${modalCreation.date}T${modalCreation.start || '08:00'}:00` 
+                          });
+                        }
                         setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' });
                       }
                     }} className="px-3 py-2 bg-red-500/10 text-red-600 hover:bg-red-500/20 rounded font-bold transition-colors text-sm shadow-sm flex items-center gap-1">
                       🗑️ Supprimer
                     </button>
                   )}
-                </div>
+                                  </div>
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
                   <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>{modalCreation.eventId ? 'Enregistrer' : 'Créer'}</button>
