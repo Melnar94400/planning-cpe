@@ -851,8 +851,8 @@ const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absences, sonn
               
               return (
                 <div key={agent.id} className="flex border-b border-gray-300 min-h-[40px] relative">
-                  <div className="w-28 shrink-0 flex items-center justify-end p-2 border-r border-black bg-gray-50">
-                    <span className="text-[10px] font-black text-right">{agent.nom}</span>
+                <div className="w-28 shrink-0 flex items-center justify-end p-2 border-r border-black" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
+                    <span className="text-xs font-black text-right">{agent.nom}</span>
                   </div>
                   
                   <div className="flex-1 relative my-1">
@@ -1230,7 +1230,7 @@ const extractTimeStr = (dateObjOrStr) => {
   };
   const baseYear = getSchoolYearBase();
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
-  
+
   const getMondayStr = (dInput) => {
     const d = new Date(dInput);
     const day = d.getDay() || 7;
@@ -1584,7 +1584,7 @@ const activeAlerts = useMemo(() => {
     return { minStr: format(baseMins), maxStr: format(maxMins), baseMins, span };
   })();
 
-  const renderSlotLabel = (arg) => {
+const renderSlotLabel = (arg) => {
     const h = String(arg.date.getHours()).padStart(2,'0');
     const m = String(arg.date.getMinutes()).padStart(2,'0');
     const timeStr = `${h}:${m}`;
@@ -1596,7 +1596,8 @@ const activeAlerts = useMemo(() => {
       const bgColor = isDarkTheme ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)';
       const textColor = isDarkTheme ? '#ffffff' : '#111827';
       const borderColor = isDarkTheme ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
-      return { html: `<div class="font-black text-[11px] px-1.5 py-0.5 rounded mx-auto shadow-xs" style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${borderColor};">${timeStr}</div>` };
+      // ⬇️ La taille du texte passe en text-xs et les marges internes (px, py) augmentent
+      return { html: `<div class="font-black text-xs px-2 py-1 rounded mx-auto shadow-xs" style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${borderColor};">${timeStr}</div>` };
     }
     return { html: '' };
   };
@@ -1957,7 +1958,7 @@ const activeAlerts = useMemo(() => {
     setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' });
   };
 
-  const renderEventContent = (arg) => {
+const renderEventContent = (arg) => {
     const tS = arg.event.start;
     const tE = arg.event.end;
     const timeStr = (tS && tE) ? `${tS.getHours()}h${String(tS.getMinutes()).padStart(2,'0')}-${tE.getHours()}h${String(tE.getMinutes()).padStart(2,'0')}` : '';
@@ -1972,13 +1973,7 @@ const activeAlerts = useMemo(() => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         e.stopPropagation();
-        setCopiedEvent({
-          title: arg.event.title,
-          backgroundColor: arg.event.backgroundColor,
-          borderColor: arg.event.borderColor,
-          extendedProps: { ...arg.event.extendedProps },
-          durationMins
-        });
+        setCopiedEvent({ title: arg.event.title, backgroundColor: arg.event.backgroundColor, borderColor: arg.event.borderColor, extendedProps: { ...arg.event.extendedProps }, durationMins });
         return;
       }
       if (!isLocked) ouvrirEdition(arg.event);
@@ -1988,21 +1983,21 @@ const activeAlerts = useMemo(() => {
       const isSous = arg.event.extendedProps.isSousEffectif;
       if (isShort) {
         return (
-          <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className="flex items-center w-full h-full overflow-hidden rounded text-[9px] shadow-sm relative group" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a', color: '#ffffff' }}>
-            <div className="flex-1 truncate px-1 flex justify-between items-center">
+          <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className="flex items-center w-full h-full overflow-hidden rounded text-xs shadow-sm relative group" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a', color: '#ffffff' }}>
+            <div className="flex-1 truncate px-1.5 flex justify-between items-center">
               <span>🎯 {arg.event.extendedProps.posteNom} ({arg.event.extendedProps.minCount}/{arg.event.extendedProps.qte})</span>
-              <span className="opacity-90 font-mono text-[8px] ml-1 shrink-0">{timeStr}</span>
+              <span className="opacity-90 font-mono text-[10px] ml-1 shrink-0">{timeStr}</span>
             </div>
           </div>
         );
       }
       return (
-        <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-red-400' : ''}`} style={{ color: textColor }}>
-          <div className="px-1 py-0.5 font-bold flex justify-between items-center" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a', color: '#ffffff' }}>
-            <span className="truncate">🎯 {arg.event.extendedProps.posteNom} <span className="text-[9px] font-normal opacity-90 ml-1">({timeStr})</span></span>
-            {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-white/50 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✖</button>}
+        <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-xs shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-red-400' : ''}`} style={{ color: textColor }}>
+          <div className="px-1.5 py-1 font-bold flex justify-between items-center" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a', color: '#ffffff' }}>
+            <span className="truncate">🎯 {arg.event.extendedProps.posteNom} <span className="text-[10px] font-normal opacity-90 ml-1">({timeStr})</span></span>
+            {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-white/50 rounded px-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✖</button>}
           </div>
-          <div className="p-1 flex flex-col justify-center items-center flex-1 leading-tight text-center" style={{ backgroundColor: isSous ? '#fee2e2' : '#dcfce7' }}>
+          <div className="p-1.5 flex flex-col justify-center items-center flex-1 leading-tight text-center" style={{ backgroundColor: isSous ? '#fee2e2' : '#dcfce7' }}>
             <span className="font-bold text-sm" style={{ color: isSous ? '#991b1b' : '#166534' }}>{arg.event.extendedProps.minCount} / {arg.event.extendedProps.qte} pers.</span>
           </div>
         </div>
@@ -2015,23 +2010,23 @@ const activeAlerts = useMemo(() => {
       const ded = arg.event.extendedProps.deduire;
       if (isShort) {
         return (
-          <div onClick={() => ouvrirEdition(arg.event)} className={`flex items-center w-full h-full overflow-hidden rounded text-[9px] font-bold shadow-md relative group cursor-pointer ${isAbs ? 'bg-red-500' : 'bg-orange-500'}`} style={{ color: '#ffffff' }}>
-            <div className="flex-1 truncate px-1 flex justify-between items-center">
+          <div onClick={() => ouvrirEdition(arg.event)} className={`flex items-center w-full h-full overflow-hidden rounded text-xs font-bold shadow-md relative group cursor-pointer ${isAbs ? 'bg-red-500' : 'bg-orange-500'}`} style={{ color: '#ffffff' }}>
+            <div className="flex-1 truncate px-1.5 flex justify-between items-center">
               <span>{isAbs ? '🚫 ABS' : '⏰ RET'} : {arg.event.extendedProps.agentNom}</span>
-              <span className="opacity-90 font-mono text-[8px] ml-1 shrink-0">{timeStr}</span>
+              <span className="opacity-90 font-mono text-[10px] ml-1 shrink-0">{timeStr}</span>
             </div>
           </div>
         );
       }
       return (
-        <div onClick={() => ouvrirEdition(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] border border-black/10 shadow-md relative group cursor-pointer hover:ring-2 transition-all z-50 opacity-90 ${isAbs ? 'bg-red-500/20 border-red-500' : 'bg-orange-500/20 border-orange-500'}`} style={{ color: textColor }}>
-          <div className={`px-1 py-0.5 font-bold flex justify-between items-center ${isAbs ? 'bg-red-500' : 'bg-orange-500'}`} style={{ color: '#ffffff' }}>
-            <span className="truncate">{isAbs ? '🚫 ABSENCE' : '⏰ RETARD'} {ded && '(-H)'} <span className="text-[9px] font-normal opacity-90 ml-1">({timeStr})</span></span>
-            <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-red-700 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✖</button>
+        <div onClick={() => ouvrirEdition(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-xs border border-black/10 shadow-md relative group cursor-pointer hover:ring-2 transition-all z-50 opacity-90 ${isAbs ? 'bg-red-500/20 border-red-500' : 'bg-orange-500/20 border-orange-500'}`} style={{ color: textColor }}>
+          <div className={`px-1.5 py-1 font-bold flex justify-between items-center ${isAbs ? 'bg-red-500' : 'bg-orange-500'}`} style={{ color: '#ffffff' }}>
+            <span className="truncate">{isAbs ? '🚫 ABSENCE' : '⏰ RETARD'} {ded && '(-H)'} <span className="text-[10px] font-normal opacity-90 ml-1">({timeStr})</span></span>
+            <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-red-700 rounded px-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✖</button>
           </div>
-          <div className="p-1 flex flex-col flex-1 leading-tight justify-center">
-            <span className="font-bold truncate">{arg.event.extendedProps.agentNom}</span>
-            <span className="text-[10px] italic truncate">{arg.event.extendedProps.motif}</span>
+          <div className="p-1.5 flex flex-col flex-1 leading-tight justify-center">
+            <span className="font-bold text-sm truncate">{arg.event.extendedProps.agentNom}</span>
+            <span className="text-[11px] italic truncate mt-0.5">{arg.event.extendedProps.motif}</span>
           </div>
         </div>
       );
@@ -2045,12 +2040,12 @@ const activeAlerts = useMemo(() => {
     if (isShort) {
       return (
         <div onClick={handleEventClick} 
-             className={`flex items-center w-full h-full overflow-hidden rounded text-[9px] shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
+             className={`flex items-center w-full h-full overflow-hidden rounded text-xs shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
              style={{ backgroundColor: headerColor, color: headerTextColor, border: `1px solid ${agentColor}` }}
              title="Clic pour modifier • Ctrl+Clic pour copier">
-          <div className="flex-1 truncate px-1 flex justify-between items-center">
+          <div className="flex-1 truncate px-1.5 flex justify-between items-center">
             <span><strong>{arg.event.extendedProps?.posteNom}</strong> <span className="opacity-80 hidden md:inline">({arg.event.extendedProps?.agentNom})</span></span>
-            <span className="font-mono text-[8px] opacity-90 ml-1 shrink-0">{timeStr}</span>
+            <span className="font-mono text-[10px] opacity-90 ml-1 shrink-0">{timeStr}</span>
           </div>
         </div>
       );
@@ -2058,16 +2053,16 @@ const activeAlerts = useMemo(() => {
 
     return (
       <div onClick={handleEventClick} 
-           className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] border border-black/10 shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
+           className={`flex flex-col w-full h-full overflow-hidden rounded text-xs border border-black/10 shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
            style={{ backgroundColor: bgColorWithOpacity, border: `1px solid ${agentColor}`, color: textColor }}
            title="Clic pour modifier • Ctrl+Clic pour copier">
-        <div className="px-1 py-0.5 font-bold flex justify-between items-center" style={{ backgroundColor: headerColor, color: headerTextColor }}>
-          <span className="truncate">{arg.event.extendedProps?.posteNom} <span className="text-[9px] font-normal opacity-90 ml-1">({timeStr})</span></span>
-          {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print bg-black/20 hover:bg-red-500 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: headerTextColor }}>✖</button>}
+        <div className="px-1.5 py-1 font-bold flex justify-between items-center" style={{ backgroundColor: headerColor, color: headerTextColor }}>
+          <span className="truncate">{arg.event.extendedProps?.posteNom} <span className="text-[10px] font-normal opacity-90 ml-1">({timeStr})</span></span>
+          {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print bg-black/20 hover:bg-red-500 rounded px-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: headerTextColor }}>✖</button>}
         </div>
-        <div className="p-1 flex flex-col flex-1 leading-tight">
-          <div className="flex justify-between items-start"><span className="font-semibold truncate pr-1">{arg.event.extendedProps?.agentNom}</span></div>
-          {arg.event.extendedProps?.note && <span className="text-[10px] opacity-80 truncate italic mt-1 bg-black/5 dark:bg-white/10 rounded px-1">{arg.event.extendedProps?.note}</span>}
+        <div className="p-1.5 flex flex-col flex-1 leading-tight">
+          <div className="flex justify-between items-start"><span className="font-semibold text-sm truncate pr-1">{arg.event.extendedProps?.agentNom}</span></div>
+          {arg.event.extendedProps?.note && <span className="text-[11px] opacity-80 truncate italic mt-1 bg-black/5 dark:bg-white/10 rounded px-1">{arg.event.extendedProps?.note}</span>}
         </div>
       </div>
     );
@@ -2695,13 +2690,14 @@ const activeAlerts = useMemo(() => {
             <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
           </div>
 
-          <div className="flex flex-col bg-black/10 rounded p-1 shadow-inner gap-1 mt-2">
-            <button onClick={() => setVueActive('journee')} className={`text-sm py-1.5 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
-            <button onClick={() => setVueActive('template')} className={`text-sm py-1.5 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
-            <button onClick={() => setVueActive('planning')} className={`text-sm py-1.5 rounded transition ${vueActive === 'planning' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📅 Planning Hebdo (Réel)</button>
-            <button onClick={() => setVueActive('dashboard')} className={`text-sm py-1.5 rounded transition ${vueActive === 'dashboard' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📊 Bilan Équipe</button>
-            <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-sm py-1.5 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>👤 Calendriers Individuels</button>
-            <button onClick={() => setVueActive('absences')} className={`text-sm py-1.5 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📋 Absences & Retards</button>
+          {/* Boutons de navigation entre les vues */}
+          <div className="flex flex-col bg-black/10 rounded p-2 shadow-inner gap-1 mt-2">
+            <button onClick={() => setVueActive('journee')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
+            <button onClick={() => setVueActive('template')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
+            <button onClick={() => setVueActive('planning')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'planning' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📅 Planning Hebdo (Réel)</button>
+            <button onClick={() => setVueActive('dashboard')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'dashboard' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📊 Bilan Équipe</button>
+            <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-base font-medium py-2 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>👤 Calendriers Individuels</button>
+            <button onClick={() => setVueActive('absences')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📋 Absences & Retards</button>
           </div>
         </div>
 
@@ -2739,28 +2735,27 @@ const activeAlerts = useMemo(() => {
                       const diffAgentHebdo = agentWeekHours - objectifHebdoAgent;
 
                       return (
-                        <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 border-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
+                        <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-3 rounded border-l-4 cursor-pointer ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 border-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
                           <div className="flex flex-col leading-tight">
-                            <span className={t.header}>{agent.nom} {agent.estEtudiant && '🎓'}</span>
-                            <div className="flex gap-2 mt-0.5">
-                              <span className="text-[10px] font-mono text-gray-500 font-semibold" title="Total planifié cette semaine">
+                            <span className={`text-base font-bold ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</span>
+                            <div className="flex gap-2 mt-1">
+                              <span className="text-xs font-mono text-gray-500 font-semibold" title="Total planifié cette semaine">
                                 Sem: {formatHeureTableau(agentWeekHours, true)}
                               </span>
-                              <span className={`text-[10px] font-mono font-bold ${diffAgentHebdo >= 0 ? 'text-emerald-600' : 'text-orange-500'}`} title="Écart par rapport à l'objectif hebdo théorique">
+                              <span className={`text-xs font-mono font-bold ${diffAgentHebdo >= 0 ? 'text-emerald-600' : 'text-orange-500'}`} title="Écart par rapport à l'objectif hebdo théorique">
                                 ({diffAgentHebdo > 0 ? '+' : ''}{formatHeureTableau(diffAgentHebdo, true)})
                               </span>
                             </div>
-                            <span className={`text-[10px] font-mono mt-0.5 ${agent.soldeGlobal > 0 ? 'text-green-600' : (agent.soldeGlobal < 0 ? 'text-red-500' : 'text-gray-500')}`}>
+                            <span className={`text-xs font-mono mt-1 ${agent.soldeGlobal > 0 ? 'text-green-600' : (agent.soldeGlobal < 0 ? 'text-red-500' : 'text-gray-500')}`}>
                               Solde global: {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}
                             </span>
                           </div>
-                          <div className="flex gap-1 items-center shrink-0">
-                            <button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className="text-gray-400 hover:text-gray-800 text-xs px-1">⚙️</button>
-                            <button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
+                          <div className="flex gap-1.5 items-center shrink-0">
+                            <button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className="text-gray-400 hover:text-gray-800 text-sm px-1">⚙️</button>
+                            <button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-sm px-1">✖</button>
                           </div>
                         </li>
-                      );
-                    })}
+                      );                    })}
                   </ul>
                 </div>
                 <div className="mt-4">
@@ -2868,10 +2863,10 @@ const activeAlerts = useMemo(() => {
 
                             return (
                               <div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px]`}>
-                                <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 ${t.cardBg} group-hover:bg-transparent transition-colors`}>
-                                  <span className={`text-xs font-bold ${t.header} text-right leading-tight`}>{agent.nom}</span>
-                                  <span className="text-[10px] font-mono text-gray-500 font-semibold">{heuresJourStr}</span>
-                                </div>
+                                <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
+                                    <span className="text-sm font-black text-right leading-tight">{agent.nom}</span>
+                                    <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
+                                  </div>
                                 <div className="flex-1 relative my-1 cursor-crosshair group/timeline select-none" onMouseDown={(e) => {
                                   if (e.target !== e.currentTarget) return;
                                   const track = e.currentTarget;
