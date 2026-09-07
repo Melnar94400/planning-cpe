@@ -2556,14 +2556,15 @@ const renderEventContent = (arg) => {
           </div>
         </div>
       )}
+
 {/* PANNEAU LATÉRAL (Fixe) */}
       <div className={`w-80 ${t.sidebar} shadow-lg flex flex-col z-20 border-r ${t.borderLight} no-print shrink-0 transition-colors`}>
-        <div className={`p-4 ${t.sidebarText} flex flex-col gap-3`}>
+        <div className={`p-4 ${t.sidebarText} flex flex-col gap-3 shrink-0`}>
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold tracking-wider">Planning CPE</h1>
           </div>
           
-{/* Barre d'outils propre sur une seule ligne répartie */}
+          {/* Barre d'outils avec la cloche de notification */}
           <div className="flex items-center justify-between bg-black/10 p-1.5 rounded-lg gap-1">
             <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
             <button onClick={() => document.getElementById('import-file').click()} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Restaurer une sauvegarde">⬆️</button>
@@ -2571,7 +2572,7 @@ const renderEventContent = (arg) => {
               ⬇️{needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
             </button>
 
-            {/* 🔔 BOUTON DE NOTIFICATIONS DISCRET INTÉGRÉ ICI */}
+            {/* Bouton de notifications (Cloche) */}
             <div className="relative flex-1 flex justify-center">
               <button 
                 onClick={() => setShowNotificationMenu(!showNotificationMenu)} 
@@ -2619,11 +2620,21 @@ const renderEventContent = (arg) => {
             <button onClick={declencherImpression} className={`${t.sidebarIconBtn} p-2 rounded text-xs font-bold border transition-colors flex-1 flex justify-center`} title="Imprimer">🖨️</button>
             <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
           </div>
+
+          {/* Boutons de navigation entre les vues */}
+          <div className="flex flex-col bg-black/10 rounded p-1 shadow-inner gap-1 mt-2">
+            <button onClick={() => setVueActive('journee')} className={`text-sm py-1.5 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
+            <button onClick={() => setVueActive('template')} className={`text-sm py-1.5 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
+            <button onClick={() => setVueActive('planning')} className={`text-sm py-1.5 rounded transition ${vueActive === 'planning' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📅 Planning Hebdo (Réel)</button>
+            <button onClick={() => setVueActive('dashboard')} className={`text-sm py-1.5 rounded transition ${vueActive === 'dashboard' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📊 Bilan Équipe</button>
+            <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-sm py-1.5 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>👤 Calendriers Individuels</button>
+            <button onClick={() => setVueActive('absences')} className={`text-sm py-1.5 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📋 Absences & Retards</button>
           </div>
- 
+        </div>
+
+        {/* Section défilante en dessous (agents, postes, etc.) */}
         {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
           <div className={`p-4 flex-1 overflow-y-auto space-y-4 ${t.bgMain}`}>
-            
             {vueActive === 'template' && currentTemplate.statut === 'brouillon' && (
               <div className={`flex ${t.bgLight} rounded p-1 mb-2 border ${t.borderLight}`}>
                 <button onClick={() => setModeEdition('agents')} className={`flex-1 text-xs py-1.5 rounded transition ${modeEdition === 'agents' ? `${t.cardBg} font-bold ${t.textAccent} shadow-sm border ${t.borderLight}` : `${t.textMenuMuted} hover:${t.header}`}`}>🖌️ Agents</button>
@@ -2641,48 +2652,46 @@ const renderEventContent = (arg) => {
               </div>
             )}
 
-            {(vueActive === 'planning' || vueActive === 'journee' || (vueActive === 'template' && currentTemplate.statut === 'brouillon')) && modeEdition === 'agents' && (
+            {modeEdition === 'agents' && (
               <div className="animate-in fade-in">
                 <div>
                   <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600">+</button></div>
-<ul className="space-y-1">
-                  {statsAgents.map((agent) => {
-                    // Calcul des heures de la semaine affichée pour cet agent
-                    const weekEvents = getEventsForWeek(targetMonday);
+                  <ul className="space-y-1">
+                    {statsAgents.map((agent) => {
+                    const weekEvents = vueActive === 'template' ? currentTemplate.events : getEventsForWeek(targetMonday);
                     const agentWeekMins = weekEvents.filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence).reduce((acc, evt) => {
-                      return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
-                    }, 0);
-                    const agentWeekHours = agentWeekMins / 60;
-                    
-                    // Objectif hebdomadaire théorique (Contrat annuel / 36 semaines)
-                    const objectifHebdoAgent = agent.hContrat / 36;
-                    const diffAgentHebdo = agentWeekHours - objectifHebdoAgent;
+                        return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
+                      }, 0);
+                      const agentWeekHours = agentWeekMins / 60;
+                      const objectifHebdoAgent = agent.hContrat / 36;
+                      const diffAgentHebdo = agentWeekHours - objectifHebdoAgent;
 
-                    return (
-                      <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 border-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
-                        <div className="flex flex-col leading-tight">
-                          <span className={t.header}>{agent.nom} {agent.estEtudiant && '🎓'}</span>
-                          <div className="flex gap-2 mt-0.5">
-                            <span className="text-[10px] font-mono text-gray-500 font-semibold" title="Total planifié cette semaine">
-                              Sem: {formatHeureTableau(agentWeekHours, true)}
-                            </span>
-                            <span className={`text-[10px] font-mono font-bold ${diffAgentHebdo >= 0 ? 'text-emerald-600' : 'text-orange-500'}`} title="Écart par rapport à l'objectif hebdo théorique">
-                              ({diffAgentHebdo > 0 ? '+' : ''}{formatHeureTableau(diffAgentHebdo, true)})
+                      return (
+                        <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 border-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
+                          <div className="flex flex-col leading-tight">
+                            <span className={t.header}>{agent.nom} {agent.estEtudiant && '🎓'}</span>
+                            <div className="flex gap-2 mt-0.5">
+                              <span className="text-[10px] font-mono text-gray-500 font-semibold" title="Total planifié cette semaine">
+                                Sem: {formatHeureTableau(agentWeekHours, true)}
+                              </span>
+                              <span className={`text-[10px] font-mono font-bold ${diffAgentHebdo >= 0 ? 'text-emerald-600' : 'text-orange-500'}`} title="Écart par rapport à l'objectif hebdo théorique">
+                                ({diffAgentHebdo > 0 ? '+' : ''}{formatHeureTableau(diffAgentHebdo, true)})
+                              </span>
+                            </div>
+                            <span className={`text-[10px] font-mono mt-0.5 ${agent.soldeGlobal > 0 ? 'text-green-600' : (agent.soldeGlobal < 0 ? 'text-red-500' : 'text-gray-500')}`}>
+                              Solde global: {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}
                             </span>
                           </div>
-                          <span className={`text-[10px] font-mono mt-0.5 ${agent.soldeGlobal > 0 ? 'text-green-600' : (agent.soldeGlobal < 0 ? 'text-red-500' : 'text-gray-500')}`}>
-                            Solde global: {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}
-                          </span>
-                        </div>
-                        <div className="flex gap-1 items-center shrink-0">
-                          <button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className="text-gray-400 hover:text-gray-800 text-xs px-1">⚙️</button>
-                          <button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>                </div>
-<div className="mt-4">
+                          <div className="flex gap-1 items-center shrink-0">
+                            <button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className="text-gray-400 hover:text-gray-800 text-xs px-1">⚙️</button>
+                            <button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                <div className="mt-4">
                   <div className="flex justify-between items-center mb-2">
                     <h2 className={`font-bold ${t.header} text-sm`}>Postes</h2>
                     <button onClick={ouvrirCreationPoste} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600 flex items-center justify-center">+</button>
@@ -2717,7 +2726,6 @@ const renderEventContent = (arg) => {
           </div>
         )}
       </div>
-
       {/* ZONE PRINCIPALE D'AFFICHAGE */}
       <div id="print-area" className={`flex-1 flex flex-col h-full overflow-hidden ${t.cardBg}`}>
         
