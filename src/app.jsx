@@ -1895,7 +1895,7 @@ const renderEventContent = (arg) => {
         </div>
       )}
 
-      {modalPrint && (
+{modalPrint && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-md overflow-hidden border ${t.borderLight}`}>
             <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">🖨️ Impression (A4 Paysage)</h3></div>
@@ -1907,7 +1907,11 @@ const renderEventContent = (arg) => {
                     <label className={`flex flex-col gap-2 p-3 border ${t.borderLight} rounded-lg cursor-pointer hover:bg-black/5 transition-colors`}><div className="flex items-center gap-3"><input type="radio" checked={printFilter.type === 'agent'} onChange={() => setPrintFilter({ type: 'agent', id: agents[0]?.id })} className="w-4 h-4" /><span className={`font-semibold ${t.header}`}>Filtrer par Agent</span></div>{printFilter.type === 'agent' && (<select value={printFilter.id || ''} onChange={(e) => setPrintFilter({ type: 'agent', id: Number(e.target.value) })} className="ml-7 p-2 border rounded text-sm w-64 bg-transparent outline-none">{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select>)}</label>
                     <label className={`flex flex-col gap-2 p-3 border ${t.borderLight} rounded-lg cursor-pointer hover:bg-black/5 transition-colors`}><div className="flex items-center gap-3"><input type="radio" checked={printFilter.type === 'poste'} onChange={() => setPrintFilter({ type: 'poste', id: postes[0]?.id })} className="w-4 h-4" /><span className={`font-semibold ${t.header}`}>Filtrer par Poste</span></div>{printFilter.type === 'poste' && (<select value={printFilter.id || ''} onChange={(e) => setPrintFilter({ type: 'poste', id: Number(e.target.value) })} className="ml-7 p-2 border rounded text-sm w-64 bg-transparent outline-none">{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select>)}</label>
                   </>
-                ) : <div className="text-center py-4"><span className="text-4xl mb-3 block">✅</span><p className="text-gray-500">Adaptation automatique pour le format A4 Recto-Verso (2 pages).</p></div>}
+                ) : vueActive === 'agent' ? (
+                  <div className="text-center py-4"><span className="text-4xl mb-3 block">✅</span><p className="text-gray-500">Impression du calendrier individuel (2 pages par agent).</p></div>
+                ) : (
+                  <div className="text-center py-4"><span className="text-4xl mb-3 block">✅</span><p className="text-gray-500">Adaptation automatique sur 1 seule page.</p></div>
+                )}
               </div>
               <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}><button type="button" onClick={() => setModalPrint(false)} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button><button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium shadow flex items-center gap-2`}>🖨️ Lancer</button></div>
             </form>
@@ -2639,19 +2643,62 @@ export default function App() {
 
         @media print {
           @page { size: A4 landscape; margin: 8mm; }
-          body, html, #root { background: white !important; height: auto !important; min-height: 100vh !important; overflow: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .no-print, .w-80 { display: none !important; }
-          #print-area { position: absolute; left: 0; top: 0; width: 100vw !important; height: auto !important; overflow: visible !important; display: block !important; background: white !important; z-index: 9999; }
-          .print-weekly-page { width: 100%; height: 98vh; overflow: hidden; box-sizing: border-box; }
-          .print-agent-page { width: 100%; height: 98vh; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; page-break-after: always; break-after: page; }
+          
+          body, html, #root { 
+            background: white !important; 
+            height: auto !important; 
+            min-height: 0 !important; /* Annule le 100vh qui causait la 2ème page */
+            margin: 0 !important; 
+            padding: 0 !important;
+            overflow: visible !important; 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important; 
+          }
+          
+          .no-print, .w-80, .md\\:hidden { display: none !important; }
+          
+          #print-area { 
+            position: relative !important; /* Le relative empêche les débordements invisibles */
+            left: 0; top: 0; 
+            width: 100% !important; 
+            height: auto !important; 
+            overflow: visible !important; 
+            display: block !important; 
+            background: white !important; 
+            z-index: 9999; 
+          }
+          
+          /* Verrouillage strict de la hauteur pour le planning Hebdo / Quotidien */
+          .print-weekly-page { 
+            width: 100%; 
+            height: 185mm !important; 
+            max-height: 185mm !important; 
+            overflow: hidden !important; 
+            box-sizing: border-box; 
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
+          }
+          
+          /* Conserve le saut de page uniquement pour le calendrier annuel des agents */
+          .print-agent-page { 
+            width: 100%; 
+            height: 185mm !important; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+            box-sizing: border-box; 
+            page-break-after: always; 
+            break-after: page; 
+          }
           .print-agent-page:last-child { page-break-after: auto; break-after: auto; }
+          
           .print-dashboard-table { transform: scale(0.85); transform-origin: top left; width: 115% !important; border:none; box-shadow:none; }
           
           /* Forcer les couleurs noires à l'impression pour annuler les thèmes */
           .print-agent-page td, .print-agent-page th, .print-dashboard-table td, .print-dashboard-table th { color: black !important; }
           .print-agent-page td > div > div { color: black !important; }
         }
-      `}</style>
+        `}</style>
 
       {!isSetupComplete ? (
         <SetupWizard onComplete={() => setIsSetupComplete(true)} t={t} />
