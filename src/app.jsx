@@ -576,25 +576,29 @@ const layoutDayEvents = (dayEvents) => {
 // ============================================================================
 // MOTEUR DE GRILLE ÉPURÉ
 // ============================================================================
-const generateGrid = (limitesHeures, sonneries) => {
+const generateGrid = (limitesHeures, sonneries, amplitude) => {
   const gridLines = [];
   const gridLabelsWeekly = []; 
   const gridLabelsDaily = []; 
   
+  const [startH, startM] = (amplitude?.start || '07:30').split(':').map(Number);
+  const startDayMins = startH * 60 + startM;
+
   for (let i = limitesHeures.baseMins; i <= limitesHeures.baseMins + limitesHeures.span; i += 5) {
      const h = String(Math.floor(i/60)).padStart(2,'0');
      const m = String(i%60).padStart(2,'0');
      const timeStr = `${h}:${m}`;
      const isSonnerie = sonneries.includes(timeStr);
+     const isStartDay = (i === startDayMins);
      const is15Min = i % 15 === 0;
      const isHeurePleine = i % 60 === 0;
      
-     if (isSonnerie || is15Min) {
+     if (isSonnerie || is15Min || isStartDay) {
          const topPercent = ((i - limitesHeures.baseMins) / limitesHeures.span) * 100;
-         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent, isHeurePleine, is15Min });
+         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent, isHeurePleine, is15Min, isStartDay });
          
-         // Étiquettes : STRICTEMENT les heures pleines
-         if (isHeurePleine) {
+         // Étiquettes d'impression : Heures pleines OU heure exacte d'ouverture paramétrée
+         if (isHeurePleine || isStartDay) {
              gridLabelsWeekly.push({ timeStr, mins: i, topPercent });
              gridLabelsDaily.push({ timeStr, mins: i, topPercent });
          }
@@ -602,7 +606,6 @@ const generateGrid = (limitesHeures, sonneries) => {
   }
   return { gridLines, gridLabelsWeekly, gridLabelsDaily };
 };
-
 // ============================================================================
 // GRILLES D'IMPRESSION PROPRES ET SÉCURISÉES
 // ============================================================================
@@ -2420,7 +2423,7 @@ const renderEventContent = (arg) => {
       <div id="print-area" className={`flex-1 flex flex-col h-full overflow-hidden ${t.cardBg}`}>
         
 {vueActive === 'journee' && (() => {
-const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
+          const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
           return (
             <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
               <div className="p-4 pb-2 no-print shrink-0">
@@ -2434,55 +2437,64 @@ const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, am
                 </div>
               </div>
               
-              <div className="flex-1 overflow-hidden px-4 pb-4">
+              <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
                 {isPrinting ? (
-                  <PrintDailyView agents={agents} jourConsulte={jourConsulte} getEventsForWeek={getEventsForWeek} absences={absences}  limitesHeures={limitesHeures} postes={postes} getMondayStr={getMondayStr} />
+                  <PrintDailyView agents={agents} jourConsulte={jourConsulte} getEventsForWeek={getEventsForWeek} absences={absences} sonneries={sonneries} limitesHeures={limitesHeures} postes={postes} getMondayStr={getMondayStr} amplitude={amplitude} />
                 ) : (
-                  <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} h-full flex flex-col overflow-hidden`}>
-                    <div className={`flex flex-wrap gap-2 p-3 border-b ${t.borderLight} ${t.bgLight} justify-center shrink-0`}>
-                      <span className="text-xs font-bold text-gray-500 mr-2 self-center uppercase tracking-wider">Légende :</span>
-                      {postes.map(p => (<span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold shadow-sm" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>{p.nom}</span>))}
+                  <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
+                    <div className={`flex flex-wrap gap-2 p-3 border-b ${t.borderLight} ${t.bgLight} justify-center items-center shrink-0`}>
+                      <span className="text-xs font-bold text-gray-500 mr-2 uppercase tracking-wider">Légende & Postes :</span>
+                      {postes.map(p => (
+                        <span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold shadow-sm flex items-center gap-1.5" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>
+                          {p.nom}
+                          <button onClick={() => {
+                            if (confirm(`Voulez-vous vraiment supprimer le poste "${p.nom}" ?`)) {
+                              setPostes(postes.filter(x => x.id !== p.id));
+                            }
+                          }} className="hover:opacity-60 text-xs font-black ml-0.5 cursor-pointer" title="Supprimer ce poste">✖</button>
+                        </span>
+                      ))}
+                      <button onClick={() => setModalNewPoste({ isOpen: true, nom: '' })} className={`ml-2 px-2.5 py-1 rounded text-xs font-bold ${t.btnPrimary} shadow-sm transition-transform hover:scale-105`}>
+                        ➕ Ajouter un poste
+                      </button>
                     </div>
 
-                    <div className="flex-1 overflow-x-auto overflow-y-auto">
-<div className="min-w-[800px] flex flex-col min-h-full relative">
-<div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8`}>
+                    <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col">
+                      <div className="min-w-[800px] flex-1 flex flex-col relative">
+                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
                           {gridLabelsDaily.map(lbl => (
-                            <div key={lbl.timeStr} className={`absolute text-[12px] font-black ${t.header} top-1.5`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
+                            <div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
                               {lbl.timeStr}
                             </div>
                           ))}
                         </div>
                         
-                        <div className="flex-1 relative z-10">
-                          <div className="absolute top-0 bottom-0 left-32 right-0 pointer-events-none z-0">
+                        <div className="flex-1 relative z-10 flex flex-col">
+                          <div className="absolute inset-0 left-32 pointer-events-none z-0">
                             {gridLines.map(line => (
-                              <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
+                              <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie || line.isStartDay ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
                             ))}
                           </div>
 
-{agents.map(agent => {
+                          {agents.map(agent => {
                             const mondayStr = getMondayStr(jourConsulte);
                             const allEvents = getEventsForWeek(mondayStr);
                             const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
                             const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(jourConsulte));
 
-                            // Calcul des heures travaillées dans la journée
                             const totalMinsJour = eventsDuJour.reduce((acc, evt) => {
                               return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
                             }, 0);
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
 
-return (
-                              <div key={agent.id} className={`flex border-b ${t.borderLight} min-h-[50px] relative group hover:bg-black/5 transition-colors`}>
+                            return (
+                              <div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px]`}>
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 ${t.cardBg} group-hover:bg-transparent transition-colors`}>
                                   <span className={`text-xs font-bold ${t.header} text-right leading-tight`}>{agent.nom}</span>
                                   <span className="text-[10px] font-mono text-gray-500 font-semibold">{heuresJourStr}</span>
                                 </div>
-
-                                {/* Piste cliquable et glissable pour tracer un créneau */}
                                 <div className="flex-1 relative my-1 cursor-crosshair group/timeline select-none" onMouseDown={(e) => {
-                                  if (e.target !== e.currentTarget) return; // Uniquement sur le fond vide
+                                  if (e.target !== e.currentTarget) return;
                                   const track = e.currentTarget;
                                   const rect = track.getBoundingClientRect();
                                   const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -2491,7 +2503,6 @@ return (
                                   let currentEndMins = Math.min(startMins + 60, limitesHeures.baseMins + limitesHeures.span);
                                   let hasMoved = false;
 
-                                  // Rectangle visuel de prévisualisation (Ghost)
                                   const ghostEl = document.createElement('div');
                                   ghostEl.className = 'absolute top-0.5 bottom-0.5 rounded bg-blue-500/40 border border-blue-600 border-dashed z-30 pointer-events-none flex items-center justify-center text-[9px] font-bold text-blue-950 dark:text-blue-100 shadow-sm';
                                   track.appendChild(ghostEl);
@@ -2523,8 +2534,6 @@ return (
 
                                     const finalStart = Math.min(startMins, currentEndMins);
                                     const finalEnd = Math.max(startMins, currentEndMins);
-                                    
-                                    // Si simple clic, défaut 1h ; si glissement, utilise la durée tracée
                                     const actualEnd = hasMoved ? finalEnd : (finalStart + 60);
 
                                     if (actualEnd - finalStart >= 5) {
@@ -2566,14 +2575,12 @@ return (
                                         onClick={(e) => { e.stopPropagation(); ouvrirEdition(evt); }} 
                                         title={`${evt.extendedProps?.posteNom} (${extractTimeStr(evt.start)} - ${extractTimeStr(evt.end)})`}>
                                         
-                                        {/* Libellés de la barre */}
                                         <div className="flex justify-between items-center w-full pointer-events-none">
                                           <span className="font-bold truncate leading-tight">{evt.extendedProps?.posteNom || 'Poste'}</span>
                                           {isShort && <span className="text-[7px] opacity-90 truncate ml-1 shrink-0">{extractTimeStr(evt.start)}-{extractTimeStr(evt.end)}</span>}
                                         </div>
                                         {!isShort && <span className="text-[8px] opacity-85 truncate leading-none mt-0.5 pointer-events-none">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>}
 
-                                        {/* Poignée de redimensionnement gauche */}
                                         <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier le début"
                                           onMouseDown={(e) => {
                                             e.stopPropagation();
@@ -2597,7 +2604,6 @@ return (
                                             window.addEventListener('mouseup', onMouseUp);
                                           }}></div>
 
-                                        {/* Poignée de redimensionnement droite */}
                                         <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier la fin"
                                           onMouseDown={(e) => {
                                             e.stopPropagation();
@@ -2627,7 +2633,7 @@ return (
                               </div>
                             );
                           })}
-                            </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2635,8 +2641,7 @@ return (
               </div>
             </div>
           );
-        })()}
-        {vueActive === 'template' && (
+        })()}        {vueActive === 'template' && (
           <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
             <div className="p-4 pb-2 no-print shrink-0">
               <div className="flex justify-between items-center mb-2">
