@@ -19,8 +19,9 @@ const getContrastYIQ = (hexcolor) => {
   const g = parseInt(hex.substr(2, 2), 16) || 0;
   const b = parseInt(hex.substr(4, 2), 16) || 0;
   const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-  return (yiq >= 128) ? '#111827' : '#ffffff'; // Renvoie Noir si fond clair, Blanc si fond sombre
+  return (yiq >= 128) ? '#111827' : '#ffffff'; 
 };
+
 // ============================================================================
 // CONFIGURATION DES THÈMES VISUELS
 // ============================================================================
@@ -263,7 +264,7 @@ const SetupWizard = ({ onComplete, t }) => {
   const [step, setStep] = useState(1);
   const [periodes, setPeriodes] = useState([]);
   const [agents, setAgents] = useState([]);
-  const [postes, setPostes] = useState([]); // Vide par défaut
+  const [postes, setPostes] = useState([]);
 
   const [anneeScolaireDeBase, setAnneeScolaireDeBase] = useState(new Date().getMonth() >= 6 ? new Date().getFullYear() : new Date().getFullYear() - 1);
   const [zone, setZone] = useState("Zone C");
@@ -271,14 +272,10 @@ const SetupWizard = ({ onComplete, t }) => {
   const [dotation, setDotation] = useState(0);
 
   const [formPeriode, setFormPeriode] = useState({ nom: '', debut: '', fin: '', type: 'vacances' });
-  const [formAgent, setFormAgent] = useState({ nom: '', quotite: '100', estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6' });
+  const [formAgent, setFormAgent] = useState({ nom: '', quotite: '100', estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6', jours: {1:true,2:true,3:true,4:true,5:true} });
   
-  // Formulaire de poste enrichi avec la grille de besoins
   const [formPoste, setFormPoste] = useState({
-    nom: '',
-    couleur: '#8B5CF6',
-    qte: 1,
-    slots: [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]
+    nom: '', couleur: '#8B5CF6', qte: 1, slots: [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]
   });
 
   const handleAgentChange = (champ, valeur) => {
@@ -324,7 +321,6 @@ const SetupWizard = ({ onComplete, t }) => {
         });
 
       vacs = Array.from(new Map(vacs.map(item => [item.debut, item])).values());
-
       vacs = vacs.map(v => {
         if (v.nom.toLowerCase().includes("été") && v.fin < `${year2}-08-31`) {
           return { ...v, fin: `${year2}-08-31` };
@@ -340,8 +336,6 @@ const SetupWizard = ({ onComplete, t }) => {
            { nom: "Vacances d'Été", debut: "2027-07-07", fin: "2027-08-31" }
          ];
          vacs = fallback.map(f => ({ id: `fallback_${Date.now()}_${Math.random()}`, nom: f.nom, debut: f.debut, fin: f.fin, type: 'vacances' }));
-      } else if (vacs.length === 0) {
-         alert(`⚠️ Les vacances scolaires de ${year1}-${year2} ne sont pas encore disponibles sur l'API.`);
       }
 
       nouvellesPeriodes = [...nouvellesPeriodes, ...vacs];
@@ -365,7 +359,6 @@ const SetupWizard = ({ onComplete, t }) => {
     const pad = n => String(n).padStart(2, '0');
     const startStr = `${baseDate.getFullYear()}-${pad(baseDate.getMonth()+1)}-${pad(baseDate.getDate())}`;
 
-    // Génération automatique des besoins initiaux à partir des grilles horaires configurées pour chaque poste
     const initialBesoins = [];
     const baseMonday = new Date(startStr);
 
@@ -403,7 +396,6 @@ const SetupWizard = ({ onComplete, t }) => {
         <div className={`${t.headerBg} p-6 ${t.headerText} text-center`}>
           <h1 className="text-3xl font-black tracking-wider">Planning CPE</h1><p className="opacity-80 mt-1">Configuration Initiale ({step}/4)</p>
         </div>
-        
         <div className="p-8">
           {step === 1 && (
             <div className="text-center space-y-6">
@@ -496,7 +488,7 @@ const SetupWizard = ({ onComplete, t }) => {
                   
                   <div className="col-span-2"><label className={`text-[10px] font-bold ${t.header} uppercase`}>Coul.</label><input type="color" value={formAgent.couleurFond} onChange={e=>setFormAgent({...formAgent, couleurFond: e.target.value})} className="w-full h-9 rounded cursor-pointer p-0 border-0" /></div>
                   <div className="col-span-10 mt-1">
-                    <button type="button" onClick={() => { if(formAgent.nom) { const hC = typeof formAgent.hContrat === 'string' ? parseHeureSaisie(formAgent.hContrat) : formAgent.hContrat; setAgents([...agents, {id: Date.now(), nom: formAgent.nom, quotite: parseFloat(formAgent.quotite), estEtudiant: formAgent.estEtudiant, hContrat: hC, couleurFond: formAgent.couleurFond}]); setFormAgent({...formAgent, nom: '', estEtudiant: false}); } }} className={`w-full ${t.btnPrimary} px-4 py-2 rounded text-sm font-bold shadow`}>Ajouter cet agent</button>
+                    <button type="button" onClick={() => { if(formAgent.nom) { const hC = typeof formAgent.hContrat === 'string' ? parseHeureSaisie(formAgent.hContrat) : formAgent.hContrat; setAgents([...agents, {id: Date.now(), nom: formAgent.nom, quotite: parseFloat(formAgent.quotite), estEtudiant: formAgent.estEtudiant, hContrat: hC, couleurFond: formAgent.couleurFond, jours: formAgent.jours}]); setFormAgent({...formAgent, nom: '', estEtudiant: false}); } }} className={`w-full ${t.btnPrimary} px-4 py-2 rounded text-sm font-bold shadow`}>Ajouter cet agent</button>
                   </div>
                 </div>
 
@@ -535,7 +527,6 @@ const SetupWizard = ({ onComplete, t }) => {
                   </div>
                 </div>
 
-                {/* Plages horaires de ce poste */}
                 <div className="border-t border-black/10 pt-3">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-bold text-gray-500 uppercase">Plages horaires (Semaine type)</span>
@@ -599,6 +590,7 @@ const SetupWizard = ({ onComplete, t }) => {
     </div>
   );
 };
+
 // ============================================================================
 // ALGORITHME ANTI-CHEVAUCHEMENT POUR L'IMPRESSION DU PLANNING
 // ============================================================================
@@ -670,12 +662,10 @@ const generateGrid = (limitesHeures, sonneries = [], amplitude) => {
      const isHeurePleine = i % 60 === 0;
      const topPercent = ((i - limitesHeures.baseMins) / limitesHeures.span) * 100;
      
-     // On évite de tracer une ligne à 0% car c'est déjà la bordure sous les jours
      if ((isSonnerie || is15Min) && topPercent > 0.5) {
          gridLines.push({ timeStr, mins: i, isSonnerie, topPercent, isHeurePleine, is15Min });
      }
 
-     // Étiquettes d'impression : uniquement les heures pleines (08:00, 09:00...)
      if (isHeurePleine) {
          gridLabelsWeekly.push({ timeStr, mins: i, topPercent });
          gridLabelsDaily.push({ timeStr, mins: i, topPercent });
@@ -683,44 +673,82 @@ const generateGrid = (limitesHeures, sonneries = [], amplitude) => {
   }
   return { gridLines, gridLabelsWeekly, gridLabelsDaily };
 };
+
 // ============================================================================
-// GRILLES D'IMPRESSION PROPRES ET SÉCURISÉES
+// ALGORITHME D'ALIGNEMENT STRICT PAR AED (COULOIRS VERTICAUX)
 // ============================================================================
-const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { baseMins: 460, span: 620 }, amplitude = { start: '07:30', end: '18:00' } }) => {
+const layoutDayEventsByAgent = (dayEvents, agentsList, dayIndex) => {
+  const workingAgentIds = agentsList
+    .filter(a => (a.jours ? a.jours[dayIndex] : true) || dayEvents.some(e => e.extendedProps?.agentId === a.id))
+    .map(a => a.id);
+
+  const totalCols = Math.max(1, workingAgentIds.length);
+
+  return {
+    workingAgentIds,
+    layouted: dayEvents.map(evt => {
+      const startD = new Date(evt.start);
+      const endD = new Date(evt.end);
+      const agentId = evt.extendedProps?.agentId;
+      const col = Math.max(0, workingAgentIds.indexOf(agentId));
+
+      return {
+        evt,
+        startMins: startD.getHours() * 60 + startD.getMinutes(),
+        endMins: endD.getHours() * 60 + endD.getMinutes(),
+        col: col !== -1 ? col : 0,
+        totalCols
+      };
+    })
+  };
+};
+
+const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { baseMins: 460, span: 620 }, amplitude = { start: '07:30', end: '18:00' }, agents = [] }) => {
   const planningEvents = events.filter(e => !e.extendedProps?.isBesoin);
   const nomsJours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
   const { gridLines, gridLabelsWeekly } = generateGrid(limitesHeures, sonneries, amplitude);
 
   return (
     <div className="print-weekly-page flex flex-col bg-white p-2 text-black">
-      <div className="text-center mb-2 border-b border-black pb-1 shrink-0">
+      <div className="text-center mb-1 border-b border-black pb-1 shrink-0">
         <h2 className="text-xl font-black uppercase tracking-wider text-black">{titre}</h2>
         <p className="text-gray-600 font-bold text-xs">Édité le {new Date().toLocaleDateString('fr-FR')}</p>
       </div>
 
-      {/* Cadre global d'impression */}
       <div className="flex flex-col flex-1 border-2 border-black relative overflow-hidden bg-white">
         
-        {/* 1. Ligne d'en-tête commune (alignement horizontal parfait) */}
-        <div className="flex border-b-2 border-black bg-gray-200 shrink-0 h-7 items-stretch">
-          {/* Coin supérieur gauche (affiche l'heure de début configurée) */}
+        <div className="flex border-b-2 border-black bg-gray-200 shrink-0 h-9 items-stretch">
           <div className="w-16 shrink-0 border-r-2 border-black flex items-center justify-center text-[10px] font-black text-gray-800 font-mono">
             {amplitude?.start || ''}
           </div>
-          {/* Noms des 5 jours */}
           <div className="flex-1 grid grid-cols-5">
-            {nomsJours.map((nom, idx) => (
-              <div key={idx} className="border-r border-black last:border-r-0 font-black text-center uppercase text-xs text-black flex items-center justify-center">
-                {nom}
-              </div>
-            ))}
+            {[1, 2, 3, 4, 5].map(day => {
+              const dayEvents = planningEvents.filter(e => new Date(e.start).getDay() === day);
+              const { workingAgentIds } = layoutDayEventsByAgent(dayEvents, agents, day);
+
+              return (
+                <div key={day} className="border-r border-black last:border-r-0 flex flex-col justify-between">
+                  <div className="font-black text-center uppercase text-[11px] text-black py-0.5 border-b border-black/30">
+                    {nomsJours[day - 1]}
+                  </div>
+                  <div className="flex flex-1 items-center bg-gray-100 text-[9px] font-bold divide-x divide-black/20 text-gray-700">
+                    {workingAgentIds.length === 0 ? (
+                      <span className="w-full text-center text-gray-400 italic text-[8px]">-</span>
+                    ) : (
+                      workingAgentIds.map(id => (
+                        <div key={id} className="flex-1 truncate text-center px-0.5">
+                          {agents.find(a => a.id === id)?.nom || 'AED'}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* 2. Corps du planning : le haut correspond exactement à l'heure d'ouverture */}
         <div className="flex flex-1 relative overflow-hidden bg-white">
-          
-          {/* Axe vertical des heures pleines */}
           <div className="w-16 shrink-0 border-r-2 border-black bg-gray-100 relative">
             {gridLabelsWeekly.map(lbl => (
               <div key={lbl.timeStr} className="absolute w-full pr-1.5 text-right pointer-events-none" style={{ top: `${lbl.topPercent}%`, transform: 'translateY(-50%)' }}>
@@ -731,16 +759,14 @@ const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { ba
             ))}
           </div>
 
-          {/* Grille des 5 jours */}
           <div className="flex-1 grid grid-cols-5 relative bg-white">
             {[1, 2, 3, 4, 5].map(day => {
               const dayEvents = planningEvents.filter(e => new Date(e.start).getDay() === day);
-              const layoutedEvents = layoutDayEvents(dayEvents); 
+              const { layouted } = layoutDayEventsByAgent(dayEvents, agents, day);
 
               return (
                 <div key={day} className="flex flex-col border-r border-black last:border-r-0 relative h-full">
                   <div className="flex-1 relative bg-white h-full">
-                    {/* Lignes horizontales de repère */}
                     {gridLines.map(line => (
                       <div key={line.timeStr} className="absolute w-full pointer-events-none z-0" 
                         style={{ 
@@ -749,8 +775,7 @@ const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { ba
                         }}></div>
                     ))}
 
-                    {/* Créneaux */}
-                    {layoutedEvents.map(item => {
+                    {layouted.map(item => {
                       const { evt, startMins, endMins, col, totalCols } = item;
                       const startD = new Date(evt.start); const endD = new Date(evt.end);
                       const top = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
@@ -979,8 +1004,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     qte: 1,
     slots: []
   });
-
-  const ouvrirCreationPoste = () => {
+const ouvrirCreationPoste = () => {
     setModalPoste({
       isOpen: true,
       id: null,
@@ -1042,28 +1066,28 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     };
 
     if (modalPoste.id) {
-      // Édition d'un poste existant
       setPostes(postes.map(p => p.id === modalPoste.id ? updatedPoste : p));
-      
-      // Régénération des besoins associés dans le modèle
       const filteredBesoins = currentTemplate.besoins.filter(b => b.extendedProps?.posteId !== posteId);
       const generatedBesoins = generateBesoinsFromSlots(posteId, updatedPoste.nom, updatedPoste.qte, updatedPoste.slots);
       updateCurrentTemplate(null, [...filteredBesoins, ...generatedBesoins]);
 
-      // Mise à jour du nom/couleur dans les affectations existantes du modèle
       const updatedEvents = currentTemplate.events.map(evt => evt.extendedProps?.posteId === posteId ? {
         ...evt,
         extendedProps: { ...evt.extendedProps, posteNom: updatedPoste.nom, posteCouleur: updatedPoste.couleur }
       } : evt);
       updateCurrentTemplate(updatedEvents, null);
     } else {
-      // Création d'un nouveau poste
       setPostes([...postes, updatedPoste]);
       const generatedBesoins = generateBesoinsFromSlots(posteId, updatedPoste.nom, updatedPoste.qte, updatedPoste.slots);
       updateCurrentTemplate(null, [...currentTemplate.besoins, ...generatedBesoins]);
     }
 
     setModalPoste({ isOpen: false, id: null, nom: '', couleur: '#8B5CF6', qte: 1, slots: [] });
+  };
+
+  const supprimerPoste = (id, e) => { 
+    e.stopPropagation(); 
+    setPostes(postes.filter(p => p.id !== id)); 
   };
   const [dotation, setDotation] = useState(() => parseFloat(localStorage.getItem('edt-dotation')) || 0);
 
@@ -1078,11 +1102,11 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return s ? JSON.parse(s)[0].id : 1;
   });
 
-const [customWeeks, setCustomWeeks] = useState(() => JSON.parse(localStorage.getItem('edt-custom-weeks') || '{}'));
-const [exceptions, setExceptions] = useState(() => JSON.parse(localStorage.getItem('edt-exceptions') || '{}'));
+  const [customWeeks, setCustomWeeks] = useState(() => JSON.parse(localStorage.getItem('edt-custom-weeks') || '{}'));
+  const [exceptions, setExceptions] = useState(() => JSON.parse(localStorage.getItem('edt-exceptions') || '{}'));
 
 
-const [amplitude, setAmplitude] = useState(() => {
+  const [amplitude, setAmplitude] = useState(() => {
     const s = localStorage.getItem('edt-amplitude');
     return s ? JSON.parse(s) : { start: '07:30', end: '18:00' };
   });
@@ -1093,72 +1117,6 @@ const [amplitude, setAmplitude] = useState(() => {
   });
   const [sonneriesText, setSonneriesText] = useState(() => sonneries.join(', '));
   
-  useEffect(() => { localStorage.setItem('edt-amplitude', JSON.stringify(amplitude)); }, [amplitude]);
-
-  const handleSonneriesBlur = () => {
-    const arr = sonneriesText.split(',')
-      .map(s => s.trim().replace('h', ':'))
-      .filter(s => /^\d{1,2}:\d{2}$/.test(s))
-      .map(s => { let [h, m] = s.split(':'); return `${h.padStart(2,'0')}:${m.padStart(2,'0')}`; })
-      .sort();
-    if(arr.length === 0) arr.push('08:00');
-    setSonneries(arr); setSonneriesText(arr.join(', '));
-    localStorage.setItem('edt-sonneries', JSON.stringify(arr));
-  };
-
-  const limitesHeures = (() => {
-    const [hS, mS] = (amplitude.start || '07:30').split(':').map(Number);
-    const [hE, mE] = (amplitude.end || '18:00').split(':').map(Number);
-    const baseMins = hS * 60 + mS;
-    const maxMins = hE * 60 + mE;
-    const span = maxMins - baseMins;
-    const format = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}:00`;
-    return { minStr: format(baseMins), maxStr: format(maxMins), baseMins, span };
-  })();
-
-
-  
-const renderSlotLabel = (arg) => {
-    const h = String(arg.date.getHours()).padStart(2,'0');
-    const m = String(arg.date.getMinutes()).padStart(2,'0');
-    const timeStr = `${h}:${m}`;
-    const isFullHour = m === '00';
-    const isSonnerie = sonneries.includes(timeStr);
-
-    // À l'écran : affiche les heures pleines ET les sonneries configurées
-    if (isFullHour || isSonnerie) {
-      const isDarkTheme = t.isDark;
-      const bgColor = isDarkTheme ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)';
-      const textColor = isDarkTheme ? '#ffffff' : '#111827';
-      const borderColor = isDarkTheme ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
-
-      return { 
-        html: `<div class="font-black text-[11px] px-1.5 py-0.5 rounded mx-auto shadow-xs" style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${borderColor};">${timeStr}</div>` 
-      };
-    }
-    
-    return { html: '' };
-  };
-
-
-  // Détermination de l'année scolaire de référence dynamique
-  const getSchoolYearBase = () => {
-     if (templateVersions.length > 0 && templateVersions[0].dateDebut) {
-        const d = new Date(templateVersions[0].dateDebut);
-        return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1;
-     }
-     const now = new Date(); return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
-  };
-  const baseYear = getSchoolYearBase();
-  const anneeScolaire = [
-    { m: 8, y: baseYear, nom: 'SEPTEMBRE' }, { m: 9, y: baseYear, nom: 'OCTOBRE' },
-    { m: 10, y: baseYear, nom: 'NOVEMBRE' }, { m: 11, y: baseYear, nom: 'DECEMBRE' },
-    { m: 0, y: baseYear+1, nom: 'JANVIER' }, { m: 1, y: baseYear+1, nom: 'FEVRIER' },
-    { m: 2, y: baseYear+1, nom: 'MARS' }, { m: 3, y: baseYear+1, nom: 'AVRIL' },
-    { m: 4, y: baseYear+1, nom: 'MAI' }, { m: 5, y: baseYear+1, nom: 'JUIN' },
-    { m: 6, y: baseYear+1, nom: 'JUILLET' }
-  ];
-
   const [absences, setAbsences] = useState(() => {
     const s = localStorage.getItem('edt-absences-retards');
     if (!s) return [];
@@ -1187,7 +1145,6 @@ const renderSlotLabel = (arg) => {
     });
   });
 
-  const currentTemplate = templateVersions.find(v => v.id === activeTemplateId) || templateVersions[0]; 
   const [modalCreation, setModalCreation] = useState({ isOpen: false, eventId: null, start: null, end: null });
   const [formTypeEvent, setFormTypeEvent] = useState('affectation'); 
   const [formTypeAbsence, setFormTypeAbsence] = useState('absence'); 
@@ -1196,25 +1153,22 @@ const renderSlotLabel = (arg) => {
   const [formPoste, setFormPoste] = useState('');
   const [formNote, setFormNote] = useState('');
 
-  const [modalNewVersion, setModalNewVersion] = useState({ isOpen: false, dateDebut: `${baseYear+1}-01-04`, nom: 'Évolution Hiver' });
+  const [modalNewVersion, setModalNewVersion] = useState({ isOpen: false, dateDebut: '', nom: 'Évolution' });
   const [modalNewPoste, setModalNewPoste] = useState({ isOpen: false, nom: '' });
   const [modalException, setModalException] = useState({ isOpen: false, agentId: null, dateStr: null, h: '0h00', note: '' });
 
   const [formAbsence, setFormAbsence] = useState({
-    agentId: '',
-    type: 'absence', 
-    journeeComplete: true,
-    dateDebut: new Date().toISOString().split('T')[0],
-    dateFin: '',
-    heures: '0',
-    minutes: '0',
-    deduireHeures: false,
-    motif: 'Maladie'
+    agentId: '', type: 'absence',  journeeComplete: true, dateDebut: new Date().toISOString().split('T')[0],
+    dateFin: '', heures: '0', minutes: '0', deduireHeures: false, motif: 'Maladie'
   });
 
   const [modalBesoinMulti, setModalBesoinMulti] = useState({ isOpen: false, posteId: '', qte: 1, slots: [] });
   const [modalEditBesoin, setModalEditBesoin] = useState({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' });
-  const [modalAgent, setModalAgent] = useState({ isOpen: false, id: null, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#10B981' });
+  const [modalAgent, setModalAgent] = useState({ 
+    isOpen: false, id: null, nom: '', quotite: 100, estEtudiant: false, 
+    hContrat: calculerContratBetty(100, false), couleurFond: '#10B981',
+    jours: { 1: true, 2: true, 3: true, 4: true, 5: true } 
+  });
   const [modalParametres, setModalParametres] = useState(false);
   const [formPeriode, setFormPeriode] = useState({ nom: '', debut: '', fin: '', type: 'vacances' });
 
@@ -1226,85 +1180,14 @@ const renderSlotLabel = (arg) => {
   const [formBesoinQte, setFormBesoinQte] = useState(1);
   const [agentActif, setAgentActif] = useState(null);
   const [posteActif, setPosteActif] = useState(null);
+  
   const [currentViewMonday, setCurrentViewMonday] = useState(null);
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const isInitialMount = useRef(true);
   const [needsBackup, setNeedsBackup] = useState(false);
+  const [copiedEvent, setCopiedEvent] = useState(null);
 
-
-  
-  useEffect(() => {
-    let isModified = false;
-    let newPeriodes = [...periodesFeriees];
-
-    newPeriodes = newPeriodes.map(p => {
-      if (!p.type) {
-        isModified = true;
-        return { ...p, type: p.nom.toLowerCase().includes('vacance') ? 'vacances' : 'ferie' };
-      }
-      return p;
-    });
-
-    const hasSummerPre = newPeriodes.some(p => p.nom.includes("Pré-rentrée") || (p.debut <= `${baseYear}-08-15` && p.fin >= `${baseYear}-08-31`));
-    if (!hasSummerPre) {
-      newPeriodes.push({
-        id: `vac_pre_auto_${Date.now()}`,
-        nom: "Vacances d'Été (Pré-rentrée)",
-        debut: `${baseYear}-07-01`,
-        fin: `${baseYear}-08-31`,
-        type: 'vacances'
-      });
-      isModified = true;
-    }
-
-    newPeriodes = newPeriodes.map(p => {
-      if (p.nom.toLowerCase().includes("été") && p.debut >= `${baseYear+1}-06-01` && p.fin < `${baseYear+1}-08-31`) {
-        isModified = true;
-        return { ...p, fin: `${baseYear+1}-08-31` };
-      }
-      return p;
-    });
-
-    if (isModified) {
-      setPeriodesFeriees(newPeriodes.sort((a, b) => a.debut.localeCompare(b.debut)));
-    }
-  }, [baseYear]); 
-  
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-    } else {
-      setNeedsBackup(true); 
-    }
-  }, [agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      if (needsBackup) {
-        e.preventDefault();
-        e.returnValue = ''; 
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [needsBackup]);
-
-  const handleExport = () => {
-    exporterDonnees();
-    setNeedsBackup(false);
-  };
-
-  useEffect(() => { localStorage.setItem('edt-agents', JSON.stringify(agents)); }, [agents]);
-  useEffect(() => { localStorage.setItem('edt-postes', JSON.stringify(postes)); }, [postes]);
-  useEffect(() => { localStorage.setItem('edt-periodes', JSON.stringify(periodesFeriees)); }, [periodesFeriees]);
-  useEffect(() => { localStorage.setItem('edt-template-versions', JSON.stringify(templateVersions)); }, [templateVersions]);
-  useEffect(() => { localStorage.setItem('edt-custom-weeks', JSON.stringify(customWeeks)); }, [customWeeks]);
-  useEffect(() => { localStorage.setItem('edt-exceptions', JSON.stringify(exceptions)); }, [exceptions]);
-  useEffect(() => { localStorage.setItem('edt-absences-retards', JSON.stringify(absences)); }, [absences]);
-  useEffect(() => { localStorage.setItem('edt-dotation', dotation.toString()); }, [dotation]);
-
-  useEffect(() => { if (vueActive === 'planning') setModeEdition('agents'); }, [vueActive]);
-
+  // --- FONCTIONS DE FORMATAGE DES HEURES ---
   const formatHeureTableau = (decimal, showZero = false) => {
     if (decimal === undefined || decimal === null || Number.isNaN(decimal)) return "";
     const arrondi = Math.round(decimal * 60) / 60; 
@@ -1326,15 +1209,8 @@ const renderSlotLabel = (arg) => {
     return parseFloat(clean) || 0;
   };
 
-  const getMondayStr = (dInput) => {
-    const d = new Date(dInput);
-    const day = d.getDay() || 7;
-    d.setDate(d.getDate() - (day - 1));
-    const pad = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-  };
 
-  const extractTimeStr = (dateObjOrStr) => {
+const extractTimeStr = (dateObjOrStr) => {
     if (!dateObjOrStr) return '08:00';
     if (typeof dateObjOrStr === 'string') {
       if (dateObjOrStr.includes('T')) return dateObjOrStr.split('T')[1].substring(0, 5);
@@ -1344,30 +1220,44 @@ const renderSlotLabel = (arg) => {
     if (!isNaN(d.getTime())) return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     return '08:00';
   };
-
-  const shiftEventToWeek = (evt, targetMondayStr) => {
-    const origMondayStr = getMondayStr(evt.start);
-    if (origMondayStr === targetMondayStr) return { ...evt, id: String(evt.id).includes('_') ? evt.id : evt.id + '_' + targetMondayStr };
-
-    const startD = new Date(evt.start);
-    const endD = new Date(evt.end);
-    const dayOffset = (startD.getDay() || 7) - 1;
-    const endDayOffset = (endD.getDay() || 7) - 1;
-    
-    const parts = targetMondayStr.split('-');
-    const targetM = new Date(parts[0], parts[1] - 1, parts[2]); 
-    
-    const newStart = new Date(targetM.getFullYear(), targetM.getMonth(), targetM.getDate() + dayOffset, startD.getHours(), startD.getMinutes());
-    const newEnd = new Date(targetM.getFullYear(), targetM.getMonth(), targetM.getDate() + endDayOffset, endD.getHours(), endD.getMinutes());
-
+  // --- VARIABLES DERIVEES OPTIMISEES ---
+  const getSchoolYearBase = () => {
+     if (templateVersions.length > 0 && templateVersions[0].dateDebut) {
+        const d = new Date(templateVersions[0].dateDebut);
+        return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1;
+     }
+     const now = new Date(); return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  };
+  const baseYear = getSchoolYearBase();
+  const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
+  
+  const getMondayStr = (dInput) => {
+    const d = new Date(dInput);
+    const day = d.getDay() || 7;
+    d.setDate(d.getDate() - (day - 1));
     const pad = n => String(n).padStart(2, '0');
-    const formatLocal = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-
-    return { ...evt, start: formatLocal(newStart), end: formatLocal(newEnd), id: String(evt.id).includes('_') ? evt.id : evt.id + '_' + targetMondayStr };
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   };
 
-  const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
+  const currentTemplate = templateVersions.find(v => v.id === activeTemplateId) || templateVersions[0]; 
 
+  const gabarits = useMemo(() => {
+    const g = {};
+    templateVersions.forEach(tv => {
+      g[tv.id] = {};
+      agents.forEach(a => { g[tv.id][a.id] = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, totalHebdo: 0 }; });
+      tv.events.forEach(evt => {
+        const agentId = evt.extendedProps?.agentId;
+        if (g[tv.id][agentId] && !evt.extendedProps?.isAbsence) {
+          const d = new Date(evt.start);
+          const duree = (new Date(evt.end) - d) / 3600000;
+          g[tv.id][agentId][d.getDay()] += duree;
+          g[tv.id][agentId].totalHebdo += duree;
+        }
+      });
+    });
+    return g;
+  }, [templateVersions, agents]);
 
   const getInfosPeriode = (date) => {
     const pad = n => String(n).padStart(2, '0');
@@ -1386,25 +1276,6 @@ const renderSlotLabel = (arg) => {
     if (ferie) return { type: 'ferie', nom: ferie.nom };
     return null;
   };
-
-  const gabarits = (() => {
-    const g = {};
-    templateVersions.forEach(tv => {
-      g[tv.id] = {};
-      agents.forEach(a => { g[tv.id][a.id] = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, totalHebdo: 0 }; });
-      tv.events.forEach(evt => {
-        const agentId = evt.extendedProps?.agentId;
-        if (g[tv.id][agentId] && !evt.extendedProps?.isAbsence) {
-          const d = new Date(evt.start);
-          const duree = (new Date(evt.end) - d) / 3600000;
-          g[tv.id][agentId][d.getDay()] += duree;
-          g[tv.id][agentId].totalHebdo += duree;
-        }
-      });
-    });
-    return g;
-  
-})();
 
   const getHeuresTheoriquesJour = (agentId, dateStr) => {
     const dateObj = new Date(dateStr);
@@ -1453,64 +1324,50 @@ const renderSlotLabel = (arg) => {
     return dureeSaisie;
   };
 
-  const statsAgents = agents.map(agent => {
-    let heuresConsommees = 0;
-    for (let m = 8; m < 20; m++) {
-      const year = baseYear + Math.floor(m / 12);
-      const month = m % 12;
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-        
-        const hJour = getHeuresTheoriquesJour(agent.id, dateStr);
-        const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr) && a.deduire);
-        const hDeduct = absDuJour.reduce((tot, a) => tot + getHeuresAbsence(a), 0);
-
-        heuresConsommees += Math.max(0, hJour - hDeduct);
-      }
-    }
-    
-    const soldeGlobalBrut = agent.hContrat - heuresConsommees;
-    const soldeGlobal = Math.round(soldeGlobalBrut * 60) / 60;
-    
-    const applicableTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0];
-    const hHebdoType = gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0;
-
-    return { ...agent, heuresConsommees, soldeGlobal, hHebdoType };
-  });
-
-  const checkCoverage = (besoin, realEventsForWeek, weekAbsences) => {
-    let minCount = Infinity;
-    const tStart = new Date(besoin.start).getTime();
-    const tEnd = new Date(besoin.end).getTime();
-    const step = 15 * 60 * 1000; 
-    
-    const posteShifts = realEventsForWeek.filter(e => e.extendedProps?.posteId === besoin.extendedProps.posteId && !e.extendedProps?.isBesoin && !e.extendedProps?.isAbsence);
-
-    let missingAgents = new Set();
-
-    for (let t = tStart; t < tEnd; t += step) {
-      const shiftsAtT = posteShifts.filter(e => new Date(e.start).getTime() <= t && new Date(e.end).getTime() > t);
-      
-      let presentCount = 0;
-      shiftsAtT.forEach(shift => {
-        const isAbsentAtT = weekAbsences.some(abs => 
-          abs.agentId === shift.extendedProps.agentId && 
-          new Date(abs.start).getTime() <= t && 
-          new Date(abs.end).getTime() > t
-        );
-        if (!isAbsentAtT) {
-          presentCount++;
-        } else {
-          missingAgents.add(shift.extendedProps.agentNom);
+  const statsAgents = useMemo(() => {
+    return agents.map(agent => {
+      let heuresConsommees = 0;
+      for (let m = 8; m < 20; m++) {
+        const year = baseYear + Math.floor(m / 12);
+        const month = m % 12;
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+          const hJour = getHeuresTheoriquesJour(agent.id, dateStr);
+          const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr) && a.deduire);
+          const hDeduct = absDuJour.reduce((tot, a) => tot + getHeuresAbsence(a), 0);
+          heuresConsommees += Math.max(0, hJour - hDeduct);
         }
-      });
+      }
+      
+      const soldeGlobal = Math.round((agent.hContrat - heuresConsommees) * 60) / 60;
+      const applicableTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0];
+      const hHebdoType = gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0;
 
-      if (presentCount < minCount) minCount = presentCount;
-    }
-    if (minCount === Infinity) minCount = 0;
+      return { ...agent, heuresConsommees, soldeGlobal, hHebdoType };
+    });
+  }, [agents, baseYear, absences, exceptions, customWeeks, templateVersions, activeTemplateId, gabarits]);
+
+
+  const shiftEventToWeek = (evt, targetMondayStr) => {
+    const origMondayStr = getMondayStr(evt.start);
+    if (origMondayStr === targetMondayStr) return { ...evt, id: String(evt.id).includes('_') ? evt.id : evt.id + '_' + targetMondayStr };
+
+    const startD = new Date(evt.start);
+    const endD = new Date(evt.end);
+    const dayOffset = (startD.getDay() || 7) - 1;
+    const endDayOffset = (endD.getDay() || 7) - 1;
     
-    return { isSousEffectif: minCount < Number(besoin.extendedProps.qte), minCount, missingAgents: Array.from(missingAgents) };
+    const parts = targetMondayStr.split('-');
+    const targetM = new Date(parts[0], parts[1] - 1, parts[2]); 
+    
+    const newStart = new Date(targetM.getFullYear(), targetM.getMonth(), targetM.getDate() + dayOffset, startD.getHours(), startD.getMinutes());
+    const newEnd = new Date(targetM.getFullYear(), targetM.getMonth(), targetM.getDate() + endDayOffset, endD.getHours(), endD.getMinutes());
+
+    const pad = n => String(n).padStart(2, '0');
+    const formatLocal = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+
+    return { ...evt, start: formatLocal(newStart), end: formatLocal(newEnd), id: String(evt.id).includes('_') ? evt.id : evt.id + '_' + targetMondayStr };
   };
 
   const getEventsForWeek = (mondayStr) => {
@@ -1539,6 +1396,36 @@ const renderSlotLabel = (arg) => {
     currentBesoins = currentTemplate.besoins.map(b => shiftEventToWeek(b, targetMonday));
   }
 
+  const checkCoverage = (besoin, realEventsForWeek, weekAbsences) => {
+    let minCount = Infinity;
+    const tStart = new Date(besoin.start).getTime();
+    const tEnd = new Date(besoin.end).getTime();
+    const step = 15 * 60 * 1000; 
+    
+    const posteShifts = realEventsForWeek.filter(e => e.extendedProps?.posteId === besoin.extendedProps.posteId && !e.extendedProps?.isBesoin && !e.extendedProps?.isAbsence);
+    let missingAgents = new Set();
+
+    for (let t = tStart; t < tEnd; t += step) {
+      const shiftsAtT = posteShifts.filter(e => new Date(e.start).getTime() <= t && new Date(e.end).getTime() > t);
+      let presentCount = 0;
+      shiftsAtT.forEach(shift => {
+        const isAbsentAtT = weekAbsences.some(abs => 
+          abs.agentId === shift.extendedProps.agentId && 
+          new Date(abs.start).getTime() <= t && 
+          new Date(abs.end).getTime() > t
+        );
+        if (!isAbsentAtT) {
+          presentCount++;
+        } else {
+          missingAgents.add(shift.extendedProps.agentNom);
+        }
+      });
+      if (presentCount < minCount) minCount = presentCount;
+    }
+    if (minCount === Infinity) minCount = 0;
+    return { isSousEffectif: minCount < Number(besoin.extendedProps.qte), minCount, missingAgents: Array.from(missingAgents) };
+  };
+
   const alertesSousEffectif = [];
   const besoinsEvents = currentBesoins.map(b => {
     const { isSousEffectif, minCount, missingAgents } = checkCoverage(b, currentRealEvents, absences);
@@ -1562,20 +1449,19 @@ const renderSlotLabel = (arg) => {
       backgroundColor: a.type === 'absence' ? '#EF4444' : '#F59E0B',
       borderColor: a.type === 'absence' ? '#DC2626' : '#D97706',
       extendedProps: {
-        isAbsence: true,
-        agentId: a.agentId,
-        typeAbsence: a.type,
-        motif: a.motif,
-        deduire: a.deduire,
-        rattrape: a.rattrape
+        isAbsence: true, agentId: a.agentId, typeAbsence: a.type, motif: a.motif, deduire: a.deduire, rattrape: a.rattrape
       }
     })).filter(e => {
       if (printFilter.type === 'agent' && e.extendedProps.agentId !== printFilter.id) return false;
       return true;
     })
   ];
+
 const activeAlerts = useMemo(() => {
     const alerts = [];
+    // ⬇️ On déclare les jours ici pour que la cloche puisse les lire ⬇️
+    const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM']; 
+    
     const targetMon = currentViewMonday || getMondayStr(currentTemplate?.dateDebut || new Date());
     const realEvts = customWeeks[targetMon] ? customWeeks[targetMon] : (
       [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= targetMon || true)?.events.map(e => shiftEventToWeek(e, targetMon)) || []
@@ -1598,9 +1484,135 @@ const activeAlerts = useMemo(() => {
 
     return alerts;
   }, [agents, currentTemplate, currentViewMonday, customWeeks, absences, templateVersions]);
-const declencherImpression = (e) => {
+
+  // --- EFFETS ---
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && copiedEvent) {
+        setCopiedEvent(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [copiedEvent]);
+
+  useEffect(() => {
+    let isModified = false;
+    let newPeriodes = [...periodesFeriees];
+
+    newPeriodes = newPeriodes.map(p => {
+      if (!p.type) {
+        isModified = true;
+        return { ...p, type: p.nom.toLowerCase().includes('vacance') ? 'vacances' : 'ferie' };
+      }
+      return p;
+    });
+
+    const hasSummerPre = newPeriodes.some(p => p.nom.includes("Pré-rentrée") || (p.debut <= `${baseYear}-08-15` && p.fin >= `${baseYear}-08-31`));
+    if (!hasSummerPre) {
+      newPeriodes.push({
+        id: `vac_pre_auto_${Date.now()}`, nom: "Vacances d'Été (Pré-rentrée)", debut: `${baseYear}-07-01`, fin: `${baseYear}-08-31`, type: 'vacances'
+      });
+      isModified = true;
+    }
+
+    newPeriodes = newPeriodes.map(p => {
+      if (p.nom.toLowerCase().includes("été") && p.debut >= `${baseYear+1}-06-01` && p.fin < `${baseYear+1}-08-31`) {
+        isModified = true;
+        return { ...p, fin: `${baseYear+1}-08-31` };
+      }
+      return p;
+    });
+
+    if (isModified) {
+      setPeriodesFeriees(newPeriodes.sort((a, b) => a.debut.localeCompare(b.debut)));
+    }
+  }, [baseYear, periodesFeriees]); 
+  
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+    } else {
+      setNeedsBackup(true); 
+    }
+  }, [agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (needsBackup) {
+        e.preventDefault();
+        e.returnValue = ''; 
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [needsBackup]);
+
+  useEffect(() => { localStorage.setItem('edt-agents', JSON.stringify(agents)); }, [agents]);
+  useEffect(() => { localStorage.setItem('edt-postes', JSON.stringify(postes)); }, [postes]);
+  useEffect(() => { localStorage.setItem('edt-periodes', JSON.stringify(periodesFeriees)); }, [periodesFeriees]);
+  useEffect(() => { localStorage.setItem('edt-template-versions', JSON.stringify(templateVersions)); }, [templateVersions]);
+  useEffect(() => { localStorage.setItem('edt-custom-weeks', JSON.stringify(customWeeks)); }, [customWeeks]);
+  useEffect(() => { localStorage.setItem('edt-exceptions', JSON.stringify(exceptions)); }, [exceptions]);
+  useEffect(() => { localStorage.setItem('edt-absences-retards', JSON.stringify(absences)); }, [absences]);
+  useEffect(() => { localStorage.setItem('edt-dotation', dotation.toString()); }, [dotation]);
+  useEffect(() => { localStorage.setItem('edt-amplitude', JSON.stringify(amplitude)); }, [amplitude]);
+  useEffect(() => { if (vueActive === 'planning') setModeEdition('agents'); }, [vueActive]);
+
+
+  // --- METHODES ---
+  const handleExport = () => { exporterDonnees(); setNeedsBackup(false); };
+
+  const handleSonneriesBlur = () => {
+    const arr = sonneriesText.split(',')
+      .map(s => s.trim().replace('h', ':'))
+      .filter(s => /^\d{1,2}:\d{2}$/.test(s))
+      .map(s => { let [h, m] = s.split(':'); return `${h.padStart(2,'0')}:${m.padStart(2,'0')}`; })
+      .sort();
+    if(arr.length === 0) arr.push('08:00');
+    setSonneries(arr); setSonneriesText(arr.join(', '));
+    localStorage.setItem('edt-sonneries', JSON.stringify(arr));
+  };
+
+  const limitesHeures = (() => {
+    const [hS, mS] = (amplitude.start || '07:30').split(':').map(Number);
+    const [hE, mE] = (amplitude.end || '18:00').split(':').map(Number);
+    const baseMins = hS * 60 + mS;
+    const maxMins = hE * 60 + mE;
+    const span = maxMins - baseMins;
+    const format = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}:00`;
+    return { minStr: format(baseMins), maxStr: format(maxMins), baseMins, span };
+  })();
+
+  const renderSlotLabel = (arg) => {
+    const h = String(arg.date.getHours()).padStart(2,'0');
+    const m = String(arg.date.getMinutes()).padStart(2,'0');
+    const timeStr = `${h}:${m}`;
+    const isFullHour = m === '00';
+    const isSonnerie = sonneries.includes(timeStr);
+
+    if (isFullHour || isSonnerie) {
+      const isDarkTheme = t.isDark;
+      const bgColor = isDarkTheme ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)';
+      const textColor = isDarkTheme ? '#ffffff' : '#111827';
+      const borderColor = isDarkTheme ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
+      return { html: `<div class="font-black text-[11px] px-1.5 py-0.5 rounded mx-auto shadow-xs" style="background-color: ${bgColor}; color: ${textColor}; border: 1px solid ${borderColor};">${timeStr}</div>` };
+    }
+    return { html: '' };
+  };
+
+  const anneeScolaire = [
+    { m: 8, y: baseYear, nom: 'SEPTEMBRE' }, { m: 9, y: baseYear, nom: 'OCTOBRE' },
+    { m: 10, y: baseYear, nom: 'NOVEMBRE' }, { m: 11, y: baseYear, nom: 'DECEMBRE' },
+    { m: 0, y: baseYear+1, nom: 'JANVIER' }, { m: 1, y: baseYear+1, nom: 'FEVRIER' },
+    { m: 2, y: baseYear+1, nom: 'MARS' }, { m: 3, y: baseYear+1, nom: 'AVRIL' },
+    { m: 4, y: baseYear+1, nom: 'MAI' }, { m: 5, y: baseYear+1, nom: 'JUIN' },
+    { m: 6, y: baseYear+1, nom: 'JUILLET' }
+  ];
+
+  const declencherImpression = (e) => {
     if (e) e.preventDefault();
-    setPrintFilter({ type: 'all', id: null }); // Force la vue globale par défaut
+    setPrintFilter({ type: 'all', id: null }); 
     setIsPrinting(true); 
     setTimeout(() => { 
       window.print(); 
@@ -1608,7 +1620,7 @@ const declencherImpression = (e) => {
     }, 800);
   };
   
-const updateCurrentTemplate = (newEvents, newBesoins) => {
+  const updateCurrentTemplate = (newEvents, newBesoins) => {
     const newVersions = templateVersions.map(tv => 
       String(tv.id) === String(activeTemplateId) ? { 
         ...tv, 
@@ -1640,6 +1652,7 @@ const updateCurrentTemplate = (newEvents, newBesoins) => {
       setCustomWeeks({ ...customWeeks, [monStr]: mod });
     }
   };
+
   const validerModele = () => {
     setTemplateVersions(templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, statut: 'valide' } : tv));
     
@@ -1672,7 +1685,7 @@ const updateCurrentTemplate = (newEvents, newBesoins) => {
     const newArr = [...templateVersions, newVersion].sort((a,b) => b.dateDebut.localeCompare(a.dateDebut)); 
     setTemplateVersions(newArr);
     setActiveTemplateId(newVersion.id);
-    setModalNewVersion({ isOpen: false, dateDebut: `${baseYear+1}-01-04`, nom: 'Évolution Hiver' });
+    setModalNewVersion({ isOpen: false, dateDebut: '', nom: 'Évolution' });
   };
 
   const importerModele = (templateId) => {
@@ -1683,7 +1696,6 @@ const updateCurrentTemplate = (newEvents, newBesoins) => {
       setCustomWeeks({ ...customWeeks, [currentViewMonday]: shiftedEvents });
     }
   };
-
 
   const ajouterAbsenceRetard = (e) => {
     e.preventDefault();
@@ -1724,14 +1736,8 @@ const updateCurrentTemplate = (newEvents, newBesoins) => {
 
       newAbs.push({
         id: String(Date.now() + Math.random()),
-        agentId,
-        type: formAbsence.type,
-        start: startStr,
-        end: endStr,
-        motif: formAbsence.motif,
-        deduire: formAbsence.deduireHeures,
-        rattrape: false,
-        journeeComplete: formAbsence.journeeComplete
+        agentId, type: formAbsence.type, start: startStr, end: endStr,
+        motif: formAbsence.motif, deduire: formAbsence.deduireHeures, rattrape: false, journeeComplete: formAbsence.journeeComplete
       });
     });
 
@@ -1757,15 +1763,10 @@ const updateCurrentTemplate = (newEvents, newBesoins) => {
     const retNonRat = ret.filter(a => !a.rattrape && a.deduire);
 
     return {
-      id: ag.id,
-      nom: ag.nom,
-      couleur: ag.couleurFond,
-      nbAbs: abs.length,
+      id: ag.id, nom: ag.nom, couleur: ag.couleurFond, nbAbs: abs.length,
       hAbs: abs.reduce((sum, a) => sum + getHeuresAbsence(a), 0),
-      nbRet: ret.length,
-      hRet: ret.reduce((sum, a) => sum + getHeuresAbsence(a), 0),
-      nbRetRat: retNonRat.length,
-      hRetRat: retNonRat.reduce((sum, a) => sum + getHeuresAbsence(a), 0)
+      nbRet: ret.length, hRet: ret.reduce((sum, a) => sum + getHeuresAbsence(a), 0),
+      nbRetRat: retNonRat.length, hRetRat: retNonRat.reduce((sum, a) => sum + getHeuresAbsence(a), 0)
     };
   });
 
@@ -1787,9 +1788,7 @@ const updateCurrentTemplate = (newEvents, newBesoins) => {
             const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 
             newBesoins.push({
-              id: String(Date.now() + Math.random()),
-              start: `${dateStr}T${slot.start}:00`,
-              end: `${dateStr}T${slot.end}:00`,
+              id: String(Date.now() + Math.random()), start: `${dateStr}T${slot.start}:00`, end: `${dateStr}T${slot.end}:00`,
               extendedProps: { posteId: poste.id, posteNom: poste.nom, qte: Number(modalBesoinMulti.qte) }
             });
           }
@@ -1816,10 +1815,35 @@ const updateCurrentTemplate = (newEvents, newBesoins) => {
     if (vueActive === 'template' && currentTemplate.statut === 'valide') return;
     selectInfo.view.calendar.unselect();
     
-    let dateJour = selectInfo.startStr;
-    if (dateJour.includes('T')) {
-      dateJour = dateJour.split('T')[0];
+    // --- COLLER UN CRÉNEAU COPIÉ ---
+    if (copiedEvent) {
+      const startD = new Date(selectInfo.startStr);
+      const endD = new Date(startD.getTime() + (copiedEvent.durationMins || 60) * 60000);
+      const pad = n => String(n).padStart(2, '0');
+      const formatISO = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+
+      const newEvt = {
+        id: String(Date.now() + Math.random()),
+        start: formatISO(startD),
+        end: formatISO(endD),
+        title: copiedEvent.title,
+        backgroundColor: copiedEvent.backgroundColor,
+        borderColor: copiedEvent.borderColor,
+        extendedProps: { ...copiedEvent.extendedProps }
+      };
+
+      applyAction('add', newEvt);
+
+      // Si on relâche Ctrl pendant le clic, on vide le presse-papier
+      if (!selectInfo.jsEvent?.ctrlKey && !selectInfo.jsEvent?.metaKey) {
+        setCopiedEvent(null);
+      }
+      return;
     }
+
+    // --- CRÉATION NORMALE ---
+    let dateJour = selectInfo.startStr;
+    if (dateJour.includes('T')) dateJour = dateJour.split('T')[0];
 
     if (modeEdition === 'besoins') {
       if (!posteActif) return alert("Sélectionnez un poste à gauche.");
@@ -1844,24 +1868,11 @@ const updateCurrentTemplate = (newEvents, newBesoins) => {
   };
 
   const gererModificationEvenement = (changeInfo) => { 
-    if (vueActive === 'template' && currentTemplate.statut === 'valide') {
-      changeInfo.revert();
-      return;
-    }
-    if (changeInfo.event.extendedProps.isBesoin) {
-      const cleanId = String(changeInfo.event.id).split('_')[0];
-      const newBesoins = currentTemplate.besoins.map(b => String(b.id) === cleanId ? { ...b, start: changeInfo.event.startStr, end: changeInfo.event.endStr } : b);
-      updateCurrentTemplate(null, newBesoins);
-    } else if (changeInfo.event.extendedProps.isAbsence) {
-      const cleanId = String(changeInfo.event.id).replace('abs_', '').split('_')[0];
-      const updated = absences.map(a => String(a.id) === cleanId ? { ...a, start: changeInfo.event.startStr, end: changeInfo.event.endStr } : a);
-      setAbsences(updated);
-    } else {
-      applyAction('update', { id: changeInfo.event.id, start: changeInfo.event.startStr, end: changeInfo.event.endStr }); 
-    }
+    if (vueActive === 'template' && currentTemplate.statut === 'valide') return changeInfo.revert();
+    applyAction('update_content', { id: changeInfo.event.id, start: changeInfo.event.startStr, end: changeInfo.event.endStr }); 
   };
 
-const gererClicEvenement = (evt) => { 
+  const gererClicEvenement = (evt) => { 
     if (vueActive === 'template' && currentTemplate.statut === 'valide') {
       alert("Ce modèle est verrouillé. Cliquez sur '🔓 Déverrouiller' dans le menu latéral pour le modifier.");
       return;
@@ -1880,6 +1891,7 @@ const gererClicEvenement = (evt) => {
       applyAction('delete', { id: evt.id, start: evt.start }); 
     }
   };
+
   const ouvrirEditionBesoin = (evt) => {
     if (vueActive !== 'template') return alert("Passez en vue 'Modèle' pour modifier les besoins structurels.");
     setModalEditBesoin({ isOpen: true, id: String(evt.id).split('_')[0], posteId: evt.extendedProps.posteId, qte: evt.extendedProps.qte, start: extractTimeStr(evt.start), end: extractTimeStr(evt.end) });
@@ -1920,15 +1932,8 @@ const gererClicEvenement = (evt) => {
       const cleanId = isEdit ? String(modalCreation.eventId).replace('abs_','') : String(Date.now());
       
       const newAbs = {
-        id: cleanId,
-        agentId: agent.id,
-        type: formTypeAbsence,
-        start: newStart,
-        end: newEnd,
-        motif: formNote || (formTypeAbsence === 'absence' ? 'Absence' : 'Retard'),
-        deduire: formAbsenceDeduire,
-        rattrape: false,
-        journeeComplete: (new Date(newEnd) - new Date(newStart)) / 3600000 >= 9
+        id: cleanId, agentId: agent.id, type: formTypeAbsence, start: newStart, end: newEnd,
+        motif: formNote || (formTypeAbsence === 'absence' ? 'Absence' : 'Retard'), deduire: formAbsenceDeduire, rattrape: false, journeeComplete: (new Date(newEnd) - new Date(newStart)) / 3600000 >= 9
       };
       
       if (isEdit) {
@@ -1952,7 +1957,7 @@ const gererClicEvenement = (evt) => {
     setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' });
   };
 
-const renderEventContent = (arg) => {
+  const renderEventContent = (arg) => {
     const tS = arg.event.start;
     const tE = arg.event.end;
     const timeStr = (tS && tE) ? `${tS.getHours()}h${String(tS.getMinutes()).padStart(2,'0')}-${tE.getHours()}h${String(tE.getMinutes()).padStart(2,'0')}` : '';
@@ -1960,8 +1965,24 @@ const renderEventContent = (arg) => {
     const isLocked = vueActive === 'template' && currentTemplate.statut === 'valide';
     const textColor = t.isDark ? '#e5e7eb' : '#111827';
     
-    const durationMins = tS && tE ? (tE - tS) / 60000 : 60;
+    const durationMins = tS && tE ? Math.round((tE - tS) / 60000) : 60;
     const isShort = durationMins <= 20;
+
+    const handleEventClick = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        setCopiedEvent({
+          title: arg.event.title,
+          backgroundColor: arg.event.backgroundColor,
+          borderColor: arg.event.borderColor,
+          extendedProps: { ...arg.event.extendedProps },
+          durationMins
+        });
+        return;
+      }
+      if (!isLocked) ouvrirEdition(arg.event);
+    };
 
     if (arg.event.extendedProps.isBesoin) {
       const isSous = arg.event.extendedProps.isSousEffectif;
@@ -2018,16 +2039,17 @@ const renderEventContent = (arg) => {
     
     const agentColor = arg.event.backgroundColor || '#3b82f6';
     const bgColorWithOpacity = agentColor + '66';
-    const headerColor = arg.event.extendedProps.posteCouleur || '#3b82f6';
+    const headerColor = arg.event.extendedProps?.posteCouleur || '#3b82f6';
     const headerTextColor = getContrastYIQ(headerColor);
 
     if (isShort) {
       return (
-        <div onClick={() => !isLocked && ouvrirEdition(arg.event)} 
+        <div onClick={handleEventClick} 
              className={`flex items-center w-full h-full overflow-hidden rounded text-[9px] shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
-             style={{ backgroundColor: headerColor, color: headerTextColor, border: `1px solid ${agentColor}` }}>
+             style={{ backgroundColor: headerColor, color: headerTextColor, border: `1px solid ${agentColor}` }}
+             title="Clic pour modifier • Ctrl+Clic pour copier">
           <div className="flex-1 truncate px-1 flex justify-between items-center">
-            <span><strong>{arg.event.extendedProps.posteNom}</strong> <span className="opacity-80 hidden md:inline">({arg.event.extendedProps.agentNom})</span></span>
+            <span><strong>{arg.event.extendedProps?.posteNom}</strong> <span className="opacity-80 hidden md:inline">({arg.event.extendedProps?.agentNom})</span></span>
             <span className="font-mono text-[8px] opacity-90 ml-1 shrink-0">{timeStr}</span>
           </div>
         </div>
@@ -2035,16 +2057,17 @@ const renderEventContent = (arg) => {
     }
 
     return (
-      <div onClick={() => !isLocked && ouvrirEdition(arg.event)} 
+      <div onClick={handleEventClick} 
            className={`flex flex-col w-full h-full overflow-hidden rounded text-[11px] border border-black/10 shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''}`}
-           style={{ backgroundColor: bgColorWithOpacity, border: `1px solid ${agentColor}`, color: textColor }}>
+           style={{ backgroundColor: bgColorWithOpacity, border: `1px solid ${agentColor}`, color: textColor }}
+           title="Clic pour modifier • Ctrl+Clic pour copier">
         <div className="px-1 py-0.5 font-bold flex justify-between items-center" style={{ backgroundColor: headerColor, color: headerTextColor }}>
-          <span className="truncate">{arg.event.extendedProps.posteNom} <span className="text-[9px] font-normal opacity-90 ml-1">({timeStr})</span></span>
+          <span className="truncate">{arg.event.extendedProps?.posteNom} <span className="text-[9px] font-normal opacity-90 ml-1">({timeStr})</span></span>
           {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print bg-black/20 hover:bg-red-500 rounded px-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: headerTextColor }}>✖</button>}
         </div>
         <div className="p-1 flex flex-col flex-1 leading-tight">
-          <div className="flex justify-between items-start"><span className="font-semibold truncate pr-1">{arg.event.extendedProps.agentNom}</span></div>
-          {arg.event.extendedProps.note && <span className="text-[10px] opacity-80 truncate italic mt-1 bg-black/5 dark:bg-white/10 rounded px-1">{arg.event.extendedProps.note}</span>}
+          <div className="flex justify-between items-start"><span className="font-semibold truncate pr-1">{arg.event.extendedProps?.agentNom}</span></div>
+          {arg.event.extendedProps?.note && <span className="text-[10px] opacity-80 truncate italic mt-1 bg-black/5 dark:bg-white/10 rounded px-1">{arg.event.extendedProps?.note}</span>}
         </div>
       </div>
     );
@@ -2065,10 +2088,10 @@ const renderEventContent = (arg) => {
     const hC = typeof modalAgent.hContrat === 'string' ? parseHeureSaisie(modalAgent.hContrat) : modalAgent.hContrat;
     
     if (modalAgent.id) {
-      setAgents(agents.map(a => a.id === modalAgent.id ? { ...a, nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond } : a));
+      setAgents(agents.map(a => a.id === modalAgent.id ? { ...a, nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours } : a));
       updateCurrentTemplate(currentTemplate.events.map(evt => evt.extendedProps?.agentId === modalAgent.id ? { ...evt, extendedProps: { ...evt.extendedProps, agentNom: modalAgent.nom }, backgroundColor: modalAgent.couleurFond, borderColor: modalAgent.couleurFond } : evt), null);
     } else {
-      setAgents([...agents, { id: Date.now(), nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond }]);
+      setAgents([...agents, { id: Date.now(), nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours }]);
     }
     setModalAgent({ ...modalAgent, isOpen: false });
   };
@@ -2083,7 +2106,7 @@ const renderEventContent = (arg) => {
     }
   };
 
-  const supprimerPoste = (id, e) => { e.stopPropagation(); setPostes(postes.filter(p => p.id !== id)); };
+
 
   const gererClicJourAgent = (agentId, dateStr, hActuel, noteActuelle) => {
     setModalException({
@@ -2152,7 +2175,7 @@ const renderEventContent = (arg) => {
   };
 
   return (
-<div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
+    <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
       <style>{`
         /* Lignes 15 min : pointillés légers */
         tr[data-time$=":00:00"] .fc-timegrid-slot-lane, 
@@ -2471,12 +2494,12 @@ const renderEventContent = (arg) => {
                   <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin</label><input type="time" required value={extractTimeStr(modalCreation.end)} onChange={e => setModalCreation({...modalCreation, end: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div>
                 </div>
                 <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>📝 {formTypeEvent === 'absence' ? 'Motif' : 'Note'}</label><input type="text" value={formNote} onChange={e => setFormNote(e.target.value)} placeholder={formTypeEvent === 'absence' ? "Ex: Maladie..." : "Ex: Réunion..."} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} autoFocus={!!modalCreation.eventId} /></div>
-</div>
+              </div>
               
               <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center`}>
                 <div>
                   {modalCreation.eventId && (
-<button type="button" onClick={() => {
+                    <button type="button" onClick={() => {
                       if(window.confirm('Voulez-vous vraiment supprimer cet élément ?')) {
                         if (formTypeEvent === 'absence') {
                           supprimerAbsence(String(modalCreation.eventId).replace('abs_','').split('_')[0]);
@@ -2492,14 +2515,14 @@ const renderEventContent = (arg) => {
                       🗑️ Supprimer
                     </button>
                   )}
-                                  </div>
+                </div>
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
                   <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>{modalCreation.eventId ? 'Enregistrer' : 'Créer'}</button>
                 </div>
               </div>
-
-            </form>          </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -2591,6 +2614,19 @@ const renderEventContent = (arg) => {
                   </div>
                   <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Couleur</label><div className="flex items-center gap-3"><input type="color" value={modalAgent.couleurFond} onChange={e => setModalAgent({...modalAgent, couleurFond: e.target.value})} className={`w-10 h-10 p-1 border ${t.borderLight} rounded cursor-pointer bg-transparent`} /><span className={`text-sm uppercase ${t.header}`}>{modalAgent.couleurFond}</span></div></div>
                 </div>
+                
+                <div className="flex flex-col mt-2">
+                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Jours de présence (Semaine Type)</label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map(day => (
+                      <label key={day} className={`flex-1 flex items-center justify-center py-1.5 rounded border text-[11px] font-bold cursor-pointer transition-colors ${modalAgent.jours?.[day] ? `${t.btnPrimary} border-transparent shadow-sm` : `bg-transparent text-gray-400 border-gray-300 hover:bg-black/5`}`}>
+                        <input type="checkbox" className="hidden" checked={modalAgent.jours?.[day] || false} onChange={e => setModalAgent({...modalAgent, jours: {...(modalAgent.jours || {1:true,2:true,3:true,4:true,5:true}), [day]: e.target.checked}})} />
+                        {['LUN', 'MAR', 'MER', 'JEU', 'VEN'][day - 1]}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
               </div>
               <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}><button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded">Annuler</button><button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded`}>{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button></div>
             </form>
@@ -2598,14 +2634,13 @@ const renderEventContent = (arg) => {
         </div>
       )}
 
-{/* PANNEAU LATÉRAL (Fixe) */}
+      {/* PANNEAU LATÉRAL (Fixe) */}
       <div className={`w-80 ${t.sidebar} shadow-lg flex flex-col z-20 border-r ${t.borderLight} no-print shrink-0 transition-colors`}>
         <div className={`p-4 ${t.sidebarText} flex flex-col gap-3 shrink-0`}>
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold tracking-wider">Planning CPE</h1>
           </div>
           
-          {/* Barre d'outils avec la cloche de notification */}
           <div className="flex items-center justify-between bg-black/10 p-1.5 rounded-lg gap-1">
             <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
             <button onClick={() => document.getElementById('import-file').click()} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Restaurer une sauvegarde">⬆️</button>
@@ -2613,7 +2648,6 @@ const renderEventContent = (arg) => {
               ⬇️{needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
             </button>
 
-            {/* Bouton de notifications (Cloche) */}
             <div className="relative flex-1 flex justify-center">
               <button 
                 onClick={() => setShowNotificationMenu(!showNotificationMenu)} 
@@ -2628,7 +2662,6 @@ const renderEventContent = (arg) => {
                 )}
               </button>
 
-              {/* Menu déroulant des notifications */}
               {showNotificationMenu && (
                 <div className={`absolute left-0 mt-9 w-72 rounded-xl shadow-2xl border ${t.borderLight} ${t.cardBg} z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150`}>
                   <div className={`${t.headerBg} p-3 flex justify-between items-center border-b ${t.borderLight}`}>
@@ -2662,7 +2695,6 @@ const renderEventContent = (arg) => {
             <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
           </div>
 
-          {/* Boutons de navigation entre les vues */}
           <div className="flex flex-col bg-black/10 rounded p-1 shadow-inner gap-1 mt-2">
             <button onClick={() => setVueActive('journee')} className={`text-sm py-1.5 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
             <button onClick={() => setVueActive('template')} className={`text-sm py-1.5 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
@@ -2673,7 +2705,6 @@ const renderEventContent = (arg) => {
           </div>
         </div>
 
-        {/* Section défilante en dessous (agents, postes, etc.) */}
         {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
           <div className={`p-4 flex-1 overflow-y-auto space-y-4 ${t.bgMain}`}>
             {vueActive === 'template' && currentTemplate.statut === 'brouillon' && (
@@ -2767,10 +2798,10 @@ const renderEventContent = (arg) => {
           </div>
         )}
       </div>
+      
       {/* ZONE PRINCIPALE D'AFFICHAGE */}
-      <div id="print-area" className={`flex-1 flex flex-col h-full overflow-hidden ${t.cardBg}`}>
-        
-{vueActive === 'journee' && (() => {
+      <div id="print-area" className={`flex-1 flex flex-col h-full overflow-hidden ${t.cardBg}`}>  
+      {vueActive === 'journee' && (() => {
           const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
           return (
             <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
@@ -2792,7 +2823,7 @@ const renderEventContent = (arg) => {
                   <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
                     <div className={`flex flex-wrap gap-2 p-3 border-b ${t.borderLight} ${t.bgLight} justify-center items-center shrink-0`}>
                       <span className="text-xs font-bold text-gray-500 mr-2 uppercase tracking-wider">Légende & Postes :</span>
-{postes.map(p => (
+                      {postes.map(p => (
                         <span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold shadow-sm flex items-center gap-1.5" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>
                           {p.nom}
                           <button onClick={() => ouvrirEditionPoste(p)} className="hover:opacity-75 text-xs ml-0.5 cursor-pointer" title="Modifier ce poste">⚙️</button>
@@ -2829,7 +2860,6 @@ const renderEventContent = (arg) => {
                             const mondayStr = getMondayStr(jourConsulte);
                             const allEvents = getEventsForWeek(mondayStr);
                             const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
-                            const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(jourConsulte));
 
                             const totalMinsJour = eventsDuJour.reduce((acc, evt) => {
                               return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
@@ -2990,7 +3020,9 @@ const renderEventContent = (arg) => {
               </div>
             </div>
           );
-        })()}        {vueActive === 'template' && (
+        })()}
+
+        {vueActive === 'template' && (
           <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
             <div className="p-4 pb-2 no-print shrink-0">
               <div className="flex justify-between items-center mb-2">
@@ -3008,15 +3040,16 @@ const renderEventContent = (arg) => {
                   </select>
                 </div>
               </div>
-                          </div>
+            </div>
 
             <div className="flex-1 overflow-hidden px-4 pb-4">
-{isPrinting ? (
-  <PrintTimeGridView events={displayEvents}  limitesHeures={limitesHeures} amplitude={amplitude} titre={`Modèle : ${currentTemplate.nom} ...`} />              ) : (
+              {isPrinting ? (
+                <PrintTimeGridView events={displayEvents} agents={agents} limitesHeures={limitesHeures} amplitude={amplitude} titre={`Modèle : ${currentTemplate.nom} ...`} />
+              ) : (
                 <div className={`${t.cardBg} rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-[#3B82F6] border-dashed border-2' : t.borderLight}`}>
                   <div className={`h-full transition-all duration-300 ${currentTemplate.statut === 'valide' ? 'pointer-events-none opacity-85 grayscale-[15%]' : ''}`}>
                     <FullCalendar
-                      key={`cal-template-${activeTemplateId}-${currentTemplate.statut}-${isDarkMode}`}
+                      key={`cal-${vueActive}-${isDarkMode}`}
                       plugins={[timeGridPlugin, interactionPlugin]}
                       initialView="timeGridWeek"
                       locale="fr"
@@ -3039,12 +3072,13 @@ const renderEventContent = (arg) => {
                       selectMirror={true}
                       dayMaxEvents={true}
                       height="100%"
-                      slotEventOverlap={true}
                       events={displayEvents}
+                      slotEventOverlap={false} 
+                      eventOrder="extendedProps.agentNom,start"
+                      eventResize={gererModificationEvenement}
+                      eventDrop={gererModificationEvenement}
                       select={gererSelection}
-                      eventChange={gererModificationEvenement}
                       eventContent={renderEventContent}
-                      
                     />
                   </div>
                 </div>
@@ -3062,33 +3096,6 @@ const renderEventContent = (arg) => {
                   {printFilter.type === 'agent' && ` - Filtré pour : ${agents.find(a=>a.id===printFilter.id)?.nom}`}
                   {printFilter.type === 'poste' && ` - Filtré pour le poste : ${postes.find(p=>p.id===printFilter.id)?.nom}`}
                 </h2>
-                {/* BILAN HEBDOMADAIRE & SOLDE */}
-              {(() => {
-                const weekEvents = getEventsForWeek(currentViewMonday);
-                const totalMinsHebdo = weekEvents.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => {
-                  return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
-                }, 0);
-                const totalHeuresHebdo = totalMinsHebdo / 60;
-
-                // Objectif hebdo théorique de l'équipe (basé sur les contrats / nb de semaines estimé à 36 ou calcul global)
-                const objectifHebdoEquipe = agents.reduce((sum, a) => sum + (a.hContrat / 36), 0);
-                const diffHebdo = totalHeuresHebdo - objectifHebdoEquipe;
-
-                return (
-                  <div className={`flex items-center justify-between ${t.cardBg} px-4 py-2 rounded-lg border ${t.borderLight} mb-3 text-xs shadow-sm`}>
-                    <div className="flex items-center gap-4">
-                      <div><span className="text-gray-500 font-bold uppercase">Total Semaine :</span> <span className="font-mono font-black text-sm ml-1">{formatHeureTableau(totalHeuresHebdo, true)}</span></div>
-                      <div className="text-gray-400">|</div>
-                      <div><span className="text-gray-500 font-bold uppercase">Objectif Hebdo (Contrats / 36) :</span> <span className="font-mono font-bold text-gray-700 dark:text-gray-300 ml-1">{formatHeureTableau(objectifHebdoEquipe, true)}</span></div>
-                    </div>
-                    <div>
-                      <span className={`px-2 py-1 rounded font-mono font-bold ${diffHebdo >= 0 ? 'bg-emerald-500/20 text-emerald-600' : 'bg-orange-500/20 text-orange-600'}`}>
-                        Écart : {diffHebdo > 0 ? '+' : ''}{formatHeureTableau(diffHebdo, true)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
                 <div className="flex gap-2 items-center">
                   {currentViewMonday && (
                     <>
@@ -3106,10 +3113,11 @@ const renderEventContent = (arg) => {
             </div>
             
             <div className="flex-1 overflow-hidden px-4 pb-4">
-{isPrinting ? (
-  <PrintTimeGridView events={displayEvents}  limitesHeures={limitesHeures} amplitude={amplitude} titre={`Modèle : ${currentTemplate.nom} ...`} />              ) : (
-              <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} h-full p-2`}>
-              <FullCalendar
+              {isPrinting ? (
+                <PrintTimeGridView events={displayEvents} agents={agents} limitesHeures={limitesHeures} amplitude={amplitude} titre={`Planning Hebdo du ${currentViewMonday}`} />
+              ) : (
+                <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} h-full p-2`}>
+                  <FullCalendar
                     key={`cal-planning-${isDarkMode}`}
                     plugins={[timeGridPlugin, interactionPlugin]}
                     initialView="timeGridWeek"
@@ -3118,6 +3126,7 @@ const renderEventContent = (arg) => {
                     initialDate={currentTemplate.dateDebut}
                     datesSet={(arg) => setCurrentViewMonday(getMondayStr(arg.start))}
                     headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+                    dayHeaderFormat={{ weekday: 'long' }} 
                     allDaySlot={false}
                     editable={true}
                     eventDurationEditable={true}
@@ -3131,10 +3140,12 @@ const renderEventContent = (arg) => {
                     selectMirror={true}
                     dayMaxEvents={true}
                     height="100%"
-                    slotEventOverlap={true}
                     events={displayEvents}
+                    slotEventOverlap={false} 
+                    eventOrder="extendedProps.agentNom,start"
+                    eventResize={gererModificationEvenement}
+                    eventDrop={gererModificationEvenement}
                     select={gererSelection}
-                    eventChange={gererModificationEvenement}
                     eventContent={renderEventContent}
                   />
                 </div>
@@ -3143,9 +3154,8 @@ const renderEventContent = (arg) => {
           </div>
         )}
 
-{vueActive === 'dashboard' && (() => {
+        {vueActive === 'dashboard' && (() => {
           const totalETP = Math.round(agents.reduce((sum, a) => sum + Number(a.quotite), 0)) / 100;
-          
           return (
             <div className={`flex-1 p-8 overflow-auto ${t.bgMain} print-dashboard-table`}>
               <div className="flex justify-between items-end mb-6">
@@ -3172,11 +3182,12 @@ const renderEventContent = (arg) => {
                     {statsAgents.map(agent => (
                       <tr key={agent.id} className={`hover:${t.bgLight} transition-colors`}>
                         <td className={`p-4 font-bold border-r ${t.borderLight} ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</td>
-<td className={`p-4 text-center border-r ${t.borderLight}`}>
+                        <td className={`p-4 text-center border-r ${t.borderLight}`}>
                           <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
                             {agent.quotite}%
                           </span>
-                        </td>                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.header}`}>{formatHeureTableau(agent.hContrat, true)}</td>
+                        </td>
+                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.header}`}>{formatHeureTableau(agent.hContrat, true)}</td>
                         <td className={`p-4 text-center border-r ${t.borderLight} font-mono text-gray-500`}>{formatHeureTableau(agent.hHebdoType, true)}</td>
                         <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.bgLight} ${t.header}`}>{formatHeureTableau(agent.heuresConsommees, true)}</td>
                         <td className={`p-4 text-center font-mono font-black text-lg ${agent.soldeGlobal > 0 ? 'bg-green-500/20 text-green-600' : (agent.soldeGlobal < 0 ? 'bg-red-500/20 text-red-500' : 'bg-emerald-500/10 text-emerald-500')}`}>{agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</td>
@@ -3188,6 +3199,7 @@ const renderEventContent = (arg) => {
             </div>
           );
         })()}
+
         {vueActive === 'absences' && (
           <div className={`flex-1 p-6 overflow-auto ${t.bgMain}`}>
             <h2 className={`text-2xl font-bold ${t.header} mb-6`}>Gestion des Absences et Retards</h2>
@@ -3266,7 +3278,7 @@ const renderEventContent = (arg) => {
                 <div className="flex flex-col items-center">
                   <span className={`text-xs ${t.textMenuMuted} print:text-black`}>Solde Actuel</span>
                   <span className={`font-mono font-bold px-2 rounded print:border print:border-black ${statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal > 0 ? 'bg-green-500/20 text-green-600 print:text-green-800 print:bg-green-100' : (statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal < 0 ? 'bg-red-500/20 text-red-500 print:text-red-800 print:bg-red-100' : 'bg-emerald-500/20 text-emerald-500 print:text-emerald-800 print:bg-emerald-100')}`}>
-                    {statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal, true)}
+{statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal, true)}
                   </span>
                 </div>
               </div>
@@ -3281,21 +3293,37 @@ const renderEventContent = (arg) => {
                       {anneeScolaire.map((mois, idx) => {
                         const daysInMonth = new Date(mois.y, mois.m + 1, 0).getDate();
                         if (jourNum > daysInMonth) return <td key={idx} className={`border ${t.borderLight} opacity-20`}></td>;
-                        const dateObj = new Date(mois.y, mois.m, jourNum); const dateStr = `${mois.y}-${String(mois.m+1).padStart(2,'0')}-${String(jourNum).padStart(2,'0')}`;
-                        const mondayStr = getMondayStr(dateObj); const dayOfWeek = dateObj.getDay(); const nomJour = nomsJours[dayOfWeek]; const estWeekEnd = dayOfWeek === 0 || dayOfWeek === 6; const infoPeriode = getInfosPeriode(dateObj);
+
+                        const dateObj = new Date(mois.y, mois.m, jourNum);
+                        const dateStr = `${mois.y}-${String(mois.m+1).padStart(2,'0')}-${String(jourNum).padStart(2,'0')}`;
                         
-                        const exc = exceptions[`${agentConsulte}_${dateStr}`]; 
+                        const dayOfWeek = dateObj.getDay();
+                        const nomJour = nomsJours[dayOfWeek];
+                        const infoPeriode = getInfosPeriode(dateObj);
+
+                        const exc = exceptions[`${agentConsulte}_${dateStr}`];
+                        
                         let hFinal = exc ? exc.h : getHeuresTheoriquesJour(agentConsulte, dateStr);
                         
-                        const absDuJour = absences.filter(a => a.agentId === agentConsulte && a.start.startsWith(dateStr)); 
-                        const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + getHeuresAbsence(a), 0); 
+                        const absDuJour = absences.filter(a => a.agentId === agentConsulte && a.start.startsWith(dateStr));
+                        const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + getHeuresAbsence(a), 0);
                         hFinal = Math.max(0, hFinal - hDeduct);
+
+                        let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : '');
+                        if (absDuJour.length > 0) {
+                          const txtAbs = absDuJour.map(a => `${a.type.toUpperCase()}${a.deduire?' (-h)':''}`).join(', ');
+                          noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs;
+                        }
+
+                        let bgJour = t.cardBg; 
+                        if (dayOfWeek === 0) bgJour = t.bgLight; 
+                        if (dayOfWeek === 6) bgJour = t.bgMain;  
                         
-                        let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : ''); 
-                        if (absDuJour.length > 0) { const txtAbs = absDuJour.map(a => `${a.type.toUpperCase()}${a.deduire?' (-h)':''}`).join(', '); noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs; }
-                        
-                        let bgJour = t.cardBg; if (dayOfWeek === 0) bgJour = t.bgLight; if (dayOfWeek === 6) bgJour = t.bgMain;  
-                        if (infoPeriode) { if (infoPeriode.type === 'ferie') bgJour = "bg-green-500/20 text-green-600 font-bold"; else bgJour = `${t.bgLight} ${t.header}`; }
+                        if (infoPeriode) {
+                          if (infoPeriode.type === 'ferie') bgJour = "bg-green-500/20 text-green-600 font-bold";
+                          else bgJour = `${t.bgLight} ${t.header}`; 
+                        }
+
                         if (absDuJour.length > 0) bgJour = "bg-red-500/20 text-red-500 font-bold";
 
                         const isExc = exc || absDuJour.length > 0;
@@ -3305,9 +3333,15 @@ const renderEventContent = (arg) => {
                         return (
                           <td key={idx} className={`border ${t.borderLight} p-0 hover:outline hover:outline-2 hover:outline-blue-500 cursor-pointer relative`} onClick={() => gererClicJourAgent(agentConsulte, dateStr, hFinal, noteAffichage)}>
                             <div className="flex h-6 items-stretch">
-                              <div className={`w-8 flex-shrink-0 flex items-center justify-center border-r ${t.borderLight} text-[10px] ${bgJour}`}><span className="rotate-[-90deg] mr-1 text-[8px] opacity-70">{nomJour[0]}</span>{jourNum}</div>
-                              <div className={`w-10 flex-shrink-0 flex items-center justify-center font-bold font-mono border-r ${t.borderLight} ${cellBg1}`}>{formatHeureTableau(hFinal)}</div>
-                              <div className={`flex-1 flex items-center px-1 truncate text-[10px] ${cellBg2}`}>{noteAffichage}</div>
+                              <div className={`w-8 flex-shrink-0 flex items-center justify-center border-r ${t.borderLight} text-[10px] ${bgJour}`}>
+                                <span className="rotate-[-90deg] mr-1 text-[8px] opacity-70">{nomJour[0]}</span>{jourNum}
+                              </div>
+                              <div className={`w-10 flex-shrink-0 flex items-center justify-center font-bold font-mono border-r ${t.borderLight} ${cellBg1}`}>
+                                {formatHeureTableau(hFinal)}
+                              </div>
+                              <div className={`flex-1 flex items-center px-1 truncate text-[10px] ${cellBg2}`}>
+                                {noteAffichage}
+                              </div>
                             </div>
                           </td>
                         );
@@ -3411,7 +3445,7 @@ export default function App() {
           ` : ''}
         }
 
-@media print {
+        @media print {
           @page { size: A4 landscape; margin: 5mm; }
           
           body, html, #root { 
@@ -3460,7 +3494,7 @@ export default function App() {
           .print-agent-page td, .print-agent-page th, .print-dashboard-table td, .print-dashboard-table th { color: black !important; }
           .print-agent-page td > div > div { color: black !important; }
         }
-        `}</style>
+      `}</style>
 
       {!isSetupComplete ? (
         <SetupWizard onComplete={() => setIsSetupComplete(true)} t={t} />
