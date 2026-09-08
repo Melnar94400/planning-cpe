@@ -161,9 +161,12 @@ const [absences, setAbsences] = useState(() => {
     });
   });
 
-  // --- HISTORIQUE (CTRL+Z) ---
+
+  // --- HISTORIQUE (CTRL+Z / CTRL+Y) ---
   const historyRef = useRef([]);
+  const redoRef = useRef([]); // 👈 La nouvelle mémoire pour le "Refaire"
   const [showUndoToast, setShowUndoToast] = useState(false);
+  const [showRedoToast, setShowRedoToast] = useState(false);
 
   const sauvegarderEtatPrecedent = (snapshot = null) => {
     const stateToSave = snapshot || {
@@ -171,16 +174,44 @@ const [absences, setAbsences] = useState(() => {
       customWeeks: JSON.parse(JSON.stringify(customWeeks)),
       absences: JSON.parse(JSON.stringify(absences))
     };
-    historyRef.current = [...historyRef.current, stateToSave].slice(-30);
+    historyRef.current = [...historyRef.current, stateToSave].slice(-30); // Garde les 30 dernières actions
+    redoRef.current = []; // 👈 On efface le futur alternatif si on fait une nouvelle action
   };
 
   const annulerAction = () => {
     if (historyRef.current.length === 0) return;
+    
+    // On sauvegarde l'état actuel dans le Redo avant de l'écraser
+    const currentState = {
+      templateVersions: JSON.parse(JSON.stringify(templateVersions)),
+      customWeeks: JSON.parse(JSON.stringify(customWeeks)),
+      absences: JSON.parse(JSON.stringify(absences))
+    };
+    redoRef.current = [...redoRef.current, currentState].slice(-30);
+
     const lastState = historyRef.current.pop();
     setTemplateVersions(lastState.templateVersions);
     setCustomWeeks(lastState.customWeeks);
     setAbsences(lastState.absences);
     setShowUndoToast(true); setTimeout(() => setShowUndoToast(false), 2000);
+  };
+
+  const refaireAction = () => {
+    if (redoRef.current.length === 0) return;
+    
+    // On sauvegarde l'état actuel dans l'historique avant d'avancer
+    const currentState = {
+      templateVersions: JSON.parse(JSON.stringify(templateVersions)),
+      customWeeks: JSON.parse(JSON.stringify(customWeeks)),
+      absences: JSON.parse(JSON.stringify(absences))
+    };
+    historyRef.current = [...historyRef.current, currentState].slice(-30);
+
+    const nextState = redoRef.current.pop();
+    setTemplateVersions(nextState.templateVersions);
+    setCustomWeeks(nextState.customWeeks);
+    setAbsences(nextState.absences);
+    setShowRedoToast(true); setTimeout(() => setShowRedoToast(false), 2000);
   };
 
   const [modalCreation, setModalCreation] = useState({ isOpen: false, eventId: null, start: null, end: null });
@@ -515,16 +546,30 @@ const activeAlerts = useMemo(() => {
     return alerts;
   }, [agents, currentTemplate, currentViewMonday, customWeeks, absences, templateVersions]);
   // --- EFFETS ---
-  useEffect(() => {
+useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && copiedEvent) {
         setCopiedEvent(null);
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        annulerAction();
+      
+      // Si la touche Ctrl (Windows) ou Cmd (Mac) est enfoncée
+      if (e.ctrlKey || e.metaKey) {
+        const key = e.key.toLowerCase();
+        
+        if (key === 'z') {
+          e.preventDefault(); // Bloque l'action du navigateur
+          if (e.shiftKey) {
+            refaireAction(); // Ctrl+Shift+Z = Refaire
+          } else {
+            annulerAction(); // Ctrl+Z = Annuler
+          }
+        } else if (key === 'y') {
+          e.preventDefault();
+          refaireAction(); // Ctrl+Y = Refaire
+        }
       }
     };
+    
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [copiedEvent, templateVersions, customWeeks, absences]);
@@ -2741,6 +2786,12 @@ if (arg.event.extendedProps.isAbsence) {
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 border border-gray-700 animate-in slide-in-from-bottom duration-150 no-print">
           <span className="text-base">↩️</span>
           <div className="text-sm font-bold">Action annulée (Ctrl+Z)</div>
+        </div>
+      )}
+      {showRedoToast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 border border-gray-700 animate-in slide-in-from-bottom duration-150 no-print">
+          <span className="text-base">↪️</span>
+          <div className="text-sm font-bold">Action rétablie (Ctrl+Y)</div>
         </div>
       )}
             {copiedEvent && (
