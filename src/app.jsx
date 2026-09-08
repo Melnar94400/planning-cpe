@@ -854,10 +854,6 @@ const bilanAbsences = agents.map(ag => {
       };
 
       applyAction('add', newEvt);
-
-      if (!selectInfo.jsEvent?.ctrlKey && !selectInfo.jsEvent?.metaKey) {
-        setCopiedEvent(null);
-      }
       return;
     }
 
@@ -1871,15 +1867,40 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
 
                             return (
-                              <div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px]`}>
+<div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px]`}>
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
                                   <span className="text-sm font-black text-right leading-tight">{agent.nom}</span>
                                   <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
                                 </div>
                                 <div className="flex-1 relative my-1 cursor-crosshair group/timeline select-none" onMouseDown={(e) => {
-                                  if (e.target !== e.currentTarget) return;
                                   const track = e.currentTarget;
                                   const rect = track.getBoundingClientRect();
+                                  
+                                  // --- GESTION DU COLLER MULTIPLE (TAMPON) ---
+                                  if (copiedEvent) {
+                                    e.preventDefault();
+
+                                    if (e.ctrlKey || e.metaKey) return;
+                                    const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                                    const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
+                                    const duration = copiedEvent.durationMins || 60;
+                                    const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
+                                    
+                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                    const newStartISO = `${jourConsulte}T${formatTime(startMins)}:00`;
+                                    const newEndISO = `${jourConsulte}T${formatTime(endMins)}:00`;
+
+                                    applyAction('add', { 
+                                      id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO,
+                                      title: `${copiedEvent.extendedProps?.posteNom} - ${agent.nom}`,
+                                      backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
+                                      extendedProps: { ...copiedEvent.extendedProps, agentId: agent.id, agentNom: agent.nom }
+                                    });
+                                    return; 
+                                  }
+
+                                  // --- GESTION DU DESSIN DE CRÉNEAU (LASSO) ---
+                                  e.preventDefault();
                                   const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                                   const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
                                   
@@ -1940,7 +1961,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                   window.addEventListener('mousemove', onMouseMove);
                                   window.addEventListener('mouseup', onMouseUp);
                                 }}>
-                                  {eventsDuJour.map(evt => {
+                              {eventsDuJour.map(evt => {
                                     const startD = new Date(evt.start); 
                                     const endD = new Date(evt.end);
                                     const startMins = startD.getHours() * 60 + startD.getMinutes(); 
@@ -1953,11 +1974,44 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                     const textColor = getContrastYIQ(posteCouleur);
                                     
                                     return (
-                                      <div key={evt.id} className="absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-10 group/item"
+                                        <div key={evt.id} className="absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-hidden border cursor-grab active:cursor-grabbing hover:ring-2 transition-all z-10 group/item"
                                         style={{ left: `${left}%`, width: `${width}%`, backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', color: textColor }}
-                                        onClick={(e) => { e.stopPropagation(); ouvrirEdition(evt); }} 
-                                        title={`${evt.extendedProps?.posteNom} (${extractTimeStr(evt.start)} - ${extractTimeStr(evt.end)})`}>
-                                        
+                                        onClick={(e) => { 
+                                          e.stopPropagation(); 
+                                          if (e.ctrlKey || e.metaKey) {
+                                            e.preventDefault();
+                                            setCopiedEvent({ title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: endMins - startMins });
+                                            return;
+                                          }
+                                          ouvrirEdition(evt); 
+                                        }}
+                                        onMouseDown={(e) => {
+                                          if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
+                                          e.stopPropagation();
+                                          let hasMoved = false;
+                                          const track = e.currentTarget.closest('.flex-1.relative.my-1');
+                                          const rect = track.getBoundingClientRect();
+                                          const startX = e.clientX;
+                                          const duration = endMins - startMins;
+
+                                          const onMouseMove = (moveEvent) => {
+                                            hasMoved = true;
+                                            let deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
+                                            let newStart = startMins + deltaMins;
+                                            let newEnd = newStart + duration;
+                                            if (newStart < limitesHeures.baseMins) { newStart = limitesHeures.baseMins; newEnd = newStart + duration; }
+                                            if (newEnd > limitesHeures.baseMins + limitesHeures.span) { newEnd = limitesHeures.baseMins + limitesHeures.span; newStart = newEnd - duration; }
+
+                                            const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                            applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(newStart)}:00`, end: `${jourConsulte}T${formatTime(newEnd)}:00` });
+                                          };
+                                          const onMouseUp = () => {
+                                            window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp);
+                                            if (hasMoved) { const preventClick = (eClick) => { eClick.stopPropagation(); eClick.preventDefault(); window.removeEventListener('click', preventClick, true); }; window.addEventListener('click', preventClick, true); setTimeout(() => window.removeEventListener('click', preventClick, true), 100); }
+                                          };
+                                          window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp);
+                                        }}
+                                        title={`${evt.extendedProps?.posteNom} (${extractTimeStr(evt.start)} - ${extractTimeStr(evt.end)})`}>                                        
                                         <div className="flex justify-between items-center w-full pointer-events-none">
                                           <span className="font-bold truncate leading-tight">{evt.extendedProps?.posteNom || 'Poste'}</span>
                                           {isShort && <span className="text-[7px] opacity-90 truncate ml-1 shrink-0">{extractTimeStr(evt.start)}-{extractTimeStr(evt.end)}</span>}
@@ -2104,21 +2158,20 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
 
                             return (
-                              <div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px]`}>
-                                {/* Titre de la ligne (Nom agent ou Poste) */}
+<div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px]`}>
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: rowBgColor, color: getContrastYIQ(rowBgColor) }}>
                                   <span className="text-sm font-black text-right leading-tight">{item.nom}</span>
                                   <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
                                 </div>
                                 
-                                {/* Zone interactive de création au lasso */}
                                 <div className="flex-1 relative my-1 cursor-crosshair group/timeline select-none" onMouseDown={(e) => {
-                                  if (e.target !== e.currentTarget) return;
+                                  if (currentTemplate.statut === 'valide') return; // Bloque si le modèle est verrouillé
                                   const track = e.currentTarget;
                                   const rect = track.getBoundingClientRect();
                                   
-                                  // --- GESTION DU COLLER (CTRL+V visuel) ---
+                                  // --- GESTION DU COLLER MULTIPLE (TAMPON) ---
                                   if (copiedEvent) {
+                                    e.preventDefault();
                                     const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                                     const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
                                     const duration = copiedEvent.durationMins || 60;
@@ -2130,22 +2183,23 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
 
                                     if (isBesoinsMode && copiedEvent.extendedProps?.isBesoin) {
                                       updateCurrentTemplate(null, [...currentTemplate.besoins, { 
-                                        id: String(Date.now()), start: newStartISO, end: newEndISO, 
+                                        id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO, 
                                         extendedProps: { ...copiedEvent.extendedProps, posteId: item.id, posteNom: item.nom } 
                                       }]);
                                     } else if (!isBesoinsMode && !copiedEvent.extendedProps?.isBesoin) {
                                       applyAction('add', { 
-                                        id: String(Date.now()), start: newStartISO, end: newEndISO,
-                                        title: `${copiedEvent.extendedProps.posteNom} - ${item.nom}`,
-                                        backgroundColor: item.couleurFond, borderColor: item.couleurFond,
+                                        id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO,
+                                        title: `${copiedEvent.extendedProps?.posteNom} - ${item.nom}`,
+                                        backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
                                         extendedProps: { ...copiedEvent.extendedProps, agentId: item.id, agentNom: item.nom }
                                       });
                                     }
-                                    if (!e.ctrlKey && !e.metaKey) setCopiedEvent(null);
-                                    return;
+                                    return; 
                                   }
 
-                                  // --- GESTION DU DESSIN DE CRÉNEAU ---
+                                  // --- GESTION DU DESSIN DE CRÉNEAU (LASSO) ---
+                                  e.preventDefault();
+                                  if (e.ctrlKey || e.metaKey) return;
                                   const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                                   const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
                                   
@@ -2212,8 +2266,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
 
                                   window.addEventListener('mousemove', onMouseMove);
                                   window.addEventListener('mouseup', onMouseUp);
-                                }}>
-                                  
+                                }}>                                  
                                   {/* Affichage des blocs horaires sur la ligne */}
                                   {eventsDeLaLigne.map(evt => {
                                     const startD = new Date(evt.start); 
@@ -2243,7 +2296,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                     }
                                     
                                     return (
-                                      <div key={evt.id} className={`absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-10 group/item ${!isBesoinsMode && conflitsIds.has(String(evt.id).split('_')[0]) ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
+                                    <div key={evt.id} className={`absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-hidden border cursor-grab active:cursor-grabbing hover:ring-2 transition-all z-10 group/item ${!isBesoinsMode && conflitsIds.has(String(evt.id).split('_')[0]) ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
                                         style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evtBgColor, borderColor: evtBorderColor, color: evtTextColor }}
                                         onClick={(e) => { 
                                           e.stopPropagation(); 
@@ -2260,9 +2313,40 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                           }
                                           if (currentTemplate.statut === 'valide') return;
                                           if (evt.extendedProps?.isBesoin) ouvrirEditionBesoin(evt); else ouvrirEdition(evt); 
-                                        }} 
+                                        }}
+                                        onMouseDown={(e) => {
+                                          if (e.button !== 0 || e.ctrlKey || e.metaKey || currentTemplate.statut === 'valide') return;
+                                          e.stopPropagation();
+                                          let hasMoved = false;
+                                          const track = e.currentTarget.closest('.flex-1.relative.my-1');
+                                          const rect = track.getBoundingClientRect();
+                                          const startX = e.clientX;
+                                          const duration = endMins - startMins;
+
+                                          const onMouseMove = (moveEvent) => {
+                                            hasMoved = true;
+                                            let deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
+                                            let newStart = startMins + deltaMins;
+                                            let newEnd = newStart + duration;
+                                            if (newStart < limitesHeures.baseMins) { newStart = limitesHeures.baseMins; newEnd = newStart + duration; }
+                                            if (newEnd > limitesHeures.baseMins + limitesHeures.span) { newEnd = limitesHeures.baseMins + limitesHeures.span; newStart = newEnd - duration; }
+
+                                            const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                            if (isBesoinsMode) {
+                                              const cleanId = String(evt.id).split('_')[0];
+                                              const newBesoins = currentTemplate.besoins.map(b => String(b.id).split('_')[0] === cleanId ? { ...b, start: `${currentTemplateDateStr}T${formatTime(newStart)}:00`, end: `${currentTemplateDateStr}T${formatTime(newEnd)}:00` } : b);
+                                              updateCurrentTemplate(null, newBesoins);
+                                            } else {
+                                              applyAction('update', { id: evt.id, start: `${currentTemplateDateStr}T${formatTime(newStart)}:00`, end: `${currentTemplateDateStr}T${formatTime(newEnd)}:00` });
+                                            }
+                                          };
+                                          const onMouseUp = () => {
+                                            window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp);
+                                            if (hasMoved) { const preventClick = (eClick) => { eClick.stopPropagation(); eClick.preventDefault(); window.removeEventListener('click', preventClick, true); }; window.addEventListener('click', preventClick, true); setTimeout(() => window.removeEventListener('click', preventClick, true), 100); }
+                                          };
+                                          window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp);
+                                        }}
                                         title={`${evtTitle} (${extractTimeStr(evt.start)} - ${extractTimeStr(evt.end)})`}>
-                                        
                                         <div className="flex justify-between items-center w-full pointer-events-none">
                                           <span className="font-bold truncate leading-tight">{evtTitle}</span>
                                           {isShort && <span className="text-[7px] opacity-90 truncate ml-1 shrink-0">{extractTimeStr(evt.start)}-{extractTimeStr(evt.end)}</span>}
