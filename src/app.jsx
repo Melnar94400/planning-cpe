@@ -131,12 +131,24 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   });
   const [sonneriesText, setSonneriesText] = useState(() => sonneries.join(', '));
   
-  const [absences, setAbsences] = useState(() => {
+const [absences, setAbsences] = useState(() => {
     const s = localStorage.getItem('edt-absences-retards');
     if (!s) return [];
     const parsed = JSON.parse(s);
     return parsed.map(a => {
-      if (a.start && a.end) return a;
+      // Nettoyage et compatibilité avec l'ancien système
+      let type = a.type || 'absence';
+      if (type === 'recup' || type === 'rattrapage') type = 'heures_supp';
+      
+      let impact = a.impact;
+      if (!impact) {
+        if (a.rattrape || type === 'heures_supp') impact = 'local';
+        else if (a.deduire) impact = 'local';
+        else impact = 'global';
+      }
+
+      if (a.start && a.end) return { ...a, type, impact };
+      
       const h = a.heures || Math.floor(a.dureeTotale || a.duree || 0);
       const m = a.minutes || Math.round(((a.dureeTotale || a.duree || 0) - h) * 60);
       const startD = new Date(`${a.date}T08:00:00`);
@@ -145,24 +157,36 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       const pad = n => String(n).padStart(2, '0');
       const formatLocal = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
       
-      return {
-        id: a.id || String(Date.now() + Math.random()),
-        agentId: a.agentId,
-        type: a.type || 'absence',
-        start: formatLocal(startD),
-        end: formatLocal(endD),
-        motif: a.motif || '',
-        deduire: a.deduire !== undefined ? a.deduire : (a.type === 'retard'),
-        rattrape: a.rattrape || false,
-        journeeComplete: a.journeeComplete
-      };
+      return { id: a.id || String(Date.now() + Math.random()), agentId: a.agentId, type, start: formatLocal(startD), end: formatLocal(endD), motif: a.motif || '', impact, journeeComplete: a.journeeComplete };
     });
   });
+
+  // --- HISTORIQUE (CTRL+Z) ---
+  const historyRef = useRef([]);
+  const [showUndoToast, setShowUndoToast] = useState(false);
+
+  const sauvegarderEtatPrecedent = (snapshot = null) => {
+    const stateToSave = snapshot || {
+      templateVersions: JSON.parse(JSON.stringify(templateVersions)),
+      customWeeks: JSON.parse(JSON.stringify(customWeeks)),
+      absences: JSON.parse(JSON.stringify(absences))
+    };
+    historyRef.current = [...historyRef.current, stateToSave].slice(-30);
+  };
+
+  const annulerAction = () => {
+    if (historyRef.current.length === 0) return;
+    const lastState = historyRef.current.pop();
+    setTemplateVersions(lastState.templateVersions);
+    setCustomWeeks(lastState.customWeeks);
+    setAbsences(lastState.absences);
+    setShowUndoToast(true); setTimeout(() => setShowUndoToast(false), 2000);
+  };
 
   const [modalCreation, setModalCreation] = useState({ isOpen: false, eventId: null, start: null, end: null });
   const [formTypeEvent, setFormTypeEvent] = useState('affectation'); 
   const [formTypeAbsence, setFormTypeAbsence] = useState('absence'); 
-  const [formAbsenceDeduire, setFormAbsenceDeduire] = useState(false);
+  const [formAbsImpact, setFormAbsImpact] = useState('local');
   const [formAgent, setFormAgent] = useState('');
   const [formPoste, setFormPoste] = useState('');
   const [formNote, setFormNote] = useState('');
@@ -171,8 +195,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [modalException, setModalException] = useState({ isOpen: false, agentId: null, dateStr: null, h: '0h00', note: '' });
 
   const [formAbsence, setFormAbsence] = useState({
-    agentId: '', type: 'absence',  journeeComplete: true, dateDebut: new Date().toISOString().split('T')[0],
-    dateFin: '', dureeSaisie: '', heures: '0', minutes: '0', deduireHeures: false, motif: 'Maladie'
+    agentId: '', type: 'retard',  journeeComplete: false, dateDebut: new Date().toISOString().split('T')[0],
+    dateFin: '', dureeSaisie: '', impact: 'local', motif: ''
   });
 
   const [modalBesoinMulti, setModalBesoinMulti] = useState({ isOpen: false, posteId: '', qte: 1, slots: [] });
@@ -294,7 +318,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return dureeSaisie;
   };
 
-const statsAgents = useMemo(() => {
+  const statsAgents = useMemo(() => {
     return agents.map(agent => {
       let heuresConsommees = 0;
       for (let m = 8; m < 20; m++) {
@@ -306,15 +330,15 @@ const statsAgents = useMemo(() => {
           const hJour = getHeuresTheoriquesJour(agent.id, dateStr);
           const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr));
           
-          // Retards / Absences à déduire (uniquement si déduit ET PAS encore rattrapé)
-          const hDeduct = absDuJour.filter(a => (a.type === 'absence' || a.type === 'retard') && a.deduire && !a.rattrape)
-                                     .reduce((tot, a) => tot + getHeuresAbsence(a), 0);
+          // Heures non travaillées déduites du Global
+          const hDeductGlobal = absDuJour.filter(a => ['absence', 'retard'].includes(a.type) && a.impact === 'global')
+                                         .reduce((tot, a) => tot + getHeuresAbsence(a), 0);
           
-          // Rattrapages libres (heures rendues en plus)
-          const hRattrapage = absDuJour.filter(a => a.type === 'rattrapage')
+          // Heures travaillées en plus ajoutées au Global
+          const hSuppGlobal = absDuJour.filter(a => a.type === 'heures_supp' && a.impact === 'global')
                                        .reduce((tot, a) => tot + getHeuresAbsence(a), 0);
 
-          heuresConsommees += Math.max(0, hJour - hDeduct) + hRattrapage;
+          heuresConsommees += Math.max(0, hJour - hDeductGlobal) + hSuppGlobal;
         }
       }
       
@@ -325,7 +349,6 @@ const statsAgents = useMemo(() => {
       return { ...agent, heuresConsommees, soldeGlobal, hHebdoType };
     });
   }, [agents, baseYear, absences, exceptions, customWeeks, templateVersions, activeTemplateId, gabarits]);
-
 
   const shiftEventToWeek = (evt, targetMondayStr) => {
     const origMondayStr = getMondayStr(evt.start);
@@ -424,13 +447,13 @@ const statsAgents = useMemo(() => {
       if (printFilter.type === 'poste') return e.extendedProps?.posteId === printFilter.id || e.extendedProps?.isBesoin;
       return true;
     }),
-    ...absences.map(a => ({
+...absences.map(a => ({
       id: `abs_${a.id}`,
       start: a.start,
       end: a.end,
-      title: `${a.type === 'absence' ? '🚫 ABSENCE' : '⏰ RETARD'} - ${agents.find(ag=>ag.id===a.agentId)?.nom}`,
-      backgroundColor: a.type === 'absence' ? '#EF4444' : '#F59E0B',
-      borderColor: a.type === 'absence' ? '#DC2626' : '#D97706',
+      title: `${a.type === 'absence' ? '🚫 ABS' : a.type === 'retard' ? '⏰ RET' : a.type === 'recup' ? '🔵 RECUP' : '🟢 SUPP'} - ${agents.find(ag=>ag.id===a.agentId)?.nom}`,
+      backgroundColor: a.type === 'absence' ? '#EF4444' : a.type === 'retard' ? '#F59E0B' : a.type === 'recup' ? '#3B82F6' : '#10B981',
+      borderColor: a.type === 'absence' ? '#DC2626' : a.type === 'retard' ? '#D97706' : a.type === 'recup' ? '#2563EB' : '#059669',
       extendedProps: {
         isAbsence: true, agentId: a.agentId, typeAbsence: a.type, motif: a.motif, deduire: a.deduire, rattrape: a.rattrape
       }
@@ -497,10 +520,14 @@ const activeAlerts = useMemo(() => {
       if (e.key === 'Escape' && copiedEvent) {
         setCopiedEvent(null);
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        annulerAction();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [copiedEvent]);
+  }, [copiedEvent, templateVersions, customWeeks, absences]);
 
   useEffect(() => {
     let isModified = false;
@@ -638,6 +665,7 @@ const anneeScolaire = [
   };
 
   const applyAction = (action, info) => {
+    sauvegarderEtatPrecedent(); // 👈 LIGNE AJOUTÉE ICI
     const cleanId = String(info.id).split('_')[0]; 
     if (vueActive === 'template') {
       let mod = [...currentTemplate.events];
@@ -705,6 +733,7 @@ const anneeScolaire = [
 
 const ajouterAbsenceRetard = (e) => {
     e.preventDefault();
+    sauvegarderEtatPrecedent();
     if (!formAbsence.agentId || !formAbsence.dateDebut) return alert("Sélectionnez un agent et une date.");
 
     const agentId = Number(formAbsence.agentId);
@@ -727,7 +756,7 @@ const ajouterAbsenceRetard = (e) => {
       let startStr = `${dateStr}T08:00:00`;
       let endStr = `${dateStr}T17:30:00`;
 
-      if (!formAbsence.journeeComplete || formAbsence.type === 'retard' || formAbsence.type === 'rattrapage') {
+      if (!formAbsence.journeeComplete || ['retard', 'heures_supp'].includes(formAbsence.type)) {
         const dureeDecimal = parseHeureSaisie(formAbsence.dureeSaisie || '0');
         if (dureeDecimal <= 0) return alert("Indiquez une durée valide (ex: 0h45).");
         
@@ -741,97 +770,47 @@ const ajouterAbsenceRetard = (e) => {
       newAbs.push({
         id: String(Date.now() + Math.random()),
         agentId, type: formAbsence.type, start: startStr, end: endStr,
-        motif: formAbsence.motif, 
-        deduire: formAbsence.type === 'retard' ? formAbsence.deduireHeures : (formAbsence.type === 'absence' ? formAbsence.deduireHeures : false), 
-        rattrape: formAbsence.type === 'rattrapage', 
+        motif: formAbsence.motif, impact: formAbsence.impact, 
         journeeComplete: formAbsence.journeeComplete && formAbsence.type === 'absence'
       });
     });
 
     setAbsences(newAbs);
     alert("Opération enregistrée !");
-    setFormAbsence({ agentId: '', type: 'absence', journeeComplete: true, dateDebut: new Date().toISOString().split('T')[0], dateFin: '', dureeSaisie: '', deduireHeures: false, motif: 'Maladie' });
+    setFormAbsence({ agentId: '', type: 'retard', journeeComplete: false, dateDebut: new Date().toISOString().split('T')[0], dateFin: '', dureeSaisie: '', impact: 'local', motif: '' });
   };
   
   const supprimerAbsence = (id) => {
     if (confirm("Supprimer cet enregistrement et restituer le planning de l'agent ?")) {
+      sauvegarderEtatPrecedent();
       setAbsences(absences.filter(a => String(a.id) !== String(id).replace('abs_','')));
     }
   };
 
-  const toggleRattrape = (id) => {
-    setAbsences(absences.map(a => String(a.id) === String(id) ? { ...a, rattrape: !a.rattrape } : a));
-  };
-
-const bilanAbsences = agents.map(ag => {
+  const bilanAbsences = agents.map(ag => {
     const agAbs = absences.filter(a => a.agentId === ag.id);
     const abs = agAbs.filter(a => a.type === 'absence');
     const ret = agAbs.filter(a => a.type === 'retard');
+    const supp = agAbs.filter(a => a.type === 'heures_supp');
     
     const hAbs = abs.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
     const hRet = ret.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+    const hSupp = supp.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
     
-    // Total de la dette (retards non rattrapés via la coche)
-    const retNonRat = ret.filter(a => !a.rattrape && a.deduire);
-    const hRetDetteBase = retNonRat.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
-    
-    // Total des rattrapages libres
-    const rattrapage = agAbs.filter(a => a.type === 'rattrapage');
-    const hRattrapageTotal = rattrapage.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+    // Uniquement l'impact LOCAL pour la page Absences
+    const hDetteLocale = agAbs.filter(a => ['absence', 'retard'].includes(a.type) && a.impact === 'local').reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+    const hCreditLocal = supp.filter(a => a.impact === 'local').reduce((sum, a) => sum + getHeuresAbsence(a), 0);
 
-    // Calcul de la balance finale
-    const hDetteRestante = Math.max(0, hRetDetteBase - hRattrapageTotal);
-    const hAvance = Math.max(0, hRattrapageTotal - hRetDetteBase);
+    const balanceLocale = hCreditLocal - hDetteLocale;
+    const hDetteRestante = Math.max(0, -balanceLocale);
+    const hAvance = Math.max(0, balanceLocale);
 
     return {
       id: ag.id, nom: ag.nom, couleur: ag.couleurFond, 
-      nbAbs: abs.length, hAbs,
-      nbRet: ret.length, hRet,
+      nbAbs: abs.length, hAbs, nbRet: ret.length, hRet, nbSupp: supp.length, hSupp,
       hDetteRestante, hAvance
     };
   });
-
-  const validerBesoinMultiModal = (e) => {
-    e.preventDefault();
-    if (!modalBesoinMulti.posteId) return alert('Sélectionnez un poste.');
-    const poste = postes.find(p => p.id === Number(modalBesoinMulti.posteId));
-    const newBesoins = [];
-    
-    const baseMonday = new Date(getMondayStr(currentTemplate.dateDebut));
-
-    modalBesoinMulti.slots.forEach(slot => {
-      if (slot.start && slot.end) {
-        [1, 2, 3, 4, 5].forEach(dayIndex => {
-          if (slot.days[dayIndex]) {
-            const d = new Date(baseMonday);
-            d.setDate(d.getDate() + dayIndex - 1);
-            const pad = n => String(n).padStart(2, '0');
-            const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-
-            newBesoins.push({
-              id: String(Date.now() + Math.random()), start: `${dateStr}T${slot.start}:00`, end: `${dateStr}T${slot.end}:00`,
-              extendedProps: { posteId: poste.id, posteNom: poste.nom, qte: Number(modalBesoinMulti.qte) }
-            });
-          }
-        });
-      }
-    });
-    if (newBesoins.length > 0) updateCurrentTemplate(null, [...currentTemplate.besoins, ...newBesoins]);
-    setModalBesoinMulti({ ...modalBesoinMulti, isOpen: false });
-  };
-
-  const validerEditBesoin = (e) => {
-    e.preventDefault();
-    const existing = currentTemplate.besoins.find(b => String(b.id) === String(modalEditBesoin.id));
-    if (!existing) return;
-    const dateStr = existing.start.split('T')[0];
-    const newBesoins = currentTemplate.besoins.map(b => 
-      String(b.id) === String(modalEditBesoin.id) ? { ...b, start: `${dateStr}T${modalEditBesoin.start}:00`, end: `${dateStr}T${modalEditBesoin.end}:00`, extendedProps: { ...b.extendedProps, qte: Number(modalEditBesoin.qte) } } : b
-    );
-    updateCurrentTemplate(null, newBesoins);
-    setModalEditBesoin({ ...modalEditBesoin, isOpen: false });
-  };
-
   const gererSelection = (selectInfo) => {
     if (vueActive === 'template' && currentTemplate.statut === 'valide') return;
     selectInfo.view.calendar.unselect();
@@ -870,7 +849,7 @@ const bilanAbsences = agents.map(ag => {
 
     setFormTypeEvent('affectation');
     setFormTypeAbsence('absence');
-    setFormAbsenceDeduire(false);
+    setFormAbsImpact('local');
     setFormAgent(agentActif || (agents[0] ? agents[0].id : ''));
     setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
     setFormNote('');
@@ -884,11 +863,13 @@ const bilanAbsences = agents.map(ag => {
   };
 
   const gererModificationEvenement = (changeInfo) => { 
+    sauvegarderEtatPrecedent();
     if (vueActive === 'template' && currentTemplate.statut === 'valide') return changeInfo.revert();
     applyAction('update_content', { id: changeInfo.event.id, start: changeInfo.event.startStr, end: changeInfo.event.endStr }); 
   };
 
   const gererClicEvenement = (evt) => { 
+    sauvegarderEtatPrecedent();
     if (vueActive === 'template' && currentTemplate.statut === 'valide') {
       alert("Ce modèle est verrouillé. Cliquez sur '🔓 Déverrouiller' dans le menu latéral pour le modifier.");
       return;
@@ -938,6 +919,7 @@ const bilanAbsences = agents.map(ag => {
 
   const validerCreationModal = (e) => {
     e.preventDefault();
+    sauvegarderEtatPrecedent();
     if (!formAgent) return alert('Veuillez sélectionner un agent.');
     const agent = agents.find(a => a.id === Number(formAgent));
     const newStart = `${modalCreation.date}T${extractTimeStr(modalCreation.start)}:00`;
@@ -949,21 +931,18 @@ const bilanAbsences = agents.map(ag => {
       
       const newAbs = {
         id: cleanId, agentId: agent.id, type: formTypeAbsence, start: newStart, end: newEnd,
-        motif: formNote || (formTypeAbsence === 'absence' ? 'Absence' : 'Retard'), deduire: formAbsenceDeduire, rattrape: false, journeeComplete: (new Date(newEnd) - new Date(newStart)) / 3600000 >= 9
+        motif: formNote || (formTypeAbsence === 'absence' ? 'Absence' : formTypeAbsence === 'retard' ? 'Retard' : 'Heures Supp'), 
+        impact: formAbsImpact, 
+        journeeComplete: (new Date(newEnd) - new Date(newStart)) / 3600000 >= 9
       };
       
-      if (isEdit) {
-        setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, ...newAbs } : a));
-      } else {
-        setAbsences([...absences, newAbs]);
-      }
+      if (isEdit) setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, ...newAbs } : a));
+      else setAbsences([...absences, newAbs]);
     } else {
       if (!formPoste) return alert('Veuillez sélectionner un poste.');
       const poste = postes.find(p => p.id === Number(posteActif || formPoste));
       const data = { 
-        title: `${poste.nom} - ${agent.nom}`, 
-        backgroundColor: agent.couleurFond, 
-        borderColor: agent.couleurFond, 
+        title: `${poste.nom} - ${agent.nom}`, backgroundColor: agent.couleurFond, borderColor: agent.couleurFond, 
         extendedProps: { agentId: agent.id, agentNom: agent.nom, posteId: poste.id, posteNom: poste.nom, posteCouleur: poste.couleur, note: formNote } 
       };
 
@@ -1025,35 +1004,46 @@ const bilanAbsences = agents.map(ag => {
       );
     }
 
-    if (arg.event.extendedProps.isAbsence) {
+if (arg.event.extendedProps.isAbsence) {
       const typeAbs = arg.event.extendedProps.typeAbsence;
+      const impact = arg.event.extendedProps.impact;
       const isAbs = typeAbs === 'absence';
-      const ded = arg.event.extendedProps.deduire;
+      const isRet = typeAbs === 'retard';
+      const isSupp = typeAbs === 'heures_supp';
+
+      const bgCol = isAbs ? 'bg-red-500' : isRet ? 'bg-orange-500' : 'bg-green-600';
+      const bgColLight = isAbs ? 'bg-red-500/20 border-red-500' : isRet ? 'bg-orange-500/20 border-orange-500' : 'bg-green-600/20 border-green-600';
+      const iconTxtShort = isAbs ? '🚫 ABS' : isRet ? '⏰ RET' : '🟢 SUPP';
+      const iconTxt = isAbs ? '🚫 ABSENCE' : isRet ? '⏰ RETARD' : '🟢 HEURES SUPP';
+      const badgeImpact = impact === 'global' ? '🌍 Global' : impact === 'local' ? '📍 Local' : '⚪ Neutre';
+
       if (isShort) {
         return (
-          <div onClick={() => ouvrirEdition(arg.event)} className={`flex items-center w-full h-full overflow-hidden rounded text-xs font-bold shadow-md relative group cursor-pointer ${isAbs ? 'bg-red-500' : 'bg-orange-500'}`} style={{ color: '#ffffff' }}>
+          <div onClick={() => ouvrirEdition(arg.event)} className={`flex items-center w-full h-full overflow-hidden rounded text-xs font-bold shadow-md relative group cursor-pointer ${bgCol}`} style={{ color: '#ffffff' }}>
             <div className="flex-1 truncate px-1.5 flex justify-between items-center">
-              <span>{isAbs ? '🚫 ABS' : '⏰ RET'} : {arg.event.extendedProps.agentNom}</span>
+              <span>{iconTxtShort} : {arg.event.extendedProps.agentNom}</span>
               <span className="opacity-90 font-mono text-[10px] ml-1 shrink-0">{timeStr}</span>
             </div>
           </div>
         );
       }
       return (
-        <div onClick={() => ouvrirEdition(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-xs border border-black/10 shadow-md relative group cursor-pointer hover:ring-2 transition-all z-50 opacity-90 ${isAbs ? 'bg-red-500/20 border-red-500' : 'bg-orange-500/20 border-orange-500'}`} style={{ color: textColor }}>
-          <div className={`px-1.5 py-1 font-bold flex justify-between items-center ${isAbs ? 'bg-red-500' : 'bg-orange-500'}`} style={{ color: '#ffffff' }}>
-            <span className="truncate">{isAbs ? '🚫 ABSENCE' : '⏰ RETARD'} {ded && '(-H)'} <span className="text-[10px] font-normal opacity-90 ml-1">({timeStr})</span></span>
-            <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-red-700 rounded px-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✖</button>
+        <div onClick={() => ouvrirEdition(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-xs border border-black/10 shadow-md relative group cursor-pointer hover:ring-2 transition-all z-50 opacity-90 ${bgColLight}`} style={{ color: textColor }}>
+          <div className={`px-1.5 py-1 font-bold flex justify-between items-center ${bgCol}`} style={{ color: '#ffffff' }}>
+            <span className="truncate">{iconTxt} <span className="text-[10px] font-normal opacity-90 ml-1">({timeStr})</span></span>
+            <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-black/50 rounded px-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✖</button>
           </div>
           <div className="p-1.5 flex flex-col flex-1 leading-tight justify-center">
-            <span className="font-bold text-sm truncate">{arg.event.extendedProps.agentNom}</span>
+            <div className="flex justify-between items-start">
+              <span className="font-bold text-sm truncate">{arg.event.extendedProps.agentNom}</span>
+              <span className="text-[9px] font-bold bg-white/50 rounded px-1 text-black shadow-sm ml-1 shrink-0">{badgeImpact}</span>
+            </div>
             <span className="text-[11px] italic truncate mt-0.5">{arg.event.extendedProps.motif}</span>
           </div>
         </div>
       );
     }
-    
-const agentColor = arg.event.backgroundColor || '#3b82f6';
+    const agentColor = arg.event.backgroundColor || '#3b82f6';
     const bgColorWithOpacity = agentColor + '66';
     const headerColor = arg.event.extendedProps?.posteCouleur || '#3b82f6';
     const headerTextColor = getContrastYIQ(headerColor);
@@ -1460,14 +1450,18 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                     <div>
                       <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nature</label>
                       <select value={formTypeAbsence} onChange={e => setFormTypeAbsence(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`}>
-                        <option value="absence">Absence (Plage horaire)</option>
-                        <option value="retard">Retard</option>
+                      <option value="absence">🚫 Absence (Plage horaire)</option>
+                      <option value="retard">⏰ Retard</option>
+                      <option value="heures_supp">🟢 Heures Supp' / Rattrapage</option>                      </select>
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-semibold mb-1 mt-2 ${t.header}`}>Impact sur les compteurs</label>
+                      <select value={formAbsImpact} onChange={e => setFormAbsImpact(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent font-bold text-sm`}>
+                        <option value="global">🌍 Bilan Annuel Global</option>
+                        <option value="local">📍 Compteur Local (Dette / Compensation)</option>
+                        {['absence', 'retard'].includes(formTypeAbsence) && <option value="neutre">⚪ Neutre (Ignoré)</option>}
                       </select>
                     </div>
-                    <label className={`flex items-center gap-2 text-sm font-bold ${t.textAccent} cursor-pointer ${t.bgLight} p-2 rounded border ${t.borderLight}`}>
-                      <input type="checkbox" checked={formAbsenceDeduire} onChange={e => setFormAbsenceDeduire(e.target.checked)} className="w-4 h-4 cursor-pointer" />
-                      Déduire ces heures du bilan
-                    </label>
                   </>
                 ) : (
                   <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>📍 Poste</label><select value={formPoste} onChange={e => setFormPoste(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`}><option value="" disabled>-- Sélectionner --</option>{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select></div>
@@ -1879,8 +1873,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                   // --- GESTION DU COLLER MULTIPLE (TAMPON) ---
                                   if (copiedEvent) {
                                     e.preventDefault();
-
-                                    if (e.ctrlKey || e.metaKey) return;
+                                    sauvegarderEtatPrecedent();
                                     const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                                     const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
                                     const duration = copiedEvent.durationMins || 60;
@@ -1901,6 +1894,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
 
                                   // --- GESTION DU DESSIN DE CRÉNEAU (LASSO) ---
                                   e.preventDefault();
+                                  if (e.ctrlKey || e.metaKey) return;
                                   const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                                   const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
                                   
@@ -1944,7 +1938,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                       const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
                                       setFormTypeEvent('affectation');
                                       setFormTypeAbsence('absence');
-                                      setFormAbsenceDeduire(false);
+                                      setFormAbsImpact('local');
                                       setFormAgent(agent.id);
                                       setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
                                       setFormNote('');
@@ -1988,6 +1982,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                         onMouseDown={(e) => {
                                           if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
                                           e.stopPropagation();
+                                          const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
                                           let hasMoved = false;
                                           const track = e.currentTarget.closest('.flex-1.relative.my-1');
                                           const rect = track.getBoundingClientRect();
@@ -2007,7 +2002,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                           };
                                           const onMouseUp = () => {
                                             window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp);
-                                            if (hasMoved) { const preventClick = (eClick) => { eClick.stopPropagation(); eClick.preventDefault(); window.removeEventListener('click', preventClick, true); }; window.addEventListener('click', preventClick, true); setTimeout(() => window.removeEventListener('click', preventClick, true), 100); }
+                                            if (hasMoved) { const preventClick = (eClick) => { eClick.stopPropagation(); sauvegarderEtatPrecedent(snapshot); eClick.preventDefault(); window.removeEventListener('click', preventClick, true); }; window.addEventListener('click', preventClick, true); setTimeout(() => window.removeEventListener('click', preventClick, true), 100); }
                                           };
                                           window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp);
                                         }}
@@ -2021,6 +2016,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                         <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier le début"
                                           onMouseDown={(e) => {
                                             e.stopPropagation();
+                                            const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
                                             const track = e.currentTarget.closest('.flex-1.relative.my-1');
 
                                             const onMouseMove = (moveEvent) => {
@@ -2044,6 +2040,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                         <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier la fin"
                                           onMouseDown={(e) => {
                                             e.stopPropagation();
+                                            const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
                                             const track = e.currentTarget.closest('.flex-1.relative.my-1');
 
                                             const onMouseMove = (moveEvent) => {
@@ -2172,6 +2169,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                   // --- GESTION DU COLLER MULTIPLE (TAMPON) ---
                                   if (copiedEvent) {
                                     e.preventDefault();
+                                    sauvegarderEtatPrecedent();
                                     const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                                     const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
                                     const duration = copiedEvent.durationMins || 60;
@@ -2249,7 +2247,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                       } else {
                                         setFormTypeEvent('affectation');
                                         setFormTypeAbsence('absence');
-                                        setFormAbsenceDeduire(false);
+                                        setFormAbsImpact('local');
                                         setFormAgent(item.id);
                                         setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
                                         setFormNote('');
@@ -2317,6 +2315,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                         onMouseDown={(e) => {
                                           if (e.button !== 0 || e.ctrlKey || e.metaKey || currentTemplate.statut === 'valide') return;
                                           e.stopPropagation();
+                                          const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
                                           let hasMoved = false;
                                           const track = e.currentTarget.closest('.flex-1.relative.my-1');
                                           const rect = track.getBoundingClientRect();
@@ -2342,7 +2341,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                           };
                                           const onMouseUp = () => {
                                             window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp);
-                                            if (hasMoved) { const preventClick = (eClick) => { eClick.stopPropagation(); eClick.preventDefault(); window.removeEventListener('click', preventClick, true); }; window.addEventListener('click', preventClick, true); setTimeout(() => window.removeEventListener('click', preventClick, true), 100); }
+                                            if (hasMoved) { const preventClick = (eClick) => { eClick.stopPropagation(); sauvegarderEtatPrecedent(snapshot); eClick.preventDefault(); window.removeEventListener('click', preventClick, true); }; window.addEventListener('click', preventClick, true); setTimeout(() => window.removeEventListener('click', preventClick, true), 100); }
                                           };
                                           window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp);
                                         }}
@@ -2358,6 +2357,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                         <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier le début"
                                           onMouseDown={(e) => {
                                             e.stopPropagation();
+                                            const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
                                             const track = e.currentTarget.closest('.flex-1.relative.my-1');
 
                                             const onMouseMove = (moveEvent) => {
@@ -2390,6 +2390,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                                         <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier la fin"
                                           onMouseDown={(e) => {
                                             e.stopPropagation();
+                                            const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
                                             const track = e.currentTarget.closest('.flex-1.relative.my-1');
 
                                             const onMouseMove = (moveEvent) => {
@@ -2554,31 +2555,33 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
           <div className={`flex-1 p-6 overflow-auto ${t.bgMain}`}>
             <h2 className={`text-2xl font-bold ${t.header} mb-6`}>Gestion des Absences et Retards</h2>
             
-<div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               {bilanAbsences.map(b => (
                 <div key={b.id} className={`${t.cardBg} rounded-xl shadow-sm border ${t.borderLight} p-4 border-l-4`} style={{ borderLeftColor: b.couleur }}>
                   <div className={`font-black text-lg ${t.header} mb-3`}>{b.nom}</div>
-                  <div className="grid grid-cols-2 gap-4 text-sm mb-3">
-                    <div><div className="text-gray-500 text-xs font-bold uppercase">Absences</div><div className="font-mono text-red-500 font-bold mt-1">{b.nbAbs} <span className="text-xs text-gray-500">({formatHeureTableau(b.hAbs, true)})</span></div></div>
-                    <div><div className="text-gray-500 text-xs font-bold uppercase">Retards</div><div className="font-mono text-orange-500 font-bold mt-1">{b.nbRet} <span className="text-xs text-gray-500">({formatHeureTableau(b.hRet, true)})</span></div></div>
+                  <div className="grid grid-cols-3 gap-2 text-center mb-3">
+                    <div className="bg-red-500/10 rounded p-1"><div className="text-gray-500 text-[9px] font-bold uppercase">Absences</div><div className="font-mono text-red-600 font-bold mt-1 text-sm">{b.nbAbs} <span className="text-[10px] text-gray-500 block leading-none">({formatHeureTableau(b.hAbs, true)})</span></div></div>
+                    <div className="bg-orange-500/10 rounded p-1"><div className="text-gray-500 text-[9px] font-bold uppercase">Retards</div><div className="font-mono text-orange-600 font-bold mt-1 text-sm">{b.nbRet} <span className="text-[10px] text-gray-500 block leading-none">({formatHeureTableau(b.hRet, true)})</span></div></div>
+                    <div className="bg-green-500/10 rounded p-1"><div className="text-gray-500 text-[9px] font-bold uppercase">H. Supp / Rattrapage</div><div className="font-mono text-green-700 font-bold mt-1 text-sm">{b.nbSupp} <span className="text-[10px] text-gray-500 block leading-none">({formatHeureTableau(b.hSupp, true)})</span></div></div>
                   </div>
-                  {b.hDetteRestante > 0 && (<div className="pt-3 border-t border-gray-500/30 text-xs font-bold text-red-500 bg-red-500/10 p-2 rounded">⚠️ Reste à rattraper : {formatHeureTableau(b.hDetteRestante, true)}</div>)}
-                  {b.nbRet > 0 && b.hDetteRestante === 0 && b.hAvance === 0 && (<div className="pt-3 border-t border-gray-500/30 text-xs font-bold text-green-600 bg-green-500/10 p-2 rounded">✅ Tous les retards sont compensés.</div>)}
-                  {b.hAvance > 0 && (<div className="pt-3 border-t border-gray-500/30 text-xs font-bold text-blue-600 bg-blue-500/10 p-2 rounded">🔵 Heures d'avance (crédit) : {formatHeureTableau(b.hAvance, true)}</div>)}
+                  {b.hDetteRestante > 0 && (<div className="pt-2 border-t border-gray-500/30 text-xs font-bold text-red-500">⚠️ Dette Locale : {formatHeureTableau(b.hDetteRestante, true)} à rattraper.</div>)}
+                  {b.hAvance > 0 && (<div className="pt-2 border-t border-gray-500/30 text-xs font-bold text-blue-600">🔵 Crédit Local : {formatHeureTableau(b.hAvance, true)} d'avance.</div>)}
+                  {b.nbRet > 0 && b.hDetteRestante === 0 && b.hAvance === 0 && (<div className="pt-2 border-t border-gray-500/30 text-xs font-bold text-green-600">✅ Tous les retards locaux sont compensés.</div>)}
                 </div>
               ))}
             </div>
+            
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className={`lg:col-span-1 ${t.cardBg} p-6 rounded-xl shadow border ${t.borderLight} h-fit`}>
               <h3 className={`font-bold text-md ${t.header} mb-4 pb-2 border-b ${t.borderLight}`}>Déclarer un événement</h3>
               <form onSubmit={ajouterAbsenceRetard} className="space-y-4">
                 <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Agent concerné</label><select required value={formAbsence.agentId} onChange={e => setFormAbsence({...formAbsence, agentId: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm`}><option value="" disabled>-- Choisir un agent --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></div>
                 <div>
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Type</label>
-                  <select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', deduireHeures: e.target.value === 'retard'})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm`}>
-                    <option value="absence">Absence</option>
-                    <option value="retard">Retard</option>
-                    <option value="rattrapage">🟢 Rattrapage / Heures rendues</option>
+                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Type d'événement</label>
+                  <select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', impact: e.target.value === 'heures_supp' && formAbsence.impact === 'neutre' ? 'local' : formAbsence.impact})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm font-bold`}>
+                    <option value="absence">🚫 Absence</option>
+                    <option value="retard">⏰ Retard</option>
+                    <option value="heures_supp">🟢 Heures Supp' / Rattrapage</option>
                   </select>
                 </div>
 
@@ -2596,18 +2599,19 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                   </div>
                 ) : null}
 
-                {formAbsence.type !== 'rattrapage' && (
-                  <label className="flex items-center gap-2 text-sm font-bold text-red-500 cursor-pointer bg-red-500/10 p-2 rounded border border-red-500/30">
-                    <input type="checkbox" checked={formAbsence.deduireHeures} onChange={e => setFormAbsence({...formAbsence, deduireHeures: e.target.checked})} className="w-4 h-4 cursor-pointer" />
-                    Déduire du bilan (à rattraper)
-                  </label>
-                )}
+                <div className="p-3 border border-black/10 rounded bg-black/5 dark:bg-white/5">
+                  <label className={`block text-sm font-semibold mb-2 ${t.header}`}>Impact sur les compteurs</label>
+                  <select value={formAbsence.impact} onChange={e => setFormAbsence({...formAbsence, impact: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent font-bold text-sm`}>
+                    <option value="global">🌍 Bilan Annuel Global</option>
+                    <option value="local">📍 Compteur Local (Dette / Compensation)</option>
+                    {['absence', 'retard'].includes(formAbsence.type) && <option value="neutre">⚪ Neutre (Ignoré)</option>}
+                  </select>
+                </div>
 
-<div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif / Note</label><input type="text" required={formAbsence.type === 'absence'} value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder={formAbsence.type === 'rattrapage' ? "Ex: Permanence rendue..." : "Optionnel pour les retards"} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>                <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition`}>Enregistrer</button>
+                <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif / Note</label><input type="text" required={formAbsence.type === 'absence'} value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder={formAbsence.type === 'heures_supp' ? "Ex: Sortie scolaire..." : "Optionnel..."} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>
+                <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition`}>Enregistrer</button>
               </form>
-            </div>
-
-              <div className={`lg:col-span-2 ${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden flex flex-col`}>
+            </div>              <div className={`lg:col-span-2 ${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden flex flex-col`}>
                 <div className={`${t.headerBg} ${t.headerText} p-4 font-bold text-sm`}>Historique complet des événements</div>
                 <div className="overflow-x-auto flex-1">
                   <table className="w-full text-sm text-left">
@@ -2617,14 +2621,15 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                         const ag = agents.find(agent => agent.id === a.agentId); const typeAbs = a.type || 'absence'; 
                         const dureeAbs = getHeuresAbsence(a);
                         return (
-                          <tr key={a.id} className={`hover:${t.bgLight} transition-colors`}>
+                        <tr key={a.id} className={`hover:${t.bgLight} transition-colors`}>
                             <td className="p-3 font-mono text-xs text-gray-500">{a.start.split('T')[0]}</td><td className={`p-3 font-bold ${t.header}`}>{ag ? ag.nom : 'Inconnu'}</td>
-                            <td className="p-3 flex items-center gap-1"><span className={`px-2 py-0.5 rounded text-xs font-bold ${typeAbs === 'absence' ? 'bg-red-500/20 text-red-500' : 'bg-orange-500/20 text-orange-500'}`}>{typeAbs.toUpperCase()}</span>{a.deduire && <span className="text-[10px] bg-red-600 text-white px-1 rounded shadow-sm" title="Déduit du bilan">DÉDUIT</span>}</td>
-                            <td className={`p-3 text-center font-mono font-bold ${t.header}`}>{formatHeureTableau(dureeAbs, true)}</td><td className="p-3 text-gray-500 italic">{a.motif || ''}</td>
-                            <td className="p-3 text-center">{typeAbs === 'retard' && a.deduire ? ( <button onClick={() => toggleRattrape(a.id)} className={`px-2 py-1 rounded text-xs font-bold transition shadow-sm ${a.rattrape ? 'bg-green-500/20 text-green-600 border border-green-500/30' : 'bg-red-500/20 text-red-500 border border-red-500/30 hover:opacity-80'}`}>{a.rattrape ? '✅ Rattrapé' : '❌ À rattraper'}</button> ) : ( <span className="text-gray-500 text-xs">-</span> )}</td>
+                            <td className="p-3 flex items-center gap-1"><span className={`px-2 py-0.5 rounded text-xs font-bold ${typeAbs === 'absence' ? 'bg-red-500/20 text-red-500' : typeAbs === 'retard' ? 'bg-orange-500/20 text-orange-500' : 'bg-green-500/20 text-green-600'}`}>{typeAbs.toUpperCase()}</span></td>
+                            <td className={`p-3 text-center font-mono font-bold ${t.header}`}>{formatHeureTableau(dureeAbs, true)}</td>
+                            <td className="p-3 font-bold text-xs"><span className={`px-2 py-1 rounded bg-black/5`}>{a.impact === 'global' ? '🌍 Global' : a.impact === 'local' ? '📍 Local' : '⚪ Neutre'}</span></td>
+                            <td className="p-3 text-gray-500 italic">{a.motif || ''}</td>
                             <td className="p-3 text-center"><button onClick={() => supprimerAbsence(a.id)} className="text-gray-500 hover:text-red-500 px-2 py-1 rounded text-xs font-bold transition">✖</button></td>
-                          </tr>
-                        );
+                          </tr>                       
+                           );
                       })}
                       {absences.length === 0 && ( <tr><td colSpan="7" className="p-6 text-center text-gray-500 italic">Aucune absence ou retard enregistré.</td></tr> )}
                     </tbody>
@@ -2732,7 +2737,13 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
 
       </div>
       {/* ================================================================= */}
-      {copiedEvent && (
+{showUndoToast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 border border-gray-700 animate-in slide-in-from-bottom duration-150 no-print">
+          <span className="text-base">↩️</span>
+          <div className="text-sm font-bold">Action annulée (Ctrl+Z)</div>
+        </div>
+      )}
+            {copiedEvent && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 border border-gray-700 animate-in slide-in-from-bottom duration-150 no-print">
           <span className="text-base">📋</span>
           <div className="text-xs">
