@@ -170,7 +170,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const [formAbsence, setFormAbsence] = useState({
     agentId: '', type: 'absence',  journeeComplete: true, dateDebut: new Date().toISOString().split('T')[0],
-    dateFin: '', heures: '0', minutes: '0', deduireHeures: false, motif: 'Maladie'
+    dateFin: '', dureeSaisie: '', heures: '0', minutes: '0', deduireHeures: false, motif: 'Maladie'
   });
 
   const [modalBesoinMulti, setModalBesoinMulti] = useState({ isOpen: false, posteId: '', qte: 1, slots: [] });
@@ -292,7 +292,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return dureeSaisie;
   };
 
-  const statsAgents = useMemo(() => {
+const statsAgents = useMemo(() => {
     return agents.map(agent => {
       let heuresConsommees = 0;
       for (let m = 8; m < 20; m++) {
@@ -302,9 +302,17 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         for (let d = 1; d <= daysInMonth; d++) {
           const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
           const hJour = getHeuresTheoriquesJour(agent.id, dateStr);
-          const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr) && a.deduire);
-          const hDeduct = absDuJour.reduce((tot, a) => tot + getHeuresAbsence(a), 0);
-          heuresConsommees += Math.max(0, hJour - hDeduct);
+          const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr));
+          
+          // Retards / Absences à déduire (uniquement si déduit ET PAS encore rattrapé)
+          const hDeduct = absDuJour.filter(a => (a.type === 'absence' || a.type === 'retard') && a.deduire && !a.rattrape)
+                                     .reduce((tot, a) => tot + getHeuresAbsence(a), 0);
+          
+          // Rattrapages libres (heures rendues en plus)
+          const hRattrapage = absDuJour.filter(a => a.type === 'rattrapage')
+                                       .reduce((tot, a) => tot + getHeuresAbsence(a), 0);
+
+          heuresConsommees += Math.max(0, hJour - hDeduct) + hRattrapage;
         }
       }
       
@@ -693,7 +701,7 @@ const activeAlerts = useMemo(() => {
     }
   };
 
-  const ajouterAbsenceRetard = (e) => {
+const ajouterAbsenceRetard = (e) => {
     e.preventDefault();
     if (!formAbsence.agentId || !formAbsence.dateDebut) return alert("Sélectionnez un agent et une date.");
 
@@ -717,15 +725,13 @@ const activeAlerts = useMemo(() => {
       let startStr = `${dateStr}T08:00:00`;
       let endStr = `${dateStr}T17:30:00`;
 
-      if (!formAbsence.journeeComplete) {
-        const h = parseFloat(formAbsence.heures) || 0;
-        const m = parseFloat(formAbsence.minutes) || 0;
-        if (h === 0 && m === 0) return;
+      if (!formAbsence.journeeComplete || formAbsence.type === 'retard' || formAbsence.type === 'rattrapage') {
+        const dureeDecimal = parseHeureSaisie(formAbsence.dureeSaisie || '0');
+        if (dureeDecimal <= 0) return alert("Indiquez une durée valide (ex: 0h45).");
         
         const pad = n => String(n).padStart(2, '0');
         const startT = new Date(`${dateStr}T08:00:00`);
-        const endT = new Date(startT);
-        endT.setHours(startT.getHours() + h, startT.getMinutes() + m);
+        const endT = new Date(startT.getTime() + dureeDecimal * 3600000);
         startStr = `${dateStr}T08:00:00`;
         endStr = `${dateStr}T${pad(endT.getHours())}:${pad(endT.getMinutes())}:00`;
       }
@@ -733,15 +739,18 @@ const activeAlerts = useMemo(() => {
       newAbs.push({
         id: String(Date.now() + Math.random()),
         agentId, type: formAbsence.type, start: startStr, end: endStr,
-        motif: formAbsence.motif, deduire: formAbsence.deduireHeures, rattrape: false, journeeComplete: formAbsence.journeeComplete
+        motif: formAbsence.motif, 
+        deduire: formAbsence.type === 'retard' ? formAbsence.deduireHeures : (formAbsence.type === 'absence' ? formAbsence.deduireHeures : false), 
+        rattrape: formAbsence.type === 'rattrapage', 
+        journeeComplete: formAbsence.journeeComplete && formAbsence.type === 'absence'
       });
     });
 
     setAbsences(newAbs);
     alert("Opération enregistrée !");
-    setFormAbsence({ agentId: '', type: 'absence', journeeComplete: true, dateDebut: new Date().toISOString().split('T')[0], dateFin: '', heures: '0', minutes: '0', deduireHeures: false, motif: 'Maladie' });
+    setFormAbsence({ agentId: '', type: 'absence', journeeComplete: true, dateDebut: new Date().toISOString().split('T')[0], dateFin: '', dureeSaisie: '', deduireHeures: false, motif: 'Maladie' });
   };
-
+  
   const supprimerAbsence = (id) => {
     if (confirm("Supprimer cet enregistrement et restituer le planning de l'agent ?")) {
       setAbsences(absences.filter(a => String(a.id) !== String(id).replace('abs_','')));
@@ -2178,21 +2187,43 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className={`lg:col-span-1 ${t.cardBg} p-6 rounded-xl shadow border ${t.borderLight} h-fit`}>
-                <h3 className={`font-bold text-md ${t.header} mb-4 pb-2 border-b ${t.borderLight}`}>Déclarer un événement</h3>
-                <form onSubmit={ajouterAbsenceRetard} className="space-y-4">
-                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Agent concerné</label><select required value={formAbsence.agentId} onChange={e => setFormAbsence({...formAbsence, agentId: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm`}><option value="" disabled>-- Choisir un agent --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></div>
-                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Type</label><select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', deduireHeures: e.target.value === 'retard'})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm`}><option value="absence">Absence</option><option value="retard">Retard</option></select></div>
-                  {formAbsence.type === 'absence' && (<label className={`flex items-center gap-2 text-sm font-bold ${t.textAccent} cursor-pointer ${t.bgLight} p-2 rounded border ${t.borderLight}`}><input type="checkbox" checked={formAbsence.journeeComplete} onChange={e => setFormAbsence({...formAbsence, journeeComplete: e.target.checked})} className="w-4 h-4 cursor-pointer" />Journée(s) complète(s)</label>)}
-                  <div className="flex gap-4">
-                    <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>{formAbsence.journeeComplete ? 'Début' : 'Date'}</label><input type="date" required value={formAbsence.dateDebut} onChange={e => setFormAbsence({...formAbsence, dateDebut: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>
-                    {formAbsence.journeeComplete && (<div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin (Optionnel)</label><input type="date" value={formAbsence.dateFin} onChange={e => setFormAbsence({...formAbsence, dateFin: e.target.value})} min={formAbsence.dateDebut} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>)}
+              <h3 className={`font-bold text-md ${t.header} mb-4 pb-2 border-b ${t.borderLight}`}>Déclarer un événement</h3>
+              <form onSubmit={ajouterAbsenceRetard} className="space-y-4">
+                <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Agent concerné</label><select required value={formAbsence.agentId} onChange={e => setFormAbsence({...formAbsence, agentId: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm`}><option value="" disabled>-- Choisir un agent --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></div>
+                <div>
+                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Type</label>
+                  <select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', deduireHeures: e.target.value === 'retard'})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm`}>
+                    <option value="absence">Absence</option>
+                    <option value="retard">Retard</option>
+                    <option value="rattrapage">🟢 Rattrapage / Heures rendues</option>
+                  </select>
+                </div>
+
+                {formAbsence.type === 'absence' && (<label className={`flex items-center gap-2 text-sm font-bold ${t.textAccent} cursor-pointer ${t.bgLight} p-2 rounded border ${t.borderLight}`}><input type="checkbox" checked={formAbsence.journeeComplete} onChange={e => setFormAbsence({...formAbsence, journeeComplete: e.target.checked})} className="w-4 h-4 cursor-pointer" />Journée(s) complète(s)</label>)}
+                
+                <div className="flex gap-4">
+                  <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>{formAbsence.type === 'absence' && formAbsence.journeeComplete ? 'Début' : 'Date'}</label><input type="date" required value={formAbsence.dateDebut} onChange={e => setFormAbsence({...formAbsence, dateDebut: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>
+                  {formAbsence.type === 'absence' && formAbsence.journeeComplete && (<div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin (Optionnel)</label><input type="date" value={formAbsence.dateFin} onChange={e => setFormAbsence({...formAbsence, dateFin: e.target.value})} min={formAbsence.dateDebut} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>)}
+                </div>
+
+                {formAbsence.type !== 'absence' || !formAbsence.journeeComplete ? (
+                  <div>
+                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Durée (ex: 0h45, 30min)</label>
+                    <input type="text" required value={formAbsence.dureeSaisie || ''} onChange={e => setFormAbsence({...formAbsence, dureeSaisie: e.target.value})} placeholder="Ex: 0h45" className={`w-full border ${t.borderLight} rounded p-2 text-sm font-bold text-center bg-transparent`} />
                   </div>
-                  {!formAbsence.journeeComplete && (<div className="flex gap-4"><div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Heure Début</label><input type="time" required value={formAbsence.heureDebut} onChange={e => setFormAbsence({...formAbsence, heureDebut: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm font-bold text-center bg-transparent`} /></div><div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Heure Fin</label><input type="time" required value={formAbsence.heureFin} onChange={e => setFormAbsence({...formAbsence, heureFin: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm font-bold text-center bg-transparent`} /></div></div>)}
-                  <label className="flex items-center gap-2 text-sm font-bold text-red-500 cursor-pointer bg-red-500/10 p-2 rounded border border-red-500/30"><input type="checkbox" checked={formAbsence.deduireHeures} onChange={e => setFormAbsence({...formAbsence, deduireHeures: e.target.checked})} className="w-4 h-4 cursor-pointer" />Déduire du bilan (à rattraper / sans solde)</label>
-                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif</label><input type="text" required value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder="Ex: Maladie, Grève, Panne réveil..." className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>
-                  <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition`}>Créer sur le planning</button>
-                </form>
-              </div>
+                ) : null}
+
+                {formAbsence.type !== 'rattrapage' && (
+                  <label className="flex items-center gap-2 text-sm font-bold text-red-500 cursor-pointer bg-red-500/10 p-2 rounded border border-red-500/30">
+                    <input type="checkbox" checked={formAbsence.deduireHeures} onChange={e => setFormAbsence({...formAbsence, deduireHeures: e.target.checked})} className="w-4 h-4 cursor-pointer" />
+                    Déduire du bilan (à rattraper)
+                  </label>
+                )}
+
+                <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif / Note</label><input type="text" required value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder={formAbsence.type === 'rattrapage' ? "Ex: Permanence rendue, heures sup..." : "Ex: Maladie..."} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>
+                <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition`}>Enregistrer</button>
+              </form>
+            </div>
 
               <div className={`lg:col-span-2 ${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden flex flex-col`}>
                 <div className={`${t.headerBg} ${t.headerText} p-4 font-bold text-sm`}>Historique complet des événements</div>
@@ -2423,8 +2454,15 @@ export default function App() {
           .px-4 { padding-left: 0 !important; padding-right: 0 !important; }
           .no-print, .w-80, .md\\:hidden { display: none !important; }
           #print-area { position: absolute !important; left: 0; top: 0; width: 100% !important; height: auto !important; margin: 0 !important; padding: 0 !important; display: block !important; background: white !important; z-index: 9999; }
-          .print-weekly-page { width: 100%; height: 180mm !important; max-height: 180mm !important; overflow: hidden !important; box-sizing: border-box; page-break-after: avoid !important; page-break-inside: avoid !important; }
-          .print-agent-page { width: 100%; height: 185mm !important; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; page-break-after: always; break-after: page; }
+.print-weekly-page { 
+            width: 100%; 
+            height: 196mm !important; /* 👈 Étiré au maximum de la page A4 */
+            max-height: 196mm !important; 
+            overflow: hidden !important; 
+            box-sizing: border-box; 
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important; 
+          }          .print-agent-page { width: 100%; height: 185mm !important; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; page-break-after: always; break-after: page; }
           .print-agent-page:last-child { page-break-after: auto; break-after: auto; }
           .print-dashboard-table { transform: scale(0.85); transform-origin: top left; width: 115% !important; border:none; box-shadow:none; }
           .print-agent-page td, .print-agent-page th, .print-dashboard-table td, .print-dashboard-table th { color: black !important; }

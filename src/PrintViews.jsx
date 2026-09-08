@@ -112,42 +112,42 @@ export const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absence
   const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
 
   return (
-    <div className="print-weekly-page flex flex-col bg-white p-2">
-      <div className="text-center mb-3 border-b border-black pb-2 shrink-0">
-        <h2 className="text-xl font-black uppercase tracking-wider text-gray-900">
+    <div className="print-weekly-page flex flex-col bg-white p-2 h-full">
+      <div className="text-center mb-2 border-b border-black pb-1 shrink-0">
+        <h2 className="text-lg font-black uppercase tracking-wider text-gray-900">
           Planning Journalier - {new Date(jourConsulte).toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'})}
         </h2>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-3 justify-center shrink-0">
-        <span className="text-[10px] font-bold text-gray-500 self-center uppercase mr-2">Légende :</span>
-        {postes.map(p => (<span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur), border: '1px solid rgba(0,0,0,0.2)' }}>{p.nom}</span>))}
-        <span className="px-2 py-1 rounded text-[10px] font-bold bg-red-100 text-red-800 border border-red-300">🚫 ABSENCE</span>
-        <span className="px-2 py-1 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-300">⏰ RETARD</span>
+      <div className="flex flex-wrap gap-2 mb-2 justify-center shrink-0">
+        <span className="text-[9px] font-bold text-gray-500 self-center uppercase mr-1">Légende :</span>
+        {postes.map(p => (<span key={p.id} className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur), border: '1px solid rgba(0,0,0,0.2)' }}>{p.nom}</span>))}
+        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800 border border-red-300">🚫 ABSENCE</span>
+        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-800 border border-orange-300">⏰ RETARD</span>
       </div>
 
       <div className="flex-1 border border-black relative bg-white flex flex-col overflow-hidden">
         <div className="flex border-b border-black bg-gray-100 shrink-0 h-6 relative ml-28">
            {gridLabelsDaily.map(lbl => (
-              <div key={lbl.timeStr} className="absolute text-[11px] font-black text-black top-1" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
+              <div key={lbl.timeStr} className="absolute text-[10px] font-black text-black top-1" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
                  {lbl.timeStr}
               </div>
            ))}
         </div>
 
-        <div className="flex-1 relative overflow-hidden">
-          <div className="absolute top-0 bottom-0 left-28 right-0 pointer-events-none z-0">
+        <div className="flex-1 relative overflow-hidden flex flex-col">
+          <div className="absolute inset-0 top-0 bottom-0 left-28 right-0 pointer-events-none z-0">
             {gridLines.map(line => (
                <div key={line.timeStr} className="absolute top-0 bottom-0" style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid rgba(0,0,0,0.3)' : '1px dashed rgba(0,0,0,0.15)' }}></div>
             ))}
           </div>
 
-          <div className="flex flex-col h-full w-full relative z-10">
+          <div className="flex flex-col h-full w-full relative z-10 flex-1">
             {agents.map(agent => {
               const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
               
               return (
-                <div key={agent.id} className="flex border-b border-gray-300 min-h-[40px] relative">
+                <div key={agent.id} className="flex border-b border-gray-300 flex-1 relative">
                   <div className="w-28 shrink-0 flex items-center justify-end p-2 border-r border-black" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
                     <span className="text-xs font-black text-right">{agent.nom}</span>
                   </div>
