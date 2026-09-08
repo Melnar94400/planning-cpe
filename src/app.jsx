@@ -35,6 +35,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     }));
   });
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
   const [modalPoste, setModalPoste] = useState({
     isOpen: false, id: null, nom: '', couleur: '#8B5CF6', qte: 1, slots: []
   });
@@ -1619,11 +1621,17 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
         </div>
       )}
 
-      <div className={`w-80 ${t.sidebar} shadow-lg flex flex-col z-20 border-r ${t.borderLight} no-print shrink-0 transition-colors`}>
-        <div className={`p-4 ${t.sidebarText} flex flex-col gap-3 shrink-0`}>
-          <div className="flex justify-between items-center">
-            <h1 className="text-xl font-bold tracking-wider">Planning CPE</h1>
-          </div>
+{/* PANNEAU LATÉRAL (Rétractable) */}
+      <div className={`${isSidebarOpen ? 'w-80' : 'w-0'} ${t.sidebar} shadow-lg flex flex-col z-20 border-r ${isSidebarOpen ? t.borderLight : 'border-transparent'} no-print shrink-0 transition-all duration-300 ease-in-out`}>
+        <div className="w-80 flex flex-col h-full overflow-hidden transition-opacity duration-300" style={{ opacity: isSidebarOpen ? 1 : 0, visibility: isSidebarOpen ? 'visible' : 'hidden' }}>
+          <div className={`p-4 ${t.sidebarText} flex flex-col gap-3 shrink-0`}>
+            <div className="flex justify-between items-center">
+              <h1 className="text-xl font-bold tracking-wider">Planning CPE</h1>
+              <button onClick={() => setIsSidebarOpen(false)} className={`${t.sidebarIconBtn} w-7 h-7 rounded flex items-center justify-center text-xs shadow-sm border transition-colors hover:scale-105`} title="Masquer le menu">
+                ◀
+              </button>
+            </div>
+
           
           <div className="flex items-center justify-between bg-black/10 p-1.5 rounded-lg gap-1">
             <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
@@ -1781,11 +1789,21 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
           </div>
         )}
       </div>
+      </div>
 {/* ========================================================= */}
       {/* ZONE PRINCIPALE D'AFFICHAGE (LE CALENDRIER ET LES BILANS) */}
       {/* ========================================================= */}
       <div id="print-area" className={`flex-1 flex flex-col h-full overflow-hidden ${t.cardBg}`}>  
-      
+      {/* Bouton pour rouvrir le menu (flottant à gauche) */}
+        {!isSidebarOpen && (
+          <button 
+            onClick={() => setIsSidebarOpen(true)} 
+            className={`absolute top-1/2 left-0 -translate-y-1/2 z-50 ${t.sidebar} border border-l-0 ${t.borderLight} ${t.sidebarText} py-5 px-1.5 rounded-r-xl shadow-lg flex items-center justify-center no-print hover:pl-3 transition-all duration-200 group`}
+            title="Ouvrir le menu"
+          >
+            <span className="group-hover:scale-125 transition-transform font-black">▶</span>
+          </button>
+        )}
         {/* 1. VUE QUOTIDIENNE */}
         {vueActive === 'journee' && (() => {
           const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
