@@ -25,7 +25,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   });
   const [agents, setAgents] = useState(() => JSON.parse(localStorage.getItem('edt-agents') || '[]'));
   const [postes, setPostes] = useState(() => JSON.parse(localStorage.getItem('edt-postes') || '[]'));
-  
+  const [jourTemplate, setJourTemplate] = useState(1); // 1 = Lundi, 5 = Vendredi
   const [periodesFeriees, setPeriodesFeriees] = useState(() => {
     const s = localStorage.getItem('edt-periodes');
     if (!s) return [];
@@ -605,13 +605,13 @@ const activeAlerts = useMemo(() => {
     return { html: '' };
   };
 
-  const anneeScolaire = [
+const anneeScolaire = [
     { m: 8, y: baseYear, nom: 'SEPTEMBRE' }, { m: 9, y: baseYear, nom: 'OCTOBRE' },
     { m: 10, y: baseYear, nom: 'NOVEMBRE' }, { m: 11, y: baseYear, nom: 'DECEMBRE' },
     { m: 0, y: baseYear+1, nom: 'JANVIER' }, { m: 1, y: baseYear+1, nom: 'FEVRIER' },
     { m: 2, y: baseYear+1, nom: 'MARS' }, { m: 3, y: baseYear+1, nom: 'AVRIL' },
     { m: 4, y: baseYear+1, nom: 'MAI' }, { m: 5, y: baseYear+1, nom: 'JUIN' },
-    { m: 6, y: baseYear+1, nom: 'JUILLET' }
+    { m: 6, y: baseYear+1, nom: 'JUILLET' }, { m: 7, y: baseYear+1, nom: 'AOÛT' } // 👈 Ajout ici
   ];
 
   const declencherImpression = (e) => {
@@ -761,17 +761,31 @@ const ajouterAbsenceRetard = (e) => {
     setAbsences(absences.map(a => String(a.id) === String(id) ? { ...a, rattrape: !a.rattrape } : a));
   };
 
-  const bilanAbsences = agents.map(ag => {
+const bilanAbsences = agents.map(ag => {
     const agAbs = absences.filter(a => a.agentId === ag.id);
     const abs = agAbs.filter(a => a.type === 'absence');
     const ret = agAbs.filter(a => a.type === 'retard');
+    
+    const hAbs = abs.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+    const hRet = ret.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+    
+    // Total de la dette (retards non rattrapés via la coche)
     const retNonRat = ret.filter(a => !a.rattrape && a.deduire);
+    const hRetDetteBase = retNonRat.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+    
+    // Total des rattrapages libres
+    const rattrapage = agAbs.filter(a => a.type === 'rattrapage');
+    const hRattrapageTotal = rattrapage.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+
+    // Calcul de la balance finale
+    const hDetteRestante = Math.max(0, hRetDetteBase - hRattrapageTotal);
+    const hAvance = Math.max(0, hRattrapageTotal - hRetDetteBase);
 
     return {
-      id: ag.id, nom: ag.nom, couleur: ag.couleurFond, nbAbs: abs.length,
-      hAbs: abs.reduce((sum, a) => sum + getHeuresAbsence(a), 0),
-      nbRet: ret.length, hRet: ret.reduce((sum, a) => sum + getHeuresAbsence(a), 0),
-      nbRetRat: retNonRat.length, hRetRat: retNonRat.reduce((sum, a) => sum + getHeuresAbsence(a), 0)
+      id: ag.id, nom: ag.nom, couleur: ag.couleurFond, 
+      nbAbs: abs.length, hAbs,
+      nbRet: ret.length, hRet,
+      hDetteRestante, hAvance
     };
   });
 
@@ -1126,6 +1140,14 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
     });
   };
 
+  // 🆕 Fonction pour supprimer la note et rétablir la case normale
+  const supprimerExceptionJour = () => {
+    const newExceptions = { ...exceptions };
+    delete newExceptions[`${modalException.agentId}_${modalException.dateStr}`];
+    setExceptions(newExceptions);
+    setModalException({ isOpen: false, agentId: null, dateStr: null, h: '0h00', note: '' });
+  };
+
   const validerExceptionJourModal = (e) => {
     e.preventDefault();
     const hDecimal = parseHeureSaisie(modalException.h);
@@ -1277,11 +1299,14 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                   <input type="text" value={modalException.note} onChange={e => setModalException({...modalException, note: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
                 </div>
               </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
-                <button type="button" onClick={() => setModalException({isOpen: false, agentId: null, dateStr: null, h: '0h00', note: ''})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
-                <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>Enregistrer</button>
+              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center`}>
+                <button type="button" onClick={supprimerExceptionJour} className="px-3 py-2 text-red-500 hover:bg-red-500/10 rounded font-bold text-xs transition-colors">🗑️ Rétablir l'horaire normal</button>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setModalException({isOpen: false, agentId: null, dateStr: null, h: '0h00', note: ''})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
+                  <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>Enregistrer</button>
+                </div>
               </div>
-            </form>
+              </form>
           </div>
         </div>
       )}
@@ -1655,8 +1680,8 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
           </div>
 
           <div className="flex flex-col bg-black/10 rounded p-2 shadow-inner gap-1 mt-2">
-            <button onClick={() => setVueActive('journee')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
             <button onClick={() => setVueActive('template')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
+            <button onClick={() => setVueActive('journee')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
             <button onClick={() => setVueActive('planning')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'planning' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📅 Planning Hebdo (Réel)</button>
             <button onClick={() => setVueActive('dashboard')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'dashboard' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📊 Bilan Équipe</button>
             <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-base font-medium py-2 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>👤 Calendriers Individuels</button>
@@ -1741,16 +1766,15 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                 </div>
               </div>
             )}
-
             {vueActive === 'template' && currentTemplate.statut === 'brouillon' && modeEdition === 'besoins' && (
               <div className="space-y-4 animate-in fade-in duration-200">
                 <div className="bg-red-900/10 border border-red-500/30 p-3 rounded text-sm text-red-500">
-                  <p className="font-bold mb-2">1. Création Rapide (Clavier) :</p>
-                  <button onClick={() => setModalBesoinMulti({ isOpen: true, posteId: '', qte: 1, slots: [{ id: Date.now(), start: '08:00', end: '10:00', days: { 1: false, 2: false, 3: false, 4: false, 5: false } }]})} className="w-full bg-red-600 text-white rounded p-2 text-xs font-bold hover:bg-red-700 shadow flex items-center justify-center gap-1 mb-4">➕ Saisir une grille complète</button>
-                  <p className="font-bold mb-2 border-t border-red-500/30 pt-3">2. Pinceau Manuel (Souris) :</p>
-                  <select value={posteActif||''} onChange={e => setPosteActif(Number(e.target.value))} className="w-full p-2 rounded border border-red-500/50 mb-2 bg-transparent font-bold"><option value="" disabled>-- Poste --</option>{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select>
+                  <p className="font-bold mb-2">1. Grille Hebdo (Clavier) :</p>
+                  <button onClick={() => setModalBesoinMulti({ isOpen: true, posteId: '', qte: 1, slots: [{ id: Date.now(), start: '08:00', end: '10:00', days: { 1: false, 2: false, 3: false, 4: false, 5: false } }]})} className="w-full bg-red-600 text-white rounded p-2 text-xs font-bold hover:bg-red-700 shadow flex items-center justify-center gap-1 mb-4">➕ Générer une grille complète</button>
+                  <p className="font-bold mb-2 border-t border-red-500/30 pt-3">2. Dessin libre (Souris) :</p>
+                  <label className="text-xs font-bold mb-1 block">Effectif requis :</label>
                   <input type="number" min="1" value={formBesoinQte} onChange={e => setFormBesoinQte(Number(e.target.value))} className="w-full p-2 rounded border border-red-500/50 font-bold text-center mb-2 bg-transparent" />
-                  <p className="text-xs italic opacity-80">Glissez la souris sur le calendrier.</p>
+                  <p className="text-[11px] italic opacity-80 leading-tight">Glissez la souris sur la ligne d'un Poste (à droite) pour dessiner un besoin.</p>
                 </div>
               </div>
             )}
@@ -1984,72 +2008,329 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
           );
         })()}
 
-        {/* 2. VUE MODELE (SEMAINE TYPE) */}
-        {vueActive === 'template' && (
-          <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
-            <div className="p-4 pb-2 no-print shrink-0">
-              <div className="flex justify-between items-center mb-2">
-                <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>
-                  📐 Modèle : {currentTemplate.nom} (dès le {currentTemplate.dateDebut}) 
-                  {printFilter.type === 'agent' && ` - Filtré : ${agents.find(a=>a.id===printFilter.id)?.nom}`}
-                </h2>
-                
-                <div className="flex gap-2 items-center">
-                  {currentTemplate.statut === 'brouillon' && (
-                    <button onClick={validerModele} className="bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded hover:bg-green-700 shadow-sm animate-pulse">✅ Valider et Appliquer</button>
-                  )}
-                  <select value={activeTemplateId} onChange={e => setActiveTemplateId(Number(e.target.value))} className={`border ${t.borderLight} rounded p-1.5 text-xs font-bold ${t.cardBg} ${t.header} outline-none`}>
-                    {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.statut==='valide'?'🔒':'✏️'} {tv.nom}</option>)}
-                  </select>
+{/* 2. VUE MODELE (SEMAINE TYPE) - NOUVELLE VERSION HORIZONTALE */}
+        {vueActive === 'template' && (() => {
+          const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
+          
+          // Calcul de la date du jour sélectionné dans le modèle
+          const templateDateObj = new Date(currentTemplate.dateDebut);
+          templateDateObj.setDate(templateDateObj.getDate() + (jourTemplate - 1));
+          const pad = n => String(n).padStart(2, '0');
+          const currentTemplateDateStr = `${templateDateObj.getFullYear()}-${pad(templateDateObj.getMonth()+1)}-${pad(templateDateObj.getDate())}`;
+
+          // Selon le mode, on affiche les Postes en ligne (Besoins) ou les Agents (Affectations)
+          const isBesoinsMode = modeEdition === 'besoins';
+          const rowsItems = isBesoinsMode ? postes : agents;
+
+          return (
+            <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
+              <div className="p-4 pb-2 no-print shrink-0">
+                <div className="flex justify-between items-center mb-2">
+                  <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>
+                    📐 Modèle : {currentTemplate.nom}
+                  </h2>
+                  <div className="flex gap-2 items-center">
+                    {currentTemplate.statut === 'brouillon' && (
+                      <button onClick={validerModele} className="bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded hover:bg-green-700 shadow-sm animate-pulse">✅ Valider et Appliquer</button>
+                    )}
+                    <select value={activeTemplateId} onChange={e => setActiveTemplateId(Number(e.target.value))} className={`border ${t.borderLight} rounded p-1.5 text-xs font-bold ${t.cardBg} ${t.header} outline-none`}>
+                      {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.statut==='valide'?'🔒':'✏️'} {tv.nom}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {/* Sélecteur de Jours de la Semaine Type */}
+                <div className="flex gap-2 mt-3 items-center">
+                  {[1, 2, 3, 4, 5].map(d => (
+                    <button key={d} onClick={() => setJourTemplate(d)} className={`px-5 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${jourTemplate === d ? t.activeTab : `${t.cardBg} ${t.textMenuMuted} border border-transparent hover:border-black/10`}`}>
+                      {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][d - 1]}
+                    </button>
+                  ))}
+                  <div className="ml-auto text-xs font-bold px-3 py-1.5 rounded-full border border-black/10 shadow-inner bg-black/5">
+                    Lignes : {isBesoinsMode ? '🎯 Postes (Besoins structurels)' : '👤 Agents (Affectations nominatives)'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
+                <div className={`${t.cardBg} rounded-xl shadow border ${currentTemplate.statut === 'brouillon' ? 'border-[#3B82F6] border-2' : t.borderLight} flex-1 flex flex-col overflow-hidden`}>
+                  <div className={`h-full flex flex-col transition-all duration-300 ${currentTemplate.statut === 'valide' ? 'pointer-events-none opacity-85 grayscale-[15%]' : ''}`}>
+                    
+                    <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col">
+                      <div className="min-w-[800px] flex-1 flex flex-col relative">
+                        {/* En-tête des heures */}
+                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
+                          {gridLabelsDaily.map(lbl => (
+                            <div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
+                              {lbl.timeStr}
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="flex-1 relative z-10 flex flex-col">
+                          <div className="absolute inset-0 left-32 pointer-events-none z-0">
+                            {gridLines.map(line => (
+                              <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
+                            ))}
+                          </div>
+
+                          {/* Boucle d'affichage des Lignes (Agents ou Postes) */}
+                          {rowsItems.map(item => {
+                            const eventsDeLaLigne = displayEvents.filter(e => {
+                              if (!e.start.startsWith(currentTemplateDateStr)) return false;
+                              if (isBesoinsMode) return e.extendedProps?.isBesoin && e.extendedProps?.posteId === item.id;
+                              return !e.extendedProps?.isBesoin && e.extendedProps?.agentId === item.id;
+                            });
+
+                            const rowBgColor = isBesoinsMode ? item.couleur : item.couleurFond;
+                            const totalMinsJour = eventsDeLaLigne.reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                            const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
+
+                            return (
+                              <div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px]`}>
+                                {/* Titre de la ligne (Nom agent ou Poste) */}
+                                <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: rowBgColor, color: getContrastYIQ(rowBgColor) }}>
+                                  <span className="text-sm font-black text-right leading-tight">{item.nom}</span>
+                                  <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
+                                </div>
+                                
+                                {/* Zone interactive de création au lasso */}
+                                <div className="flex-1 relative my-1 cursor-crosshair group/timeline select-none" onMouseDown={(e) => {
+                                  if (e.target !== e.currentTarget) return;
+                                  const track = e.currentTarget;
+                                  const rect = track.getBoundingClientRect();
+                                  
+                                  // --- GESTION DU COLLER (CTRL+V visuel) ---
+                                  if (copiedEvent) {
+                                    const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                                    const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
+                                    const duration = copiedEvent.durationMins || 60;
+                                    const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
+                                    
+                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                    const newStartISO = `${currentTemplateDateStr}T${formatTime(startMins)}:00`;
+                                    const newEndISO = `${currentTemplateDateStr}T${formatTime(endMins)}:00`;
+
+                                    if (isBesoinsMode && copiedEvent.extendedProps?.isBesoin) {
+                                      updateCurrentTemplate(null, [...currentTemplate.besoins, { 
+                                        id: String(Date.now()), start: newStartISO, end: newEndISO, 
+                                        extendedProps: { ...copiedEvent.extendedProps, posteId: item.id, posteNom: item.nom } 
+                                      }]);
+                                    } else if (!isBesoinsMode && !copiedEvent.extendedProps?.isBesoin) {
+                                      applyAction('add', { 
+                                        id: String(Date.now()), start: newStartISO, end: newEndISO,
+                                        title: `${copiedEvent.extendedProps.posteNom} - ${item.nom}`,
+                                        backgroundColor: item.couleurFond, borderColor: item.couleurFond,
+                                        extendedProps: { ...copiedEvent.extendedProps, agentId: item.id, agentNom: item.nom }
+                                      });
+                                    }
+                                    if (!e.ctrlKey && !e.metaKey) setCopiedEvent(null);
+                                    return;
+                                  }
+
+                                  // --- GESTION DU DESSIN DE CRÉNEAU ---
+                                  const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                                  const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
+                                  
+                                  let currentEndMins = Math.min(startMins + 60, limitesHeures.baseMins + limitesHeures.span);
+                                  let hasMoved = false;
+
+                                  const ghostEl = document.createElement('div');
+                                  ghostEl.className = `absolute top-0.5 bottom-0.5 rounded border border-dashed z-30 pointer-events-none flex items-center justify-center text-[9px] font-bold shadow-sm ${isBesoinsMode ? 'bg-red-500/40 border-red-600 text-red-950 dark:text-red-100' : 'bg-blue-500/40 border-blue-600 text-blue-950 dark:text-blue-100'}`;
+                                  track.appendChild(ghostEl);
+
+                                  const updateGhost = (m1, m2) => {
+                                    const minM = Math.min(m1, m2);
+                                    const maxM = Math.max(m1, m2);
+                                    const l = Math.max(0, ((minM - limitesHeures.baseMins) / limitesHeures.span) * 100);
+                                    const w = Math.min(100 - l, ((maxM - minM) / limitesHeures.span) * 100);
+                                    ghostEl.style.left = `${l}%`;
+                                    ghostEl.style.width = `${w}%`;
+                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                    ghostEl.textContent = `${formatTime(minM)} - ${formatTime(maxM)}`;
+                                  };
+
+                                  updateGhost(startMins, currentEndMins);
+
+                                  const onMouseMove = (moveEvent) => {
+                                    hasMoved = true;
+                                    const movePercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
+                                    currentEndMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
+                                    updateGhost(startMins, currentEndMins);
+                                  };
+
+                                  const onMouseUp = () => {
+                                    window.removeEventListener('mousemove', onMouseMove);
+                                    window.removeEventListener('mouseup', onMouseUp);
+                                    ghostEl.remove();
+
+                                    const finalStart = Math.min(startMins, currentEndMins);
+                                    const finalEnd = Math.max(startMins, currentEndMins);
+                                    const actualEnd = hasMoved ? finalEnd : (finalStart + 60);
+
+                                    if (actualEnd - finalStart >= 5) {
+                                      const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                      if (isBesoinsMode) {
+                                        updateCurrentTemplate(null, [...currentTemplate.besoins, { 
+                                          id: String(Date.now()), start: `${currentTemplateDateStr}T${formatTime(finalStart)}:00`, end: `${currentTemplateDateStr}T${formatTime(actualEnd)}:00`, 
+                                          extendedProps: { posteId: item.id, posteNom: item.nom, qte: formBesoinQte } 
+                                        }]);
+                                      } else {
+                                        setFormTypeEvent('affectation');
+                                        setFormTypeAbsence('absence');
+                                        setFormAbsenceDeduire(false);
+                                        setFormAgent(item.id);
+                                        setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
+                                        setFormNote('');
+                                        setModalCreation({
+                                          isOpen: true,
+                                          eventId: null,
+                                          date: currentTemplateDateStr,
+                                          start: formatTime(finalStart),
+                                          end: formatTime(actualEnd)
+                                        });
+                                      }
+                                    }
+                                  };
+
+                                  window.addEventListener('mousemove', onMouseMove);
+                                  window.addEventListener('mouseup', onMouseUp);
+                                }}>
+                                  
+                                  {/* Affichage des blocs horaires sur la ligne */}
+                                  {eventsDeLaLigne.map(evt => {
+                                    const startD = new Date(evt.start); 
+                                    const endD = new Date(evt.end);
+                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); 
+                                    const endMins = endD.getHours() * 60 + endD.getMinutes();
+                                    const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
+                                    const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
+                                    const isShort = (endMins - startMins) <= 20;
+                                    
+                                    let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo;
+                                    if (isBesoinsMode) {
+                                      const isSous = evt.extendedProps?.isSousEffectif;
+                                      evtBgColor = isSous ? '#dc2626' : '#16a34a';
+                                      evtBorderColor = isSous ? '#991b1b' : '#166534';
+                                      evtTextColor = '#ffffff';
+                                      evtTitle = `${evt.extendedProps?.minCount} / ${evt.extendedProps?.qte} pers.`;
+                                      extInfo = null;
+                                    } else {
+                                      evtBgColor = evt.extendedProps?.posteCouleur || '#3b82f6';
+                                      const estEnConflit = conflitsIds.has(String(evt.id).split('_')[0]);
+                                      if (estEnConflit) { evtBgColor = '#dc2626'; }
+                                      evtBorderColor = 'rgba(0,0,0,0.2)';
+                                      evtTextColor = getContrastYIQ(evtBgColor);
+                                      evtTitle = (estEnConflit ? '⚠️ ' : '') + (evt.extendedProps?.posteNom || 'Poste');
+                                      extInfo = evt.extendedProps?.note || null;
+                                    }
+                                    
+                                    return (
+                                      <div key={evt.id} className={`absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-hidden border cursor-pointer hover:ring-2 transition-all z-10 group/item ${!isBesoinsMode && conflitsIds.has(String(evt.id).split('_')[0]) ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
+                                        style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evtBgColor, borderColor: evtBorderColor, color: evtTextColor }}
+                                        onClick={(e) => { 
+                                          e.stopPropagation(); 
+                                          if (e.ctrlKey || e.metaKey) {
+                                            e.preventDefault();
+                                            setCopiedEvent({
+                                              title: evt.title || evtTitle,
+                                              backgroundColor: evtBgColor,
+                                              borderColor: evtBorderColor,
+                                              extendedProps: { ...evt.extendedProps },
+                                              durationMins: endMins - startMins
+                                            });
+                                            return;
+                                          }
+                                          if (currentTemplate.statut === 'valide') return;
+                                          if (evt.extendedProps?.isBesoin) ouvrirEditionBesoin(evt); else ouvrirEdition(evt); 
+                                        }} 
+                                        title={`${evtTitle} (${extractTimeStr(evt.start)} - ${extractTimeStr(evt.end)})`}>
+                                        
+                                        <div className="flex justify-between items-center w-full pointer-events-none">
+                                          <span className="font-bold truncate leading-tight">{evtTitle}</span>
+                                          {isShort && <span className="text-[7px] opacity-90 truncate ml-1 shrink-0">{extractTimeStr(evt.start)}-{extractTimeStr(evt.end)}</span>}
+                                        </div>
+                                        {!isShort && <span className="text-[8px] opacity-85 truncate leading-none mt-0.5 pointer-events-none">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>}
+                                        {extInfo && !isShort && <span className="text-[7px] truncate italic bg-black/10 rounded px-0.5 mt-0.5 pointer-events-none">{extInfo}</span>}
+
+                                        {/* Poignée de redimensionnement GAUCHE */}
+                                        <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier le début"
+                                          onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            const track = e.currentTarget.closest('.flex-1.relative.my-1');
+
+                                            const onMouseMove = (moveEvent) => {
+                                              const rect = track.getBoundingClientRect();
+                                              const offsetX = moveEvent.clientX - rect.left;
+                                              const percent = Math.max(0, Math.min(1, offsetX / rect.width));
+                                              let newStart = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5;
+                                              newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5));
+                                              
+                                              const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                              const newStartISO = `${currentTemplateDateStr}T${formatTime(newStart)}:00`;
+                                              
+                                              if (isBesoinsMode) {
+                                                const cleanId = String(evt.id).split('_')[0];
+                                                const newBesoins = currentTemplate.besoins.map(b => String(b.id).split('_')[0] === cleanId ? { ...b, start: newStartISO } : b);
+                                                updateCurrentTemplate(null, newBesoins);
+                                              } else {
+                                                applyAction('update', { id: evt.id, start: newStartISO, end: evt.end });
+                                              }
+                                            };
+                                            const onMouseUp = () => {
+                                              window.removeEventListener('mousemove', onMouseMove);
+                                              window.removeEventListener('mouseup', onMouseUp);
+                                            };
+                                            window.addEventListener('mousemove', onMouseMove);
+                                            window.addEventListener('mouseup', onMouseUp);
+                                          }}></div>
+
+                                        {/* Poignée de redimensionnement DROITE */}
+                                        <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Glisser pour modifier la fin"
+                                          onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            const track = e.currentTarget.closest('.flex-1.relative.my-1');
+
+                                            const onMouseMove = (moveEvent) => {
+                                              const rect = track.getBoundingClientRect();
+                                              const offsetX = moveEvent.clientX - rect.left;
+                                              const percent = Math.max(0, Math.min(1, offsetX / rect.width));
+                                              let newEnd = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5;
+                                              newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span));
+                                              
+                                              const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                              const newEndISO = `${currentTemplateDateStr}T${formatTime(newEnd)}:00`;
+                                              
+                                              if (isBesoinsMode) {
+                                                const cleanId = String(evt.id).split('_')[0];
+                                                const newBesoins = currentTemplate.besoins.map(b => String(b.id).split('_')[0] === cleanId ? { ...b, end: newEndISO } : b);
+                                                updateCurrentTemplate(null, newBesoins);
+                                              } else {
+                                                applyAction('update', { id: evt.id, start: evt.start, end: newEndISO });
+                                              }
+                                            };
+                                            const onMouseUp = () => {
+                                              window.removeEventListener('mousemove', onMouseMove);
+                                              window.removeEventListener('mouseup', onMouseUp);
+                                            };
+                                            window.addEventListener('mousemove', onMouseMove);
+                                            window.addEventListener('mouseup', onMouseUp);
+                                          }}></div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-
-            <div className="flex-1 overflow-hidden px-4 pb-4">
-              {isPrinting ? (
-                <PrintTimeGridView events={displayEvents} agents={agents} limitesHeures={limitesHeures} amplitude={amplitude} titre={`Modèle : ${currentTemplate.nom} ...`} />
-              ) : (
-                <div className={`${t.cardBg} rounded-xl shadow border h-full p-2 ${currentTemplate.statut === 'brouillon' ? 'border-[#3B82F6] border-dashed border-2' : t.borderLight}`}>
-                  <div className={`h-full transition-all duration-300 ${currentTemplate.statut === 'valide' ? 'pointer-events-none opacity-85 grayscale-[15%]' : ''}`}>
-                    <FullCalendar
-                      key={`cal-${vueActive}-${isDarkMode}`}
-                      plugins={[timeGridPlugin, interactionPlugin]}
-                      initialView="timeGridWeek"
-                      locale="fr"
-                      firstDay={1} 
-                      initialDate={currentTemplate.dateDebut}
-                      headerToolbar={false} 
-                      dayHeaderFormat={{ weekday: 'long' }} 
-                      allDaySlot={false}
-                      slotMinTime={limitesHeures.minStr}
-                      slotMaxTime={limitesHeures.maxStr}
-                      slotDuration="00:05:00"
-                      slotLabelInterval="00:05:00"
-                      slotLabelContent={renderSlotLabel}
-                      snapDuration="00:05:00"
-                      hiddenDays={[0, 6]}
-                      editable={currentTemplate.statut === 'brouillon'} 
-                      eventDurationEditable={true}
-                      eventResizableFromStart={true}
-                      selectable={currentTemplate.statut === 'brouillon'}
-                      selectMirror={true}
-                      dayMaxEvents={true}
-                      height="100%"
-                      events={displayEvents}
-                      slotEventOverlap={false} 
-                      eventOrder="extendedProps.agentNom,start"
-                      eventResize={gererModificationEvenement}
-                      eventDrop={gererModificationEvenement}
-                      select={gererSelection}
-                      eventContent={renderEventContent}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
+          );
+        })()}
         {/* 3. VUE PLANNING REEL */}
         {vueActive === 'planning' && (
           <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
@@ -2171,20 +2452,20 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
           <div className={`flex-1 p-6 overflow-auto ${t.bgMain}`}>
             <h2 className={`text-2xl font-bold ${t.header} mb-6`}>Gestion des Absences et Retards</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+<div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               {bilanAbsences.map(b => (
                 <div key={b.id} className={`${t.cardBg} rounded-xl shadow-sm border ${t.borderLight} p-4 border-l-4`} style={{ borderLeftColor: b.couleur }}>
                   <div className={`font-black text-lg ${t.header} mb-3`}>{b.nom}</div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-4 text-sm mb-3">
                     <div><div className="text-gray-500 text-xs font-bold uppercase">Absences</div><div className="font-mono text-red-500 font-bold mt-1">{b.nbAbs} <span className="text-xs text-gray-500">({formatHeureTableau(b.hAbs, true)})</span></div></div>
                     <div><div className="text-gray-500 text-xs font-bold uppercase">Retards</div><div className="font-mono text-orange-500 font-bold mt-1">{b.nbRet} <span className="text-xs text-gray-500">({formatHeureTableau(b.hRet, true)})</span></div></div>
                   </div>
-                  {b.nbRetRat > 0 && (<div className="mt-3 pt-3 border-t border-gray-500/30 text-xs font-bold text-red-500 bg-red-500/10 p-2 rounded">⚠️ {b.nbRetRat} retard(s) à rattraper ({formatHeureTableau(b.hRetRat, true)})</div>)}
-                  {b.nbRet > 0 && b.nbRetRat === 0 && (<div className="mt-3 pt-3 border-t border-gray-500/30 text-xs font-bold text-green-500 bg-green-500/10 p-2 rounded">✅ Tous les retards sont rattrapés.</div>)}
+                  {b.hDetteRestante > 0 && (<div className="pt-3 border-t border-gray-500/30 text-xs font-bold text-red-500 bg-red-500/10 p-2 rounded">⚠️ Reste à rattraper : {formatHeureTableau(b.hDetteRestante, true)}</div>)}
+                  {b.nbRet > 0 && b.hDetteRestante === 0 && b.hAvance === 0 && (<div className="pt-3 border-t border-gray-500/30 text-xs font-bold text-green-600 bg-green-500/10 p-2 rounded">✅ Tous les retards sont compensés.</div>)}
+                  {b.hAvance > 0 && (<div className="pt-3 border-t border-gray-500/30 text-xs font-bold text-blue-600 bg-blue-500/10 p-2 rounded">🔵 Heures d'avance (crédit) : {formatHeureTableau(b.hAvance, true)}</div>)}
                 </div>
               ))}
             </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className={`lg:col-span-1 ${t.cardBg} p-6 rounded-xl shadow border ${t.borderLight} h-fit`}>
               <h3 className={`font-bold text-md ${t.header} mb-4 pb-2 border-b ${t.borderLight}`}>Déclarer un événement</h3>
@@ -2220,8 +2501,7 @@ const agentColor = arg.event.backgroundColor || '#3b82f6';
                   </label>
                 )}
 
-                <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif / Note</label><input type="text" required value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder={formAbsence.type === 'rattrapage' ? "Ex: Permanence rendue, heures sup..." : "Ex: Maladie..."} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>
-                <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition`}>Enregistrer</button>
+<div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif / Note</label><input type="text" required={formAbsence.type === 'absence'} value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder={formAbsence.type === 'rattrapage' ? "Ex: Permanence rendue..." : "Optionnel pour les retards"} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>                <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition`}>Enregistrer</button>
               </form>
             </div>
 

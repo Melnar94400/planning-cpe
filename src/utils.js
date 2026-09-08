@@ -137,11 +137,20 @@ export const formatHeureTableau = (decimal, showZero = false) => {
 };
 
 export const parseHeureSaisie = (chaine) => {
-  if (chaine === undefined || chaine === null) return 0;
-  const clean = String(chaine).toLowerCase().replace('min', '').replace('h', ':').replace(',', '.').trim();
+  if (!chaine) return 0;
+  const str = String(chaine).toLowerCase().trim();
+  
+  // NOUVEAU : Cas spécifique "30min" ou "45 min" (sans 'h')
+  if (str.includes('min') && !str.includes('h') && !str.includes(':')) {
+    const m = parseFloat(str.replace(/[^0-9.,]/g, '').replace(',', '.'));
+    return (m || 0) / 60;
+  }
+
+  // Cas classique "1h30" ou "1.5"
+  const clean = str.replace('min', '').replace('h', ':').replace(',', '.').trim();
   if (clean.includes(':')) {
     const parts = clean.split(':');
-    return parseFloat(parts[0]) + (parseFloat(parts[1] || 0) / 60);
+    return (parseFloat(parts[0]) || 0) + ((parseFloat(parts[1]) || 0) / 60);
   }
   return parseFloat(clean) || 0;
 };
