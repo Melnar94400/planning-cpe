@@ -2785,23 +2785,49 @@ export default function App() {
           --fc-today-bg-color: ${t.fcToday};
         }
 
-        ${themeId === 'personnalise' ? `
+${themeId === 'personnalise' ? `
           :root {
             --c-prim: ${customColors.primary};
             --c-prim-rgb: ${hexToRgb(customColors.primary)};
             --c-acc: ${customColors.accent};
             --c-acc-rgb: ${hexToRgb(customColors.accent)};
             --c-dark-sidebar: color-mix(in srgb, var(--c-prim) 15%, #0b0f19);
+            
+            /* Surcharge dynamique pour les boutons du calendrier FullCalendar */
+            --fc-button-bg-color: var(--c-prim) !important;
+            --fc-button-border-color: var(--c-prim) !important;
+            --fc-button-hover-bg-color: var(--c-prim) !important;
+            --fc-button-hover-border-color: var(--c-prim) !important;
+            --fc-button-active-bg-color: var(--c-prim) !important;
+            --fc-button-active-border-color: var(--c-prim) !important;
           }
-          .custom-sidebar { background-color: var(--c-prim) !important; }
-          .custom-btn { background-color: var(--c-acc) !important; color: white !important; }
-          .custom-text-accent { color: var(--c-acc) !important; }
-          .custom-text-primary { color: var(--c-prim) !important; }
-          .custom-text-primary-muted { color: rgba(var(--c-prim-rgb), 0.6) !important; }
+          
+          /* Forcer la lisibilité du texte et des icônes dans les boutons FullCalendar */
+          .fc .fc-button-primary { color: ${getContrastYIQ(customColors.primary)} !important; }
+          .fc .fc-button-primary .fc-icon { color: ${getContrastYIQ(customColors.primary)} !important; }
+          
+          /* 1. Couleurs de fond principales et contraste */
+          /* 1. Couleurs de fond principales et contraste */
+          .custom-sidebar { background-color: var(--c-prim) !important; color: ${getContrastYIQ(customColors.primary)} !important; }
+          .custom-btn { background-color: var(--c-acc) !important; color: ${getContrastYIQ(customColors.accent)} !important; }
+          
+          /* 2. Forcer le contraste parfait à l'intérieur de la sidebar (Noir ou Blanc) */
+          .custom-sidebar .custom-text-primary,
+          .custom-sidebar .custom-text-primary-muted { 
+             color: ${getContrastYIQ(customColors.primary)} !important; 
+          }
+          .custom-sidebar .custom-text-primary-muted { opacity: 0.7; }
+          
+          /* 3. Textes dans la zone principale (Mixés avec du Noir/Blanc pour garantir la lisibilité sur fond blanc) */
+          .custom-text-accent { color: color-mix(in srgb, var(--c-acc) 70%, ${isDarkMode ? 'white' : 'black'}) !important; }
+          .custom-text-primary { color: color-mix(in srgb, var(--c-prim) 50%, ${isDarkMode ? 'white' : 'black'}) !important; }
+          .custom-text-primary-muted { color: color-mix(in srgb, var(--c-prim) 30%, ${isDarkMode ? '#9ca3af' : '#6b7280'}) !important; }
+          
+          /* 4. Fonds et Bordures (adaptatifs) */
           .custom-bg-main { background-color: rgba(var(--c-prim-rgb), 0.05) !important; }
           .custom-bg-light { background-color: rgba(var(--c-prim-rgb), 0.15) !important; }
           .custom-border { border-color: rgba(var(--c-prim-rgb), 0.2) !important; }
-          .custom-card { background-color: #ffffff !important; }
+          .custom-card { background-color: ${isDarkMode ? '#1f2937' : '#ffffff'} !important; }
           
           .custom-sidebar-dark { background-color: rgba(var(--c-prim-rgb), 0.15) !important; }
           .custom-border-dark { border-color: rgba(var(--c-prim-rgb), 0.2) !important; }
