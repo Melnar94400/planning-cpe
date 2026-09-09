@@ -14,7 +14,7 @@ import {
 } from './utils';
 import { SetupWizard } from './SetupWizard';
 import { PrintTimeGridView, PrintDailyView, PrintAgentYearlyView } from './PrintViews';
-
+import { TimelineTrack, TimelineEvent } from './TimelineComponents'; // 👈 AJOUTEZ CECI
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
   const [vueActive, setVueActive] = useState('template'); 
   const [agentConsulte, setAgentConsulte] = useState(null); 
@@ -1946,6 +1946,10 @@ return (
             <span className="group-hover:scale-125 transition-transform font-black">▶</span>
           </button>
         )}
+{/* ========================================================= */}
+        {/* ZONE DU CALENDRIER (ALLEGEE GRACE A TIMELINECOMPONENTS) */}
+        {/* ========================================================= */}
+        
         {/* 1. VUE QUOTIDIENNE */}
         {vueActive === 'journee' && (() => {
           const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
@@ -1973,32 +1977,21 @@ return (
                         <span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold shadow-sm flex items-center gap-1.5" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>
                           {p.nom}
                           <button onClick={() => ouvrirEditionPoste(p)} className="hover:opacity-75 text-xs ml-0.5 cursor-pointer" title="Modifier ce poste">⚙️</button>
-                          <button onClick={() => {
-                            if (confirm(`Voulez-vous vraiment supprimer le poste "${p.nom}" ?`)) {
-                              setPostes(postes.filter(x => x.id !== p.id));
-                            }
-                          }} className="hover:opacity-60 text-xs font-black ml-0.5 cursor-pointer" title="Supprimer ce poste">✖</button>
+                          <button onClick={() => { if (confirm(`Supprimer le poste "${p.nom}" ?`)) setPostes(postes.filter(x => x.id !== p.id)); }} className="hover:opacity-60 text-xs font-black ml-0.5 cursor-pointer" title="Supprimer ce poste">✖</button>
                         </span>
                       ))}
-                      <button onClick={ouvrirCreationPoste} className={`ml-2 px-2.5 py-1 rounded text-xs font-bold ${t.btnPrimary} shadow-sm transition-transform hover:scale-105`}>
-                        ➕ Ajouter un poste
-                      </button>
+                      <button onClick={ouvrirCreationPoste} className={`ml-2 px-2.5 py-1 rounded text-xs font-bold ${t.btnPrimary} shadow-sm transition-transform hover:scale-105`}>➕ Ajouter un poste</button>
                     </div>
 
-<div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">                      <div className="min-w-[800px] flex-1 flex flex-col relative">
+                    <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
+                      <div className="min-w-[800px] flex-1 flex flex-col relative">
                         <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
-                          {gridLabelsDaily.map(lbl => (
-                            <div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
-                              {lbl.timeStr}
-                            </div>
-                          ))}
+                          {gridLabelsDaily.map(lbl => (<div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>{lbl.timeStr}</div>))}
                         </div>
                         
                         <div className="flex-1 relative z-10 flex flex-col">
                           <div className="absolute inset-0 left-32 pointer-events-none z-0">
-                            {gridLines.map(line => (
-                              <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie || line.isStartDay ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
-                            ))}
+                            {gridLines.map(line => (<div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie || line.isStartDay ? '2px solid currentColor' : '1px dashed currentColor' }}></div>))}
                           </div>
 
                           {agents.map(agent => {
@@ -2006,200 +1999,58 @@ return (
                             const allEvents = getEventsForWeek(mondayStr);
                             const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
 
-                            const totalMinsJour = eventsDuJour.reduce((acc, evt) => {
-                              return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
-                            }, 0);
+                            const totalMinsJour = eventsDuJour.reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
 
                             return (
-<div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
+                              <div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
                                   <span className="text-sm font-black text-right leading-tight">{agent.nom}</span>
                                   <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
                                 </div>
-                                <div className="flex-1 relative my-1 cursor-crosshair group/timeline select-none" onMouseDown={(e) => {
-                                  const track = e.currentTarget;
-                                  const rect = track.getBoundingClientRect();
-                                  
-                                  // --- GESTION DU COLLER MULTIPLE (TAMPON) ---
-                                  if (copiedEvent) {
-                                    e.preventDefault();
-                                    sauvegarderEtatPrecedent();
-                                    const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                                    const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
+                                
+                                <TimelineTrack 
+                                  limitesHeures={limitesHeures} isBesoins={false} copiedEvent={copiedEvent}
+                                  onAddCopy={(startMins) => {
                                     const duration = copiedEvent.durationMins || 60;
                                     const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
-                                    
                                     const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                    const newStartISO = `${jourConsulte}T${formatTime(startMins)}:00`;
-                                    const newEndISO = `${jourConsulte}T${formatTime(endMins)}:00`;
-
+                                    sauvegarderEtatPrecedent();
                                     applyAction('add', { 
-                                      id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO,
+                                      id: String(Date.now() + Math.random()), start: `${jourConsulte}T${formatTime(startMins)}:00`, end: `${jourConsulte}T${formatTime(endMins)}:00`,
                                       title: `${copiedEvent.extendedProps?.posteNom} - ${agent.nom}`,
                                       backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
                                       extendedProps: { ...copiedEvent.extendedProps, agentId: agent.id, agentNom: agent.nom }
                                     });
-                                    return; 
-                                  }
-
-                                  // --- GESTION DU DESSIN DE CRÉNEAU (LASSO) ---
-                                  e.preventDefault();
-                                  if (e.ctrlKey || e.metaKey) return;
-                                  const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                                  const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
-                                  
-                                  let currentEndMins = Math.min(startMins + 60, limitesHeures.baseMins + limitesHeures.span);
-                                  let hasMoved = false;
-
-                                  const ghostEl = document.createElement('div');
-                                  ghostEl.className = 'absolute top-0.5 bottom-0.5 rounded bg-blue-500/40 border border-blue-600 border-dashed z-30 pointer-events-none flex items-center justify-center text-[9px] font-bold text-blue-950 dark:text-blue-100 shadow-sm';
-                                  track.appendChild(ghostEl);
-
-                                  const updateGhost = (m1, m2) => {
-                                    const minM = Math.min(m1, m2);
-                                    const maxM = Math.max(m1, m2);
-                                    const l = Math.max(0, ((minM - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                                    const w = Math.min(100 - l, ((maxM - minM) / limitesHeures.span) * 100);
-                                    ghostEl.style.left = `${l}%`;
-                                    ghostEl.style.width = `${w}%`;
+                                    setCopiedEvent(null);
+                                  }}
+                                  onAddLasso={(startMins, endMins) => {
                                     const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                    ghostEl.textContent = `${formatTime(minM)} - ${formatTime(maxM)}`;
-                                  };
-
-                                  updateGhost(startMins, currentEndMins);
-
-                                  const onMouseMove = (moveEvent) => {
-                                    if (Math.abs(moveEvent.clientX - startX) > 3) hasMoved = true;
-                                    const movePercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
-                                    currentEndMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
-                                    updateGhost(startMins, currentEndMins);
-                                  };
-
-                                  const onMouseUp = () => {
-                                    window.removeEventListener('mousemove', onMouseMove);
-                                    window.removeEventListener('mouseup', onMouseUp);
-                                    ghostEl.remove();
-
-                                    const finalStart = Math.min(startMins, currentEndMins);
-                                    const finalEnd = Math.max(startMins, currentEndMins);
-                                    const actualEnd = hasMoved ? finalEnd : (finalStart + 60);
-
-                                    if (actualEnd - finalStart >= 5) {
-                                      const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                      setFormTypeEvent('affectation');
-                                      setFormTypeAbsence('absence');
-                                      setFormAbsImpact('local');
-                                      setFormAgent(agent.id);
-                                      setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
-                                      setFormNote('');
-                                      setModalCreation({
-                                        isOpen: true,
-                                        eventId: null,
-                                        date: jourConsulte,
-                                        start: formatTime(finalStart),
-                                        end: formatTime(actualEnd)
-                                      });
-                                    }
-                                  };
-
-                                  window.addEventListener('mousemove', onMouseMove);
-                                  window.addEventListener('mouseup', onMouseUp);
-                                }}>
-                              {eventsDuJour.map(evt => {
-                                    const startD = new Date(evt.start); 
-                                    const endD = new Date(evt.end);
-                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); 
-                                    const endMins = endD.getHours() * 60 + endD.getMinutes();
-                                    const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                                    const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
-                                    const durationMins = endMins - startMins;
-                                    const isVeryShort = durationMins <= 45; // Texte vertical si <= 45m
-                                    const isLong = durationMins >= 120; // Gros texte si >= 2h
-                                    
+                                    setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(agent.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
+                                    setModalCreation({ isOpen: true, eventId: null, date: jourConsulte, start: formatTime(startMins), end: formatTime(endMins) });
+                                  }}
+                                >
+                                  {eventsDuJour.map(evt => {
+                                    const startD = new Date(evt.start); const endD = new Date(evt.end);
+                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
                                     const posteCouleur = evt.extendedProps?.posteCouleur || '#3b82f6';
-                                    const textColor = getContrastYIQ(posteCouleur);
                                     
                                     return (
-                                      <div key={evt.id} className="event-item absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-visible border cursor-pointer hover:ring-2 transition-all z-10 group/item"
-  style={{ left: `${left}%`, width: `${width}%`, backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', color: textColor }}
-  onMouseDown={(e) => {
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    
-    // --- GESTION DU CTRL+CLIC (COPIE) ---
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      setCopiedEvent({ title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: durationMins });
-      return;
-    }
-
-    const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
-    let hasMoved = false;
-    const track = e.currentTarget.closest('.flex-1.relative.my-1') || e.currentTarget.parentElement;
-    const rect = track.getBoundingClientRect();
-    const startX = e.clientX;
-
-    const onMouseMove = (moveEvent) => {
-      if (Math.abs(moveEvent.clientX - startX) > 4) hasMoved = true;
-      if (!hasMoved) return;
-
-      let deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
-      if (deltaMins !== 0) {
-        let newStart = startMins + deltaMins;
-        let newEnd = newStart + durationMins;
-        if (newStart < limitesHeures.baseMins) { newStart = limitesHeures.baseMins; newEnd = newStart + durationMins; }
-        if (newEnd > limitesHeures.baseMins + limitesHeures.span) { newEnd = limitesHeures.baseMins + limitesHeures.span; newStart = newEnd - durationMins; }
-
-        const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-        applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(newStart)}:00`, end: `${jourConsulte}T${formatTime(newEnd)}:00` });
-      }
-    };
-
-    const onMouseUp = () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      if (hasMoved) {
-        sauvegarderEtatPrecedent(snapshot);
-      } else {
-        // AUCUN MOUVEMENT = C'EST UN CLIC NORMAL !
-        ouvrirEdition(evt);
-      }
-    };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  }}>
-                                      {/* LE CONTENU DU BLOC */}
-                                        <div className={`w-full h-full flex pointer-events-none overflow-hidden ${isVeryShort ? 'flex-col items-center justify-center' : 'flex-col justify-center'}`}>
-                                          {isVeryShort ? (
-                                            <span className="font-bold tracking-widest uppercase truncate w-full text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '9px' }}>
-                                              {evt.extendedProps?.posteNom || 'Poste'}
-                                            </span>
-                                          ) : (
-                                            <>
-                                              <span className={`font-bold truncate leading-none ${isLong ? 'text-sm' : 'text-[10px]'}`}>{evt.extendedProps?.posteNom || 'Poste'}</span>
-                                              <span className={`opacity-85 font-mono truncate mt-0.5 ${isLong ? 'text-xs' : 'text-[8px]'}`}>{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
-                                            </>
-                                          )}
-                                        </div>
-
-                                        {/* POIGNÉES */}
-                                        <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier le début" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.closest('.flex-1.relative.my-1'); const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newStart = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(newStart)}:00`, end: evt.end }); }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
-                                        <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier la fin" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.closest('.flex-1.relative.my-1'); const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newEnd = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; applyAction('update', { id: evt.id, start: evt.start, end: `${jourConsulte}T${formatTime(newEnd)}:00` }); }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
-                                        
-                                        {/* LE TOOLTIP FLOTTANT VERS LE BAS */}
-                                        <div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none top-full left-1/2 -translate-x-1/2 mt-1.5 w-max min-w-[130px] text-center border border-gray-700">
-                                          <span className="font-black text-sm text-blue-300 leading-tight mb-1">{evt.extendedProps?.posteNom || 'Poste'}</span>
-                                          <span className="font-semibold text-xs leading-none">{agent.nom}</span>
-                                          <span className="text-gray-400 font-mono text-[10px] mt-1">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
-                                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900"></div>
-                                        </div>
-
-                                      </div>
-                                    );                    
-                                    
-                                    })}
-                                </div>
+                                      <TimelineEvent 
+                                        key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={false} 
+                                        bgColor={posteCouleur} borderColor='rgba(0,0,0,0.2)' textColor={getContrastYIQ(posteCouleur)} 
+                                        title={evt.extendedProps?.posteNom || 'Poste'} subtitle={agent.nom} extInfo={null} conflit={false}
+                                        onUpdate={(min, max) => {
+                                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                          sauvegarderEtatPrecedent();
+                                          applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(min)}:00`, end: `${jourConsulte}T${formatTime(max)}:00` });
+                                        }}
+                                        onClick={() => ouvrirEdition(evt)}
+                                        onCopy={(dur) => setCopiedEvent({ title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: dur })}
+                                      />
+                                    );
+                                  })}
+                                </TimelineTrack>
                               </div>
                             );
                           })}
@@ -2213,73 +2064,55 @@ return (
           );
         })()}
 
-{/* 2. VUE MODELE (SEMAINE TYPE) - NOUVELLE VERSION HORIZONTALE */}
+        {/* 2. VUE MODELE (SEMAINE TYPE) */}
         {vueActive === 'template' && (() => {
           const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
-          
-          // Calcul de la date du jour sélectionné dans le modèle
           const templateDateObj = new Date(currentTemplate.dateDebut);
           templateDateObj.setDate(templateDateObj.getDate() + (jourTemplate - 1));
           const pad = n => String(n).padStart(2, '0');
           const currentTemplateDateStr = `${templateDateObj.getFullYear()}-${pad(templateDateObj.getMonth()+1)}-${pad(templateDateObj.getDate())}`;
 
-          // Selon le mode, on affiche les Postes en ligne (Besoins) ou les Agents (Affectations)
           const isBesoinsMode = modeEdition === 'besoins';
           const rowsItems = isBesoinsMode ? postes : agents;
 
           return (
-<div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden min-h-0`}>              <div className="p-4 pb-2 no-print shrink-0">
+            <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden min-h-0`}>
+              <div className="p-4 pb-2 no-print shrink-0">
                 <div className="flex justify-between items-center mb-2">
-                  <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>
-                    📐 Modèle : {currentTemplate.nom}
-                  </h2>
+                  <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>📐 Modèle : {currentTemplate.nom}</h2>
                   <div className="flex gap-2 items-center">
-                    {currentTemplate.statut === 'brouillon' && (
-                      <button onClick={validerModele} className="bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded hover:bg-green-700 shadow-sm animate-pulse">✅ Valider et Appliquer</button>
-                    )}
+                    {currentTemplate.statut === 'brouillon' && (<button onClick={validerModele} className="bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded hover:bg-green-700 shadow-sm animate-pulse">✅ Valider et Appliquer</button>)}
                     <select value={activeTemplateId} onChange={e => setActiveTemplateId(Number(e.target.value))} className={`border ${t.borderLight} rounded p-1.5 text-xs font-bold ${t.cardBg} ${t.header} outline-none`}>
                       {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.statut==='valide'?'🔒':'✏️'} {tv.nom}</option>)}
                     </select>
                   </div>
                 </div>
-                {/* Sélecteur de Jours de la Semaine Type */}
                 <div className="flex gap-2 mt-3 items-center">
                   {[1, 2, 3, 4, 5].map(d => (
-                    <button key={d} onClick={() => setJourTemplate(d)} className={`px-5 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${jourTemplate === d ? t.activeTab : `${t.cardBg} ${t.textMenuMuted} border border-transparent hover:border-black/10`}`}>
-                      {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][d - 1]}
-                    </button>
+                    <button key={d} onClick={() => setJourTemplate(d)} className={`px-5 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${jourTemplate === d ? t.activeTab : `${t.cardBg} ${t.textMenuMuted} border border-transparent hover:border-black/10`}`}>{['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][d - 1]}</button>
                   ))}
-                  <div className="ml-auto text-xs font-bold px-3 py-1.5 rounded-full border border-black/10 shadow-inner bg-black/5">
-                    Lignes : {isBesoinsMode ? '🎯 Postes (Besoins structurels)' : '👤 Agents (Affectations nominatives)'}
-                  </div>
+                  <div className="ml-auto text-xs font-bold px-3 py-1.5 rounded-full border border-black/10 shadow-inner bg-black/5">Lignes : {isBesoinsMode ? '🎯 Postes (Besoins structurels)' : '👤 Agents (Affectations nominatives)'}</div>
                 </div>
               </div>
 
               <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
                 <div className={`${t.cardBg} rounded-xl shadow border ${currentTemplate.statut === 'brouillon' ? 'border-[#3B82F6] border-2' : t.borderLight} flex-1 flex flex-col overflow-hidden`}>
                   <div className={`h-full flex flex-col transition-all duration-300 ${currentTemplate.statut === 'valide' ? 'pointer-events-none opacity-85 grayscale-[15%]' : ''}`}>
-                    
-<div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">                      <div className="min-w-[800px] flex-1 flex flex-col relative">
-                        {/* En-tête des heures */}
+                    <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
+                      <div className="min-w-[800px] flex-1 flex flex-col relative">
                         <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
-                          {gridLabelsDaily.map(lbl => (
-                            <div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
-                              {lbl.timeStr}
-                            </div>
-                          ))}
+                          {gridLabelsDaily.map(lbl => (<div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>{lbl.timeStr}</div>))}
                         </div>
                         
                         <div className="flex-1 relative z-10 flex flex-col">
                           <div className="absolute inset-0 left-32 pointer-events-none z-0">
-                            {gridLines.map(line => (
-                              <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
-                            ))}
+                            {gridLines.map(line => (<div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>))}
                           </div>
 
-                          {/* Boucle d'affichage des Lignes (Agents ou Postes) */}
                           {rowsItems.map(item => {
+                            const dateStr = currentTemplateDateStr;
                             const eventsDeLaLigne = displayEvents.filter(e => {
-                              if (!e.start.startsWith(currentTemplateDateStr)) return false;
+                              if (!e.start.startsWith(dateStr)) return false;
                               if (isBesoinsMode) return e.extendedProps?.isBesoin && e.extendedProps?.posteId === item.id;
                               return !e.extendedProps?.isBesoin && e.extendedProps?.agentId === item.id;
                             });
@@ -2289,34 +2122,26 @@ return (
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
 
                             return (
-<div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
+                              <div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: rowBgColor, color: getContrastYIQ(rowBgColor) }}>
                                   <span className="text-sm font-black text-right leading-tight">{item.nom}</span>
                                   <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
                                 </div>
                                 
-                                <div className="flex-1 relative my-1 cursor-crosshair group/timeline select-none" onMouseDown={(e) => {
-                                  if (currentTemplate.statut === 'valide') return; // Bloque si le modèle est verrouillé
-                                  const track = e.currentTarget;
-                                  const rect = track.getBoundingClientRect();
-                                  
-                                  // --- GESTION DU COLLER MULTIPLE (TAMPON) ---
-                                  if (copiedEvent) {
-                                    e.preventDefault();
-                                    sauvegarderEtatPrecedent();
-                                    const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                                    const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
+                                <TimelineTrack 
+                                  limitesHeures={limitesHeures} isBesoins={isBesoinsMode} copiedEvent={copiedEvent}
+                                  onAddCopy={(startMins) => {
+                                    if (currentTemplate.statut === 'valide') return;
                                     const duration = copiedEvent.durationMins || 60;
                                     const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
-                                    
                                     const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                    sauvegarderEtatPrecedent();
                                     const newStartISO = `${currentTemplateDateStr}T${formatTime(startMins)}:00`;
                                     const newEndISO = `${currentTemplateDateStr}T${formatTime(endMins)}:00`;
 
                                     if (isBesoinsMode && copiedEvent.extendedProps?.isBesoin) {
                                       updateCurrentTemplate(null, [...currentTemplate.besoins, { 
-                                        id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO, 
-                                        extendedProps: { ...copiedEvent.extendedProps, posteId: item.id, posteNom: item.nom } 
+                                        id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO, extendedProps: { ...copiedEvent.extendedProps, posteId: item.id, posteNom: item.nom } 
                                       }]);
                                     } else if (!isBesoinsMode && !copiedEvent.extendedProps?.isBesoin) {
                                       applyAction('add', { 
@@ -2326,194 +2151,63 @@ return (
                                         extendedProps: { ...copiedEvent.extendedProps, agentId: item.id, agentNom: item.nom }
                                       });
                                     }
-                                    return; 
-                                  }
-
-                                  // --- GESTION DU DESSIN DE CRÉNEAU (LASSO) ---
-                                  e.preventDefault();
-                                  if (e.ctrlKey || e.metaKey) return;
-                                  const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                                  const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
-                                  
-                                  let currentEndMins = Math.min(startMins + 60, limitesHeures.baseMins + limitesHeures.span);
-                                  let hasMoved = false;
-
-                                  const ghostEl = document.createElement('div');
-                                  ghostEl.className = `absolute top-0.5 bottom-0.5 rounded border border-dashed z-30 pointer-events-none flex items-center justify-center text-[9px] font-bold shadow-sm ${isBesoinsMode ? 'bg-red-500/40 border-red-600 text-red-950 dark:text-red-100' : 'bg-blue-500/40 border-blue-600 text-blue-950 dark:text-blue-100'}`;
-                                  track.appendChild(ghostEl);
-
-                                  const updateGhost = (m1, m2) => {
-                                    const minM = Math.min(m1, m2);
-                                    const maxM = Math.max(m1, m2);
-                                    const l = Math.max(0, ((minM - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                                    const w = Math.min(100 - l, ((maxM - minM) / limitesHeures.span) * 100);
-                                    ghostEl.style.left = `${l}%`;
-                                    ghostEl.style.width = `${w}%`;
+                                    setCopiedEvent(null);
+                                  }}
+                                  onAddLasso={(startMins, endMins) => {
+                                    if (currentTemplate.statut === 'valide') return;
                                     const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                    ghostEl.textContent = `${formatTime(minM)} - ${formatTime(maxM)}`;
-                                  };
-
-                                  updateGhost(startMins, currentEndMins);
-
-                                  const onMouseMove = (moveEvent) => {
-                                    if (Math.abs(moveEvent.clientX - startX) > 3) hasMoved = true;
-                                    const movePercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
-                                    currentEndMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
-                                    updateGhost(startMins, currentEndMins);
-                                  };
-
-                                  const onMouseUp = () => {
-                                    window.removeEventListener('mousemove', onMouseMove);
-                                    window.removeEventListener('mouseup', onMouseUp);
-                                    ghostEl.remove();
-
-                                    const finalStart = Math.min(startMins, currentEndMins);
-                                    const finalEnd = Math.max(startMins, currentEndMins);
-                                    const actualEnd = hasMoved ? finalEnd : (finalStart + 60);
-
-                                    if (actualEnd - finalStart >= 5) {
-                                      const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                      if (isBesoinsMode) {
-                                        updateCurrentTemplate(null, [...currentTemplate.besoins, { 
-                                          id: String(Date.now()), start: `${currentTemplateDateStr}T${formatTime(finalStart)}:00`, end: `${currentTemplateDateStr}T${formatTime(actualEnd)}:00`, 
-                                          extendedProps: { posteId: item.id, posteNom: item.nom, qte: formBesoinQte } 
-                                        }]);
-                                      } else {
-                                        setFormTypeEvent('affectation');
-                                        setFormTypeAbsence('absence');
-                                        setFormAbsImpact('local');
-                                        setFormAgent(item.id);
-                                        setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
-                                        setFormNote('');
-                                        setModalCreation({
-                                          isOpen: true,
-                                          eventId: null,
-                                          date: currentTemplateDateStr,
-                                          start: formatTime(finalStart),
-                                          end: formatTime(actualEnd)
-                                        });
-                                      }
+                                    if (isBesoinsMode) {
+                                      updateCurrentTemplate(null, [...currentTemplate.besoins, { 
+                                        id: String(Date.now()), start: `${currentTemplateDateStr}T${formatTime(startMins)}:00`, end: `${currentTemplateDateStr}T${formatTime(endMins)}:00`, 
+                                        extendedProps: { posteId: item.id, posteNom: item.nom, qte: formBesoinQte } 
+                                      }]);
+                                    } else {
+                                      setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(item.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
+                                      setModalCreation({ isOpen: true, eventId: null, date: currentTemplateDateStr, start: formatTime(startMins), end: formatTime(endMins) });
                                     }
-                                  };
-
-                                  window.addEventListener('mousemove', onMouseMove);
-                                  window.addEventListener('mouseup', onMouseUp);
-                                }}>                                  
-                                  {/* Affichage des blocs horaires sur la ligne */}
+                                  }}
+                                >
                                   {eventsDeLaLigne.map(evt => {
-                                    const startD = new Date(evt.start); 
-                                    const endD = new Date(evt.end);
-                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); 
-                                    const endMins = endD.getHours() * 60 + endD.getMinutes();
-                                    const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                                    const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
-                                    const durationMins = endMins - startMins;
-                                    const isVeryShort = durationMins <= 45; // Texte vertical
-                                    const isLong = durationMins >= 120; // Texte agrandi
+                                    const startD = new Date(evt.start); const endD = new Date(evt.end);
+                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
+                                    const isLocked = currentTemplate.statut === 'valide';
                                     
                                     let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo;
                                     if (isBesoinsMode) {
                                       const isSous = evt.extendedProps?.isSousEffectif;
-                                      evtBgColor = isSous ? '#dc2626' : '#16a34a';
-                                      evtBorderColor = isSous ? '#991b1b' : '#166534';
-                                      evtTextColor = '#ffffff';
+                                      evtBgColor = isSous ? '#dc2626' : '#16a34a'; evtBorderColor = isSous ? '#991b1b' : '#166534'; evtTextColor = '#ffffff';
                                       evtTitle = `${evt.extendedProps?.minCount} / ${evt.extendedProps?.qte} pers.`;
-                                      extInfo = null;
                                     } else {
                                       evtBgColor = evt.extendedProps?.posteCouleur || '#3b82f6';
                                       const estEnConflit = conflitsIds.has(String(evt.id).split('_')[0]);
                                       if (estEnConflit) { evtBgColor = '#dc2626'; }
-                                      evtBorderColor = 'rgba(0,0,0,0.2)';
-                                      evtTextColor = getContrastYIQ(evtBgColor);
+                                      evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = getContrastYIQ(evtBgColor);
                                       evtTitle = (estEnConflit ? '⚠️ ' : '') + (evt.extendedProps?.posteNom || 'Poste');
                                       extInfo = evt.extendedProps?.note || null;
                                     }
                                     
                                     return (
-                                     <div key={evt.id} className={`event-item absolute top-1 bottom-1 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 border cursor-pointer hover:ring-2 transition-all z-10 group/item ${!evt.extendedProps?.isAbsence && conflitsIds.has(String(evt.id).split('_')[0]) ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
-  style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evtBgColor, borderColor: evtBorderColor, color: evtTextColor }}
-  onMouseDown={(e) => {
-    if (e.button !== 0) return;
-    e.stopPropagation();
-
-    // --- GESTION DU CTRL+CLIC (COPIE) ---
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      setCopiedEvent({ title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: durationMins });
-      return;
-    }
-
-    const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
-    let hasMoved = false;
-    const track = e.currentTarget.closest('.flex-1.relative.my-1') || e.currentTarget.parentElement;
-    const rect = track.getBoundingClientRect();
-    const startX = e.clientX;
-
-    const onMouseMove = (moveEvent) => {
-      if (Math.abs(moveEvent.clientX - startX) > 4) hasMoved = true;
-      if (!hasMoved) return;
-
-      let deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
-      if (deltaMins !== 0) {
-        let newStart = startMins + deltaMins;
-        let newEnd = newStart + durationMins;
-        if (newStart < limitesHeures.baseMins) { newStart = limitesHeures.baseMins; newEnd = newStart + durationMins; }
-        if (newEnd > limitesHeures.baseMins + limitesHeures.span) { newEnd = limitesHeures.baseMins + limitesHeures.span; newStart = newEnd - durationMins; }
-
-        const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-        if (evt.extendedProps?.isAbsence) {
-          const cleanId = String(evt.id).replace('abs_', '').split('_')[0];
-          setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(newStart)}:00`, end: `${dateStr}T${formatTime(newEnd)}:00` } : a));
-        } else {
-          applyAction('update', { id: evt.id, start: `${dateStr}T${formatTime(newStart)}:00`, end: `${dateStr}T${formatTime(newEnd)}:00` });
-        }
-      }
-    };
-
-    const onMouseUp = () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      if (hasMoved) {
-        sauvegarderEtatPrecedent(snapshot);
-      } else {
-        // AUCUN MOUVEMENT = C'EST UN CLIC NORMAL !
-        ouvrirEdition(evt);
-      }
-    };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  }}>                                         
-                                      {/* LE CONTENU DU BLOC */}
-                                        <div className={`w-full h-full flex pointer-events-none overflow-hidden ${isVeryShort ? 'flex-col items-center justify-center' : 'flex-col justify-center'}`}>
-                                          {isVeryShort ? (
-                                            <span className="font-bold tracking-widest uppercase truncate w-full text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '9px' }}>
-                                              {evtTitle}
-                                            </span>
-                                          ) : (
-                                            <>
-                                              <span className={`font-bold truncate leading-none ${isLong ? 'text-sm' : 'text-[10px]'}`}>{evtTitle}</span>
-                                              <span className={`opacity-85 font-mono truncate mt-0.5 ${isLong ? 'text-xs' : 'text-[8px]'}`}>{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
-                                              {extInfo && <span className="text-[8px] italic mt-0.5 truncate bg-black/10 rounded px-1">{extInfo}</span>}
-                                            </>
-                                          )}
-                                        </div>
-
-                                        {/* POIGNÉES */}
-                                        <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier le début" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.closest('.flex-1.relative.my-1'); const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newStart = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; if (isBesoinsMode) { const cleanId = String(evt.id).split('_')[0]; const newBesoins = currentTemplate.besoins.map(b => String(b.id).split('_')[0] === cleanId ? { ...b, start: `${currentTemplateDateStr}T${formatTime(newStart)}:00` } : b); updateCurrentTemplate(null, newBesoins); } else { applyAction('update', { id: evt.id, start: `${currentTemplateDateStr}T${formatTime(newStart)}:00`, end: evt.end }); } }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
-                                        <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier la fin" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.closest('.flex-1.relative.my-1'); const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newEnd = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; if (isBesoinsMode) { const cleanId = String(evt.id).split('_')[0]; const newBesoins = currentTemplate.besoins.map(b => String(b.id).split('_')[0] === cleanId ? { ...b, end: `${currentTemplateDateStr}T${formatTime(newEnd)}:00` } : b); updateCurrentTemplate(null, newBesoins); } else { applyAction('update', { id: evt.id, start: evt.start, end: `${currentTemplateDateStr}T${formatTime(newEnd)}:00` }); } }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
-                                        
-                                        {/* LE NOUVEAU TOOLTIP FLOTTANT */}
-<div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none top-full left-1/2 -translate-x-1/2 mt-1.5 w-max min-w-[130px] text-center border border-gray-700">                                          <span className="font-black text-sm text-blue-300 leading-tight mb-1">{evtTitle}</span>
-                                          {!isBesoinsMode && <span className="font-semibold text-xs leading-none">{item.nom}</span>}
-                                          <span className="text-gray-400 font-mono text-[10px] mt-1">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
-                                          {extInfo && <span className="text-gray-300 text-[10px] italic mt-1">{extInfo}</span>}
-{/* Flèche pointant vers le haut */}
-                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900"></div>                                        </div>
-
-                                      </div>
+                                      <TimelineEvent 
+                                        key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={isLocked} 
+                                        bgColor={evtBgColor} borderColor={evtBorderColor} textColor={evtTextColor} 
+                                        title={evtTitle} subtitle={!isBesoinsMode ? item.nom : null} extInfo={extInfo} conflit={!isBesoinsMode && conflitsIds.has(String(evt.id).split('_')[0])}
+                                        onUpdate={(min, max) => {
+                                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                          sauvegarderEtatPrecedent();
+                                          if (isBesoinsMode) {
+                                            const cleanId = String(evt.id).split('_')[0];
+                                            const newBesoins = currentTemplate.besoins.map(b => String(b.id).split('_')[0] === cleanId ? { ...b, start: `${currentTemplateDateStr}T${formatTime(min)}:00`, end: `${currentTemplateDateStr}T${formatTime(max)}:00` } : b);
+                                            updateCurrentTemplate(null, newBesoins);
+                                          } else {
+                                            applyAction('update', { id: evt.id, start: `${currentTemplateDateStr}T${formatTime(min)}:00`, end: `${currentTemplateDateStr}T${formatTime(max)}:00` });
+                                          }
+                                        }}
+                                        onClick={() => { if (!isLocked) { if (evt.extendedProps?.isBesoin) ouvrirEditionBesoin(evt); else ouvrirEdition(evt); } }}
+                                        onCopy={(dur) => setCopiedEvent({ title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: dur })}
+                                      />
                                     );
                                   })}
-                                </div>
+                                </TimelineTrack>
                               </div>
                             );
                           })}
@@ -2527,335 +2221,148 @@ return (
           );
         })()}
 
-{/* 3. VUE PLANNING REEL */}
+        {/* 3. VUE PLANNING REEL */}
         {vueActive === 'planning' && (() => {
           const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
           const activeMonday = currentViewMonday || getMondayStr(new Date());
           
           return (
-<div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden min-h-0`}>            <div className="p-4 pb-2 no-print shrink-0">
-              <div className="flex justify-between items-center mb-2">
-                <h2 className={`text-lg font-bold ${t.header}`}>
-                  📅 Planning Réel 
-                  {printFilter.type === 'agent' && ` - Filtré pour : ${agents.find(a=>a.id===printFilter.id)?.nom}`}
-                  {printFilter.type === 'poste' && ` - Filtré pour le poste : ${postes.find(p=>p.id===printFilter.id)?.nom}`}
-                </h2>
-            
-                <div className="flex gap-2 items-center">
-                  <div className="flex items-center gap-3 mr-4">
-                    <button onClick={() => { const d = new Date(activeMonday); d.setDate(d.getDate() - 7); setCurrentViewMonday(getMondayStr(d)); }} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>◀ Semaine Préc.</button>
-                    <span className={`font-bold ${t.headerText} text-sm`}>Semaine du {activeMonday}</span>
-                    <button onClick={() => { const d = new Date(activeMonday); d.setDate(d.getDate() + 7); setCurrentViewMonday(getMondayStr(d)); }} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>Semaine Suiv. ▶</button>
+            <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden min-h-0`}>
+              <div className="p-4 pb-2 no-print shrink-0">
+                <div className="flex justify-between items-center mb-2">
+                  <h2 className={`text-lg font-bold ${t.header}`}>📅 Planning Réel {printFilter.type === 'agent' && ` - Filtré pour : ${agents.find(a=>a.id===printFilter.id)?.nom}`} {printFilter.type === 'poste' && ` - Filtré pour le poste : ${postes.find(p=>p.id===printFilter.id)?.nom}`}</h2>
+                  <div className="flex gap-2 items-center">
+                    <div className="flex items-center gap-3 mr-4">
+                      <button onClick={() => { const d = new Date(activeMonday); d.setDate(d.getDate() - 7); setCurrentViewMonday(getMondayStr(d)); }} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>◀ Semaine Préc.</button>
+                      <span className={`font-bold ${t.headerText} text-sm`}>Semaine du {activeMonday}</span>
+                      <button onClick={() => { const d = new Date(activeMonday); d.setDate(d.getDate() + 7); setCurrentViewMonday(getMondayStr(d)); }} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>Semaine Suiv. ▶</button>
+                    </div>
+                    <select onChange={(e) => { if(e.target.value) importerModele(e.target.value); e.target.value=''; }} className={`${t.cardBg} ${t.textAccent} px-2 py-1 rounded text-xs font-bold border ${t.borderLight} shadow-sm outline-none cursor-pointer hover:opacity-75`}>
+                      <option value="">📥 Appliquer un modèle...</option>
+                      {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.nom}</option>)}
+                    </select>
+                    {customWeeks[activeMonday] && (
+                      <button onClick={reinitialiserSemaineReelle} className="bg-orange-500/20 text-orange-500 hover:bg-orange-500/40 px-3 py-1 rounded text-xs font-bold border border-orange-500 shadow-sm transition">🔄 Rétablir</button>
+                    )}
                   </div>
-                  <select onChange={(e) => { if(e.target.value) importerModele(e.target.value); e.target.value=''; }} className={`${t.cardBg} ${t.textAccent} px-2 py-1 rounded text-xs font-bold border ${t.borderLight} shadow-sm outline-none cursor-pointer hover:opacity-75`}>
-                    <option value="">📥 Appliquer un modèle...</option>
-                    {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.nom}</option>)}
-                  </select>
-                  {customWeeks[activeMonday] && (
-                    <button onClick={reinitialiserSemaineReelle} className="bg-orange-500/20 text-orange-500 hover:bg-orange-500/40 px-3 py-1 rounded text-xs font-bold border border-orange-500 shadow-sm transition">🔄 Rétablir</button>
-                  )}
                 </div>
               </div>
-            </div>
-            
-            <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
-              {isPrinting ? (
-                <PrintTimeGridView events={displayEvents} agents={agents} limitesHeures={limitesHeures} amplitude={amplitude} titre={`Planning Hebdo du ${activeMonday}`} />
-              ) : (
-                <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
-<div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
+              
+              <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
+                {isPrinting ? (
+                  <PrintTimeGridView events={displayEvents} agents={agents} limitesHeures={limitesHeures} amplitude={amplitude} titre={`Planning Hebdo du ${activeMonday}`} />
+                ) : (
+                  <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
+                    <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
                       <div className="min-w-[900px] flex-1 flex flex-col relative">
-                      
-                      {/* En-tête des heures sticky */}
-                      <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center sticky top-0 z-30`}>
-                        {gridLabelsDaily.map(lbl => (
-                          <div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
-                            {lbl.timeStr}
-                          </div>
-                        ))}
-                      </div>
-                      
-                      <div className="flex-1 flex flex-col relative">
-                        {/* Grille de fond (traits verticaux) */}
-                        <div className="absolute inset-0 left-32 pointer-events-none z-0">
-                          {gridLines.map(line => (
-                            <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
-                          ))}
+                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center sticky top-0 z-30`}>
+                          {gridLabelsDaily.map(lbl => (<div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>{lbl.timeStr}</div>))}
                         </div>
+                        
+                        <div className="flex-1 flex flex-col relative">
+                          <div className="absolute inset-0 left-32 pointer-events-none z-0">
+                            {gridLines.map(line => (<div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>))}
+                          </div>
 
-                        {/* Boucle des 5 jours (Lundi à Vendredi) */}
-                        {[1, 2, 3, 4, 5].map(dayIndex => {
-                          const dateDuJour = new Date(activeMonday);
-                          dateDuJour.setDate(dateDuJour.getDate() + dayIndex - 1);
-                          const pad = n => String(n).padStart(2, '0');
-                          const dateStr = `${dateDuJour.getFullYear()}-${pad(dateDuJour.getMonth()+1)}-${pad(dateDuJour.getDate())}`;
-                          const nomJour = nomsJours[dayIndex];
+                          {[1, 2, 3, 4, 5].map(dayIndex => {
+                            const dateDuJour = new Date(activeMonday);
+                            dateDuJour.setDate(dateDuJour.getDate() + dayIndex - 1);
+                            const pad = n => String(n).padStart(2, '0');
+                            const dateStr = `${dateDuJour.getFullYear()}-${pad(dateDuJour.getMonth()+1)}-${pad(dateDuJour.getDate())}`;
+                            const nomJour = nomsJours[dayIndex];
 
-                          return (
-                            <div key={dateStr} className="flex flex-col border-b-4 border-black/15 dark:border-white/10 relative z-10 hover:z-[60]">
-                              {/* Bandeau du jour */}
-                              <div className={`px-4 py-1.5 font-bold uppercase text-xs tracking-wider sticky left-0 z-20 ${t.bgLight} ${t.header} border-b ${t.borderLight}`}>
-                                {nomJour} {dateDuJour.getDate()}/{dateDuJour.getMonth()+1}
-                              </div>
+                            return (
+                              <div key={dateStr} className="flex flex-col border-b-4 border-black/15 dark:border-white/10 relative z-10 hover:z-[60]">
+                                <div className={`px-4 py-1.5 font-bold uppercase text-xs tracking-wider sticky left-0 z-20 ${t.bgLight} ${t.header} border-b ${t.borderLight}`}>{nomJour} {dateDuJour.getDate()}/{dateDuJour.getMonth()+1}</div>
+                                {agents.map(agent => {
+                                  const eventsDeLaLigne = displayEvents.filter(e => e.start.startsWith(dateStr) && e.extendedProps?.agentId === agent.id);
+                                  const totalMinsJour = eventsDeLaLigne.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                                  const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
 
-                              {/* Lignes pour chaque agent */}
-                              {agents.map(agent => {
-                                const eventsDeLaLigne = displayEvents.filter(e => e.start.startsWith(dateStr) && e.extendedProps?.agentId === agent.id);
-                                const totalMinsJour = eventsDeLaLigne.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
-                                const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
-
-                                return (
-                                  <div key={`${dateStr}-${agent.id}`} className={`flex border-b ${t.borderLight} h-14 relative group hover:bg-black/5 hover:z-50 transition-colors`}>
-                                    {/* Colonne fixe avec Nom de l'agent */}
-                                    <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-20 shadow-[2px_0_5px_rgba(0,0,0,0.05)] sticky left-0`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
-                                      <span className="text-sm font-black text-right leading-tight truncate w-full">{agent.nom}</span>
-                                      <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
-                                    </div>
-                                    
-                                    {/* Zone interactive de la ligne (Piste horaire) */}
-                                    <div 
-                                      className="flex-1 h-full relative cursor-crosshair select-none"
-                                      onMouseDown={(e) => {
-                                        // On ignore si on clique sur un créneau ou un bouton
-                                        if (e.target.closest('.event-item')) return;
-                                        
-                                        const track = e.currentTarget;
-                                        const rect = track.getBoundingClientRect();
-                                        
-                                        // --- GESTION DU COLLER MULTIPLE (TAMPON) ---
-                                        if (copiedEvent) {
-                                          e.preventDefault();
-                                          sauvegarderEtatPrecedent();
-                                          const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                                          const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
+                                  return (
+                                    <div key={`${dateStr}-${agent.id}`} className={`flex border-b ${t.borderLight} h-14 relative group hover:bg-black/5 hover:z-50 transition-colors`}>
+                                      <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-20 shadow-[2px_0_5px_rgba(0,0,0,0.05)] sticky left-0`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
+                                        <span className="text-sm font-black text-right leading-tight truncate w-full">{agent.nom}</span>
+                                        <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
+                                      </div>
+                                      
+                                      <TimelineTrack 
+                                        limitesHeures={limitesHeures} isBesoins={false} copiedEvent={copiedEvent}
+                                        onAddCopy={(startMins) => {
                                           const duration = copiedEvent.durationMins || 60;
                                           const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
-                                          
                                           const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                          const newStartISO = `${dateStr}T${formatTime(startMins)}:00`;
-                                          const newEndISO = `${dateStr}T${formatTime(endMins)}:00`;
-
+                                          sauvegarderEtatPrecedent();
                                           applyAction('add', { 
-                                            id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO,
+                                            id: String(Date.now() + Math.random()), start: `${dateStr}T${formatTime(startMins)}:00`, end: `${dateStr}T${formatTime(endMins)}:00`,
                                             title: `${copiedEvent.extendedProps?.posteNom} - ${agent.nom}`,
                                             backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
                                             extendedProps: { ...copiedEvent.extendedProps, agentId: agent.id, agentNom: agent.nom }
                                           });
-                                          return; 
-                                        }
-
-                                        // --- GESTION DU DESSIN DE CRÉNEAU (LASSO) ---
-                                        if (e.ctrlKey || e.metaKey || e.button !== 0) return;
-                                        e.preventDefault();
-                                        
-                                        const startPercent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                                        const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
-                                        let currentEndMins = Math.min(startMins + 60, limitesHeures.baseMins + limitesHeures.span);
-                                        let hasMoved = false;
-
-                                        const ghostEl = document.createElement('div');
-                                        ghostEl.className = 'absolute top-1 bottom-1 rounded border-2 border-dashed z-30 pointer-events-none flex items-center justify-center text-[10px] font-bold shadow-md bg-blue-500/40 border-blue-600 text-blue-950 dark:text-blue-100';
-                                        track.appendChild(ghostEl);
-
-                                        const updateGhost = (m1, m2) => {
-                                          const minM = Math.min(m1, m2);
-                                          const maxM = Math.max(m1, m2);
-                                          const l = Math.max(0, ((minM - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                                          const w = Math.min(100 - l, ((maxM - minM) / limitesHeures.span) * 100);
-                                          ghostEl.style.left = `${l}%`;
-                                          ghostEl.style.width = `${w}%`;
+                                          setCopiedEvent(null);
+                                        }}
+                                        onAddLasso={(startMins, endMins) => {
                                           const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                          ghostEl.textContent = `${formatTime(minM)} - ${formatTime(maxM)}`;
-                                        };
-
-                                        updateGhost(startMins, currentEndMins);
-
-                                        const onMouseMove = (moveEvent) => {
-                                          if (Math.abs(moveEvent.clientX - startX) > 3) hasMoved = true;
-                                          const movePercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
-                                          currentEndMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
-                                          updateGhost(startMins, currentEndMins);
-                                        };
-
-                                        const onMouseUp = () => {
-                                          window.removeEventListener('mousemove', onMouseMove);
-                                          window.removeEventListener('mouseup', onMouseUp);
-                                          ghostEl.remove();
-
-                                          const finalStart = Math.min(startMins, currentEndMins);
-                                          const finalEnd = Math.max(startMins, currentEndMins);
-                                          const actualEnd = hasMoved ? finalEnd : (finalStart + 60);
-
-                                          if (actualEnd - finalStart >= 5) {
-                                            const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                            setFormTypeEvent('affectation');
-                                            setFormTypeAbsence('absence');
-                                            setFormAbsImpact('local');
-                                            setFormAgent(agent.id);
-                                            setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
-                                            setFormNote('');
-                                            setModalCreation({
-                                              isOpen: true,
-                                              eventId: null,
-                                              date: dateStr,
-                                              start: formatTime(finalStart),
-                                              end: formatTime(actualEnd)
-                                            });
+                                          setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(agent.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
+                                          setModalCreation({ isOpen: true, eventId: null, date: dateStr, start: formatTime(startMins), end: formatTime(endMins) });
+                                        }}
+                                      >
+                                        {eventsDeLaLigne.map(evt => {
+                                          const startD = new Date(evt.start); const endD = new Date(evt.end);
+                                          const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
+                                          
+                                          let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo;
+                                          if (evt.extendedProps?.isAbsence) {
+                                            const typeAbs = evt.extendedProps.typeAbsence;
+                                            evtBgColor = typeAbs === 'absence' ? '#ef4444' : typeAbs === 'retard' ? '#f59e0b' : '#10b981';
+                                            evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = '#ffffff';
+                                            evtTitle = typeAbs === 'absence' ? '🚫 ABS' : typeAbs === 'retard' ? '⏰ RET' : '🟢 SUPP';
+                                            extInfo = evt.extendedProps?.motif;
+                                          } else {
+                                            evtBgColor = evt.extendedProps?.posteCouleur || '#3b82f6';
+                                            const estEnConflit = conflitsIds.has(String(evt.id).split('_')[0]);
+                                            if (estEnConflit) { evtBgColor = '#dc2626'; }
+                                            evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = getContrastYIQ(evtBgColor);
+                                            evtTitle = (estEnConflit ? '⚠️ ' : '') + (evt.extendedProps?.posteNom || 'Poste');
+                                            extInfo = evt.extendedProps?.note || null;
                                           }
-                                        };
-
-                                        window.addEventListener('mousemove', onMouseMove);
-                                        window.addEventListener('mouseup', onMouseUp);
-                                      }}
-                                    >
-                                  {/* Événements de la ligne */}
-                                      {eventsDeLaLigne.map(evt => {
-                                        const startD = new Date(evt.start); 
-                                        const endD = new Date(evt.end);
-                                        const startMins = startD.getHours() * 60 + startD.getMinutes(); 
-                                        const endMins = endD.getHours() * 60 + endD.getMinutes();
-                                        const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                                        const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
-                                        
-                                        const durationMins = endMins - startMins;
-                                        const isVeryShort = durationMins <= 45;
-                                        const isLong = durationMins >= 120;
-                                        
-                                        let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo;
-                                        if (evt.extendedProps?.isAbsence) {
-                                          const typeAbs = evt.extendedProps.typeAbsence;
-                                          evtBgColor = typeAbs === 'absence' ? '#ef4444' : typeAbs === 'retard' ? '#f59e0b' : '#10b981';
-                                          evtBorderColor = 'rgba(0,0,0,0.2)';
-                                          evtTextColor = '#ffffff';
-                                          evtTitle = typeAbs === 'absence' ? '🚫 ABS' : typeAbs === 'retard' ? '⏰ RET' : '🟢 SUPP';
-                                          extInfo = evt.extendedProps?.motif;
-                                        } else {
-                                          evtBgColor = evt.extendedProps?.posteCouleur || '#3b82f6';
-                                          const estEnConflit = conflitsIds.has(String(evt.id).split('_')[0]);
-                                          if (estEnConflit) { evtBgColor = '#dc2626'; }
-                                          evtBorderColor = 'rgba(0,0,0,0.2)';
-                                          evtTextColor = getContrastYIQ(evtBgColor);
-                                          evtTitle = (estEnConflit ? '⚠️ ' : '') + (evt.extendedProps?.posteNom || 'Poste');
-                                          extInfo = evt.extendedProps?.note || null;
-                                        }
-                                        
-                                        return (
-                                          <div 
-                                            key={evt.id} 
-                                            className={`event-item absolute top-1 bottom-1 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 border cursor-pointer hover:ring-2 transition-colors z-10 group/item ${!evt.extendedProps?.isAbsence && conflitsIds.has(String(evt.id).split('_')[0]) ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
-                                            style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evtBgColor, borderColor: evtBorderColor, color: evtTextColor }}
-                                            onMouseDown={(e) => {
-                                              if (e.button !== 0) return;
-                                              e.stopPropagation();
-
-                                              // --- GESTION DU CTRL+CLIC (COPIE) ---
-                                              if (e.ctrlKey || e.metaKey) {
-                                                e.preventDefault();
-                                                setCopiedEvent({ title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins });
-                                                return;
-                                              }
-
-                                              const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
-                                              let hasMoved = false;
-                                              let isDraggingStarted = false;
-                                              const track = e.currentTarget.parentElement;
-                                              const rect = track.getBoundingClientRect();
-                                              const startX = e.clientX;
-
-                                              const onMouseMove = (moveEvent) => {
-                                                if (Math.abs(moveEvent.clientX - startX) > 4) {
-                                                  isDraggingStarted = true;
-                                                  hasMoved = true;
-                                                }
-                                                if (!isDraggingStarted) return;
-
-                                                let deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
-                                                if (deltaMins !== 0) {
-                                                  let newStart = startMins + deltaMins;
-                                                  let newEnd = newStart + durationMins;
-                                                  if (newStart < limitesHeures.baseMins) { newStart = limitesHeures.baseMins; newEnd = newStart + durationMins; }
-                                                  if (newEnd > limitesHeures.baseMins + limitesHeures.span) { newEnd = limitesHeures.baseMins + limitesHeures.span; newStart = newEnd - durationMins; }
-
-                                                  const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                                  if (evt.extendedProps?.isAbsence) {
-                                                    const cleanId = String(evt.id).replace('abs_', '').split('_')[0];
-                                                    setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(newStart)}:00`, end: `${dateStr}T${formatTime(newEnd)}:00` } : a));
-                                                  } else {
-                                                    applyAction('update', { id: evt.id, start: `${dateStr}T${formatTime(newStart)}:00`, end: `${dateStr}T${formatTime(newEnd)}:00` });
-                                                  }
-                                                }
-                                              };
-
-                                              const onMouseUp = () => {
-                                                window.removeEventListener('mousemove', onMouseMove);
-                                                window.removeEventListener('mouseup', onMouseUp);
-                                                
-                                                if (isDraggingStarted && hasMoved) {
-                                                  const preventClick = (eClick) => { 
-                                                    eClick.stopPropagation(); 
-                                                    sauvegarderEtatPrecedent(snapshot); 
-                                                    eClick.preventDefault(); 
-                                                    window.removeEventListener('click', preventClick, true); 
-                                                  }; 
-                                                  window.addEventListener('click', preventClick, true); 
-                                                  setTimeout(() => window.removeEventListener('click', preventClick, true), 100); 
+                                          
+                                          return (
+                                            <TimelineEvent 
+                                              key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={false} 
+                                              bgColor={evtBgColor} borderColor={evtBorderColor} textColor={evtTextColor} 
+                                              title={evtTitle} subtitle={agent?.nom || evt.extendedProps?.agentNom || 'Agent'} extInfo={extInfo} conflit={!evt.extendedProps?.isAbsence && conflitsIds.has(String(evt.id).split('_')[0])}
+                                              onUpdate={(min, max) => {
+                                                const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                                sauvegarderEtatPrecedent();
+                                                if (evt.extendedProps?.isAbsence) {
+                                                  const cleanId = String(evt.id).replace('abs_', '').split('_')[0];
+                                                  setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(min)}:00`, end: `${dateStr}T${formatTime(max)}:00` } : a));
                                                 } else {
-                                                  // AUCUN MOUVEMENT = CLIC SIMPLE (OUVERTURE FENETRE)
-                                                  ouvrirEdition(evt);
+                                                  applyAction('update', { id: evt.id, start: `${dateStr}T${formatTime(min)}:00`, end: `${dateStr}T${formatTime(max)}:00` });
                                                 }
-                                              };
-                                              
-                                              window.addEventListener('mousemove', onMouseMove);
-                                              window.addEventListener('mouseup', onMouseUp);
-                                            }}
-                                          >
-                                            <div className={`w-full h-full flex pointer-events-none overflow-hidden ${isVeryShort ? 'flex-col items-center justify-center' : 'flex-col justify-center'}`}>
-                                              {isVeryShort ? (
-                                                <span className="font-bold tracking-widest uppercase truncate w-full text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '9px' }}>
-                                                  {evtTitle}
-                                                </span>
-                                              ) : (
-                                                <>
-                                                  <span className={`font-bold truncate leading-none ${isLong ? 'text-sm' : 'text-[10px]'}`}>{evtTitle}</span>
-                                                  <span className={`opacity-85 font-mono truncate mt-0.5 ${isLong ? 'text-xs' : 'text-[8px]'}`}>{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
-                                                  {extInfo && <span className="text-[8px] italic mt-0.5 truncate bg-black/10 rounded px-1">{extInfo}</span>}
-                                                </>
-                                              )}
-                                            </div>
-
-                                            {/* Poignées */}
-                                            <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier le début" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.parentElement.parentElement; const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newStart = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; if (evt.extendedProps?.isAbsence) { const cleanId = String(evt.id).replace('abs_', '').split('_')[0]; setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(newStart)}:00` } : a)); } else { applyAction('update', { id: evt.id, start: `${dateStr}T${formatTime(newStart)}:00`, end: evt.end }); } }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
-                                            <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier la fin" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.parentElement.parentElement; const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newEnd = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; if (evt.extendedProps?.isAbsence) { const cleanId = String(evt.id).replace('abs_', '').split('_')[0]; setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, end: `${dateStr}T${formatTime(newEnd)}:00` } : a)); } else { applyAction('update', { id: evt.id, start: evt.start, end: `${dateStr}T${formatTime(newEnd)}:00` }); } }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
-                                            
-                                            {/* Tooltip */}
-                                            <div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[99999] pointer-events-none top-full left-1/2 -translate-x-1/2 mt-1.5 w-max min-w-[130px] text-center border border-gray-700">
-                                                <span className="font-black text-sm text-blue-300 leading-tight mb-1">{evtTitle}</span>
-                                                <span className="font-semibold text-xs leading-none">{agent?.nom || evt.extendedProps?.agentNom || 'Agent'}</span>
-                                                <span className="text-gray-400 font-mono text-[10px] mt-1">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
-                                                {extInfo && <span className="text-gray-300 text-[10px] italic mt-1">{extInfo}</span>}
-                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900"></div>
-                                            </div>
-                                          </div>
-                                        );
-                                      })}                                      
-
+                                              }}
+                                              onClick={() => ouvrirEdition(evt)}
+                                              onCopy={(dur) => setCopiedEvent({ title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: dur })}
+                                            />
+                                          );
+                                        })}
+                                      </TimelineTrack>
                                     </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        })}
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
           );
         })()}
-
 
         {/* 4. VUE BILAN EQUIPE */}
         {vueActive === 'dashboard' && (() => {
@@ -3091,7 +2598,7 @@ return (
 
       </div>
       {/* ================================================================= */}
-{showUndoToast && (
+      {showUndoToast && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 border border-gray-700 animate-in slide-in-from-bottom duration-150 no-print">
           <span className="text-base">↩️</span>
           <div className="text-sm font-bold">Action annulée (Ctrl+Z)</div>
@@ -3103,7 +2610,7 @@ return (
           <div className="text-sm font-bold">Action rétablie (Ctrl+Y)</div>
         </div>
       )}
-            {copiedEvent && (
+      {copiedEvent && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 border border-gray-700 animate-in slide-in-from-bottom duration-150 no-print">
           <span className="text-base">📋</span>
           <div className="text-xs">
@@ -3115,7 +2622,6 @@ return (
     </div>
   );
 };
-
 export default function App() {
   const [isSetupComplete, setIsSetupComplete] = useState(() => localStorage.getItem('edt-setup-done') === 'true');
   const [themeId, setThemeId] = useState(() => localStorage.getItem('edt-theme') || 'menthe_terracotta');
