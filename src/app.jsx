@@ -1162,10 +1162,42 @@ return (
 
   };
 
+
+  /* REMPLACER PAR : */
+  const getActiveContract = (agentData, dateStr) => {
+    if (!agentData.avenants || agentData.avenants.length === 0) return { quotite: agentData.quotite, estEtudiant: agentData.estEtudiant };
+    const sorted = [...agentData.avenants].sort((a, b) => a.date.localeCompare(b.date));
+    let active = { quotite: agentData.quotite, estEtudiant: agentData.estEtudiant };
+    for (const av of sorted) {
+      if (av.date && dateStr >= av.date) {
+        active = { quotite: av.quotite, estEtudiant: av.estEtudiant };
+      }
+    }
+    return active;
+  };
+
+  const calculerContratProratise = (agentData, bYear) => {
+    if (!agentData.avenants || agentData.avenants.length === 0) return calculerContratBetty(agentData.quotite, agentData.estEtudiant);
+    
+    let totalHours = 0;
+    const startD = new Date(bYear, 8, 1); // 1er Septembre
+    const endD = new Date(bYear + 1, 7, 31); // 31 Août
+    const daysInYear = Math.round((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
+    
+    for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+      const pad = n => String(n).padStart(2, '0');
+      const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      const active = getActiveContract(agentData, dateStr);
+      const annualHoursForDay = calculerContratBetty(active.quotite, active.estEtudiant);
+      totalHours += (annualHoursForDay / daysInYear);
+    }
+    return Math.round(totalHours);
+  };
+
   const handleEditAgentChange = (champ, valeur) => {
     const newAgent = { ...modalAgent, [champ]: valeur };
     if (champ === 'quotite' || champ === 'estEtudiant') {
-      newAgent.hContrat = calculerContratBetty(newAgent.quotite, newAgent.estEtudiant);
+      newAgent.hContrat = calculerContratProratise(newAgent, baseYear);
     }
     setModalAgent(newAgent);
   };
@@ -1177,10 +1209,10 @@ return (
     const hC = typeof modalAgent.hContrat === 'string' ? parseHeureSaisie(modalAgent.hContrat) : modalAgent.hContrat;
     
     if (modalAgent.id) {
-      setAgents(agents.map(a => a.id === modalAgent.id ? { ...a, nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours } : a));
+      setAgents(agents.map(a => a.id === modalAgent.id ? { ...a, nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours, avenants: modalAgent.avenants } : a));
       updateCurrentTemplate(currentTemplate.events.map(evt => evt.extendedProps?.agentId === modalAgent.id ? { ...evt, extendedProps: { ...evt.extendedProps, agentNom: modalAgent.nom }, backgroundColor: modalAgent.couleurFond, borderColor: modalAgent.couleurFond } : evt), null);
     } else {
-      setAgents([...agents, { id: Date.now(), nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours }]);
+      setAgents([...agents, { id: Date.now(), nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours, avenants: modalAgent.avenants || [] }]);
     }
     setModalAgent({ ...modalAgent, isOpen: false });
   };
@@ -1678,11 +1710,55 @@ return (
                         {['LUN', 'MAR', 'MER', 'JEU', 'VEN'][day - 1]}
                       </label>
                     ))}
+</div>
                   </div>
-                </div>
 
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}><button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded">Annuler</button><button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded`}>{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button></div>
+                  {/* AJOUT: GESTION DES AVENANTS */}
+                  <div className="flex flex-col mt-4 pt-4 border-t border-black/10 dark:border-white/10">
+                    <div className="flex justify-between items-center mb-2">
+                        <label className={`text-sm font-semibold ${t.header}`}>Avenants (Changement en cours d'année)</label>
+                        <button type="button" onClick={() => {
+                            const newAv = [...(modalAgent.avenants || []), { date: '', quotite: 100, estEtudiant: false }];
+                            setModalAgent({...modalAgent, avenants: newAv});
+                        }} className="text-xs bg-black/10 hover:bg-black/20 px-2 py-1 rounded font-bold transition-colors">➕ Ajouter</button>
+                    </div>
+                    {(modalAgent.avenants || []).map((av, idx) => (
+                        <div key={idx} className="flex gap-2 items-center mb-2 bg-black/5 p-2 rounded shadow-inner">
+                            <input type="date" required value={av.date} onChange={e => {
+                                const newAv = [...modalAgent.avenants]; newAv[idx].date = e.target.value;
+                                const newAgent = {...modalAgent, avenants: newAv};
+                                newAgent.hContrat = calculerContratProratise(newAgent, baseYear);
+                                setModalAgent(newAgent);
+                            }} className="flex-1 border border-black/20 rounded p-1 text-xs bg-transparent" />
+                            <input type="number" step="0.1" required value={av.quotite} onChange={e => {
+                                const newAv = [...modalAgent.avenants]; newAv[idx].quotite = e.target.value;
+                                const newAgent = {...modalAgent, avenants: newAv};
+                                newAgent.hContrat = calculerContratProratise(newAgent, baseYear);
+                                setModalAgent(newAgent);
+                            }} className="w-16 border border-black/20 rounded p-1 text-xs text-center bg-transparent font-bold" placeholder="%" />
+                            <label className="flex items-center gap-1 text-[10px] font-bold cursor-pointer">
+                                <input type="checkbox" checked={av.estEtudiant} onChange={e => {
+                                    const newAv = [...modalAgent.avenants]; newAv[idx].estEtudiant = e.target.checked;
+                                    const newAgent = {...modalAgent, avenants: newAv};
+                                    newAgent.hContrat = calculerContratProratise(newAgent, baseYear);
+                                    setModalAgent(newAgent);
+                                }} /> Étud.
+                            </label>
+                            <button type="button" onClick={() => {
+                                const newAv = [...modalAgent.avenants]; newAv.splice(idx, 1);
+                                const newAgent = {...modalAgent, avenants: newAv};
+                                newAgent.hContrat = calculerContratProratise(newAgent, baseYear);
+                                setModalAgent(newAgent);
+                            }} className="text-red-500 hover:text-red-700 px-1 font-black transition-colors" title="Supprimer cet avenant">✖</button>
+                        </div>
+                    ))}
+                    {(modalAgent.avenants || []).length > 0 && (
+                        <p className="text-[10px] text-gray-500 italic leading-tight mt-1">Le contrat global est recalculé automatiquement au prorata exact des jours de l'année scolaire (1er Sept. au 31 Août).</p>
+                    )}
+                  </div>
+
+                </div>
+                <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}><button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded">Annuler</button><button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-bold`}>{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button></div>
             </form>
           </div>
         </div>
@@ -1937,7 +2013,7 @@ return (
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
 
                             return (
-<div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px]`}>
+<div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
                                   <span className="text-sm font-black text-right leading-tight">{agent.nom}</span>
                                   <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
@@ -2102,12 +2178,12 @@ const durationMins = endMins - startMins;
                                         <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier le début" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.closest('.flex-1.relative.my-1'); const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newStart = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(newStart)}:00`, end: evt.end }); }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
                                         <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier la fin" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.closest('.flex-1.relative.my-1'); const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newEnd = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; applyAction('update', { id: evt.id, start: evt.start, end: `${jourConsulte}T${formatTime(newEnd)}:00` }); }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
                                         
-                                        {/* LE NOUVEAU TOOLTIP FLOTTANT */}
-                                        <div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-max min-w-[130px] text-center border border-gray-700">
+                                        {/* LE TOOLTIP FLOTTANT VERS LE BAS */}
+                                        <div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none top-full left-1/2 -translate-x-1/2 mt-1.5 w-max min-w-[130px] text-center border border-gray-700">
                                           <span className="font-black text-sm text-blue-300 leading-tight mb-1">{evt.extendedProps?.posteNom || 'Poste'}</span>
                                           <span className="font-semibold text-xs leading-none">{agent.nom}</span>
                                           <span className="text-gray-400 font-mono text-[10px] mt-1">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
-                                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900"></div>
                                         </div>
 
                                       </div>
@@ -2204,7 +2280,7 @@ const durationMins = endMins - startMins;
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
 
                             return (
-<div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px]`}>
+<div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: rowBgColor, color: getContrastYIQ(rowBgColor) }}>
                                   <span className="text-sm font-black text-right leading-tight">{item.nom}</span>
                                   <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
@@ -2410,13 +2486,12 @@ const durationMins = endMins - startMins;
                                         <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier la fin" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.closest('.flex-1.relative.my-1'); const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newEnd = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; if (isBesoinsMode) { const cleanId = String(evt.id).split('_')[0]; const newBesoins = currentTemplate.besoins.map(b => String(b.id).split('_')[0] === cleanId ? { ...b, end: `${currentTemplateDateStr}T${formatTime(newEnd)}:00` } : b); updateCurrentTemplate(null, newBesoins); } else { applyAction('update', { id: evt.id, start: evt.start, end: `${currentTemplateDateStr}T${formatTime(newEnd)}:00` }); } }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
                                         
                                         {/* LE NOUVEAU TOOLTIP FLOTTANT */}
-                                        <div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-max min-w-[130px] text-center border border-gray-700">
-                                          <span className="font-black text-sm text-blue-300 leading-tight mb-1">{evtTitle}</span>
+<div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none top-full left-1/2 -translate-x-1/2 mt-1.5 w-max min-w-[130px] text-center border border-gray-700">                                          <span className="font-black text-sm text-blue-300 leading-tight mb-1">{evtTitle}</span>
                                           {!isBesoinsMode && <span className="font-semibold text-xs leading-none">{item.nom}</span>}
                                           <span className="text-gray-400 font-mono text-[10px] mt-1">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
                                           {extInfo && <span className="text-gray-300 text-[10px] italic mt-1">{extInfo}</span>}
-                                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                                        </div>
+{/* Flèche pointant vers le haut */}
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900"></div>                                        </div>
 
                                       </div>
                                     );
@@ -2513,7 +2588,7 @@ const durationMins = endMins - startMins;
                                 const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
 
                                 return (
-                                  <div key={`${dateStr}-${agent.id}`} className={`flex border-b ${t.borderLight} h-14 relative group hover:bg-black/5 transition-colors`}>
+                                  <div key={`${dateStr}-${agent.id}`} className={`flex border-b ${t.borderLight} h-14 relative group hover:bg-black/5 hover:z-50 transition-colors`}>
                                     {/* Colonne fixe avec Nom de l'agent */}
                                     <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-20 shadow-[2px_0_5px_rgba(0,0,0,0.05)] sticky left-0`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
                                       <span className="text-sm font-black text-right leading-tight truncate w-full">{agent.nom}</span>
@@ -2723,14 +2798,15 @@ const durationMins = endMins - startMins;
                                             <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier la fin" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.closest('.event-item').parentElement; const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newEnd = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; if (evt.extendedProps?.isAbsence) { const cleanId = String(evt.id).replace('abs_', '').split('_')[0]; setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, end: `${dateStr}T${formatTime(newEnd)}:00` } : a)); } else { applyAction('update', { id: evt.id, start: evt.start, end: `${dateStr}T${formatTime(newEnd)}:00` }); } }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
                                             
                                             {/* Tooltip */}
-                                            <div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-max min-w-[130px] text-center border border-gray-700">
-                                              <span className="font-black text-sm text-blue-300 leading-tight mb-1">{evtTitle}</span>
-                                              <span className="font-semibold text-xs leading-none">{agent.nom}</span>
-                                              <span className="text-gray-400 font-mono text-[10px] mt-1">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
-                                              {extInfo && <span className="text-gray-300 text-[10px] italic mt-1">{extInfo}</span>}
-                                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                                            </div>
-                                          </div>
+                                            <div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none top-full left-1/2 -translate-x-1/2 mt-1.5 w-max min-w-[130px] text-center border border-gray-700">
+                                                <span className="font-black text-sm text-blue-300 leading-tight mb-1">{evtTitle}</span>
+                                                <span className="font-semibold text-xs leading-none">{agent?.nom || evt.extendedProps?.agentNom || 'Agent'}</span>
+                                                <span className="text-gray-400 font-mono text-[10px] mt-1">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
+                                                {extInfo && <span className="text-gray-300 text-[10px] italic mt-1">{extInfo}</span>}
+                                                {/* Flèche pointant vers le haut */}
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900"></div>
+                                              </div>
+                                              </div>
                                         );
                                       })}
                                     </div>
@@ -2749,9 +2825,12 @@ const durationMins = endMins - startMins;
           </div>
           );
         })()}
+
+
         {/* 4. VUE BILAN EQUIPE */}
         {vueActive === 'dashboard' && (() => {
-          const totalETP = Math.round(agents.reduce((sum, a) => sum + Number(a.quotite), 0)) / 100;
+          const todayStr = new Date().toISOString().split('T')[0];
+          const totalETP = Math.round(agents.reduce((sum, a) => sum + Number(getActiveContract(a, todayStr).quotite), 0)) / 100;
           return (
             <div className={`flex-1 p-8 overflow-auto ${t.bgMain} print-dashboard-table`}>
               <div className="flex justify-between items-end mb-6">
@@ -2763,12 +2842,11 @@ const durationMins = endMins - startMins;
                    </div>
                    <div className="text-3xl font-light text-gray-400">/</div>
                    <div>
-                      <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">ETP Répartis (Agents)</label>
-                      <div className={`text-2xl font-black flex items-center gap-1 ${totalETP > dotation && dotation > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{totalETP.toFixed(2)}<span className="text-base">ETP</span></div>
+                      <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">ETP Actifs (Aujourd'hui)</label>
+                      <div className={`text-2xl font-black flex items-center gap-1 ${totalETP !== dotation && dotation > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{totalETP.toFixed(2)}<span className="text-base">ETP</span></div>
                    </div>
                 </div>
               </div>
-
               <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden`}>
                 <table className="w-full text-sm text-left">
                   <thead className={`${t.headerBg} ${t.headerText} font-medium uppercase text-xs`}>
@@ -2780,7 +2858,7 @@ const durationMins = endMins - startMins;
                         <td className={`p-4 font-bold border-r ${t.borderLight} ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</td>
                         <td className={`p-4 text-center border-r ${t.borderLight}`}>
                           <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
-                            {agent.quotite}%
+                            {getActiveContract(agent, todayStr).quotite}% {(agent.avenants?.length > 0) && <span title="Des avenants modifient son temps de travail en cours d'année" className="ml-1 cursor-help">📝</span>}
                           </span>
                         </td>
                         <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.header}`}>{formatHeureTableau(agent.hContrat, true)}</td>
