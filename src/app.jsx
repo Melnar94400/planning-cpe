@@ -722,7 +722,6 @@ const anneeScolaire = [
   };
 
   const applyAction = (action, info) => {
-    sauvegarderEtatPrecedent(); // 👈 LIGNE AJOUTÉE ICI
     const cleanId = String(info.id).split('_')[0]; 
     if (vueActive === 'template') {
       let mod = [...currentTemplate.events];
@@ -961,7 +960,7 @@ const ajouterAbsenceRetard = (e) => {
 
     setFormTypeEvent(isAbs ? 'absence' : 'affectation');
     setFormTypeAbsence(extProps.typeAbsence || 'absence');
-    setFormAbsenceDeduire(extProps.deduire || false);
+    setFormAbsImpact(extProps.impact || 'local'); // 👈 CORRECTION ICI (Fini le crash !)
     setFormAgent(extProps.agentId || '');
     setFormPoste(extProps.posteId || postes.find(p => p.nom === extProps.posteNom)?.id || '');
     setFormNote(extProps.motif || extProps.note || '');
@@ -1282,7 +1281,7 @@ return (
   return (
     <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
       {modalNewVersion.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
             <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">➕ Créer une évolution</h3></div>
             <form onSubmit={validerCreationVersionModal}>
@@ -1306,7 +1305,7 @@ return (
       )}
 
       {modalPoste.isOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 no-print">
+        <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
             <div className={`${t.headerBg} ${t.headerText} p-4 shrink-0 flex justify-between items-center`}>
               <h3 className="font-bold text-lg">{modalPoste.id ? 'Modifier le poste' : 'Nouveau poste & Grille de besoins'}</h3>
@@ -1382,7 +1381,7 @@ return (
       )}
 
       {modalException.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
             <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">Modifier le jour ({modalException.dateStr})</h3></div>
             <form onSubmit={validerExceptionJourModal}>
@@ -1409,7 +1408,7 @@ return (
       )}
 
       {modalParametres && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 no-print">
+        <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh] border ${t.borderLight}`}>
             <div className={`${t.headerBg} ${t.headerText} p-5 flex justify-between items-center shrink-0`}>
               <h3 className="font-bold text-xl">⚙️ Paramètres Généraux</h3>
@@ -1537,7 +1536,7 @@ return (
       )}
 
       {modalCreation.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
             <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">{modalCreation.eventId ? 'Modifier l\'affectation' : 'Nouvelle affectation'}</h3></div>
             <form onSubmit={validerCreationModal}>
@@ -1614,7 +1613,7 @@ return (
       )}
 
       {modalBesoinMulti.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
             <div className="bg-red-700 text-white p-4 shrink-0"><h3 className="font-bold text-lg">🎯 Saisie d'une grille de besoins</h3></div>
             <form onSubmit={validerBesoinMultiModal} className="flex flex-col overflow-hidden">
@@ -1668,7 +1667,7 @@ return (
       )}
 
       {modalEditBesoin.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
             <div className="bg-red-700 text-white p-4"><h3 className="font-bold text-lg">Modifier le besoin</h3></div>
             <form onSubmit={validerEditBesoin}>
@@ -1683,7 +1682,7 @@ return (
       )}
 
       {modalAgent.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print">
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-md overflow-hidden border ${t.borderLight}`}>
             <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">{modalAgent.id ? 'Modifier un agent' : 'Nouvel agent'}</h3></div>
             <form onSubmit={validerAgentModal}>
@@ -2071,7 +2070,7 @@ return (
                                   updateGhost(startMins, currentEndMins);
 
                                   const onMouseMove = (moveEvent) => {
-                                    hasMoved = true;
+                                    if (Math.abs(moveEvent.clientX - startX) > 3) hasMoved = true;
                                     const movePercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
                                     currentEndMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
                                     updateGhost(startMins, currentEndMins);
@@ -2114,7 +2113,7 @@ return (
                                     const endMins = endD.getHours() * 60 + endD.getMinutes();
                                     const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
                                     const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
-const durationMins = endMins - startMins;
+                                    const durationMins = endMins - startMins;
                                     const isVeryShort = durationMins <= 45; // Texte vertical si <= 45m
                                     const isLong = durationMins >= 120; // Gros texte si >= 2h
                                     
@@ -2122,45 +2121,55 @@ const durationMins = endMins - startMins;
                                     const textColor = getContrastYIQ(posteCouleur);
                                     
                                     return (
-                                        <div key={evt.id} className="absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-visible border cursor-grab active:cursor-grabbing hover:ring-2 transition-all z-10 group/item"
-                                        style={{ left: `${left}%`, width: `${width}%`, backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', color: textColor }}
-                                        onClick={(e) => { 
-                                          e.stopPropagation(); 
-                                          if (e.ctrlKey || e.metaKey) {
-                                            e.preventDefault();
-                                            setCopiedEvent({ title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: durationMins });
-                                            return;
-                                          }
-                                          ouvrirEdition(evt); 
-                                        }}
-                                        onMouseDown={(e) => {
-                                          if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
-                                          e.stopPropagation();
-                                          const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
-                                          let hasMoved = false;
-                                          const track = e.currentTarget.closest('.flex-1.relative.my-1');
-                                          const rect = track.getBoundingClientRect();
-                                          const startX = e.clientX;
+                                      <div key={evt.id} className="event-item absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-visible border cursor-pointer hover:ring-2 transition-all z-10 group/item"
+  style={{ left: `${left}%`, width: `${width}%`, backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', color: textColor }}
+  onMouseDown={(e) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    
+    // --- GESTION DU CTRL+CLIC (COPIE) ---
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      setCopiedEvent({ title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: durationMins });
+      return;
+    }
 
-                                          const onMouseMove = (moveEvent) => {
-                                            hasMoved = true;
-                                            let deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
-                                            let newStart = startMins + deltaMins;
-                                            let newEnd = newStart + durationMins;
-                                            if (newStart < limitesHeures.baseMins) { newStart = limitesHeures.baseMins; newEnd = newStart + durationMins; }
-                                            if (newEnd > limitesHeures.baseMins + limitesHeures.span) { newEnd = limitesHeures.baseMins + limitesHeures.span; newStart = newEnd - durationMins; }
+    const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
+    let hasMoved = false;
+    const track = e.currentTarget.closest('.flex-1.relative.my-1') || e.currentTarget.parentElement;
+    const rect = track.getBoundingClientRect();
+    const startX = e.clientX;
 
-                                            const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                            applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(newStart)}:00`, end: `${jourConsulte}T${formatTime(newEnd)}:00` });
-                                          };
-                                          const onMouseUp = () => {
-                                            window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp);
-                                            if (hasMoved) { const preventClick = (eClick) => { eClick.stopPropagation(); sauvegarderEtatPrecedent(snapshot); eClick.preventDefault(); window.removeEventListener('click', preventClick, true); }; window.addEventListener('click', preventClick, true); setTimeout(() => window.removeEventListener('click', preventClick, true), 100); }
-                                          };
-                                          window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp);
-                                        }}>
-                                        
-                                        {/* LE CONTENU DU BLOC */}
+    const onMouseMove = (moveEvent) => {
+      if (Math.abs(moveEvent.clientX - startX) > 4) hasMoved = true;
+      if (!hasMoved) return;
+
+      let deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
+      if (deltaMins !== 0) {
+        let newStart = startMins + deltaMins;
+        let newEnd = newStart + durationMins;
+        if (newStart < limitesHeures.baseMins) { newStart = limitesHeures.baseMins; newEnd = newStart + durationMins; }
+        if (newEnd > limitesHeures.baseMins + limitesHeures.span) { newEnd = limitesHeures.baseMins + limitesHeures.span; newStart = newEnd - durationMins; }
+
+        const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+        applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(newStart)}:00`, end: `${jourConsulte}T${formatTime(newEnd)}:00` });
+      }
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      if (hasMoved) {
+        sauvegarderEtatPrecedent(snapshot);
+      } else {
+        // AUCUN MOUVEMENT = C'EST UN CLIC NORMAL !
+        ouvrirEdition(evt);
+      }
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }}>
+                                      {/* LE CONTENU DU BLOC */}
                                         <div className={`w-full h-full flex pointer-events-none overflow-hidden ${isVeryShort ? 'flex-col items-center justify-center' : 'flex-col justify-center'}`}>
                                           {isVeryShort ? (
                                             <span className="font-bold tracking-widest uppercase truncate w-full text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '9px' }}>
@@ -2347,7 +2356,7 @@ const durationMins = endMins - startMins;
                                   updateGhost(startMins, currentEndMins);
 
                                   const onMouseMove = (moveEvent) => {
-                                    hasMoved = true;
+                                    if (Math.abs(moveEvent.clientX - startX) > 3) hasMoved = true;
                                     const movePercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
                                     currentEndMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
                                     updateGhost(startMins, currentEndMins);
@@ -2398,7 +2407,7 @@ const durationMins = endMins - startMins;
                                     const endMins = endD.getHours() * 60 + endD.getMinutes();
                                     const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
                                     const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
-const durationMins = endMins - startMins;
+                                    const durationMins = endMins - startMins;
                                     const isVeryShort = durationMins <= 45; // Texte vertical
                                     const isLong = durationMins >= 120; // Texte agrandi
                                     
@@ -2421,52 +2430,60 @@ const durationMins = endMins - startMins;
                                     }
                                     
                                     return (
-                                    <div key={evt.id} className={`absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 overflow-visible border cursor-grab active:cursor-grabbing hover:ring-2 transition-all z-10 group/item ${!isBesoinsMode && conflitsIds.has(String(evt.id).split('_')[0]) ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
-                                        style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evtBgColor, borderColor: evtBorderColor, color: evtTextColor }}
-                                        onClick={(e) => { 
-                                          e.stopPropagation(); 
-                                          if (e.ctrlKey || e.metaKey) {
-                                            e.preventDefault();
-                                            setCopiedEvent({ title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: durationMins });
-                                            return;
-                                          }
-                                          if (currentTemplate.statut === 'valide') return;
-                                          if (evt.extendedProps?.isBesoin) ouvrirEditionBesoin(evt); else ouvrirEdition(evt); 
-                                        }}
-                                        onMouseDown={(e) => {
-                                          if (e.button !== 0 || e.ctrlKey || e.metaKey || currentTemplate.statut === 'valide') return;
-                                          e.stopPropagation();
-                                          const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
-                                          let hasMoved = false;
-                                          const track = e.currentTarget.closest('.flex-1.relative.my-1');
-                                          const rect = track.getBoundingClientRect();
-                                          const startX = e.clientX;
+                                     <div key={evt.id} className={`event-item absolute top-1 bottom-1 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 border cursor-pointer hover:ring-2 transition-all z-10 group/item ${!evt.extendedProps?.isAbsence && conflitsIds.has(String(evt.id).split('_')[0]) ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
+  style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evtBgColor, borderColor: evtBorderColor, color: evtTextColor }}
+  onMouseDown={(e) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
 
-                                          const onMouseMove = (moveEvent) => {
-                                            hasMoved = true;
-                                            let deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
-                                            let newStart = startMins + deltaMins;
-                                            let newEnd = newStart + durationMins;
-                                            if (newStart < limitesHeures.baseMins) { newStart = limitesHeures.baseMins; newEnd = newStart + durationMins; }
-                                            if (newEnd > limitesHeures.baseMins + limitesHeures.span) { newEnd = limitesHeures.baseMins + limitesHeures.span; newStart = newEnd - durationMins; }
+    // --- GESTION DU CTRL+CLIC (COPIE) ---
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      setCopiedEvent({ title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: durationMins });
+      return;
+    }
 
-                                            const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                            if (isBesoinsMode) {
-                                              const cleanId = String(evt.id).split('_')[0];
-                                              const newBesoins = currentTemplate.besoins.map(b => String(b.id).split('_')[0] === cleanId ? { ...b, start: `${currentTemplateDateStr}T${formatTime(newStart)}:00`, end: `${currentTemplateDateStr}T${formatTime(newEnd)}:00` } : b);
-                                              updateCurrentTemplate(null, newBesoins);
-                                            } else {
-                                              applyAction('update', { id: evt.id, start: `${currentTemplateDateStr}T${formatTime(newStart)}:00`, end: `${currentTemplateDateStr}T${formatTime(newEnd)}:00` });
-                                            }
-                                          };
-                                          const onMouseUp = () => {
-                                            window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp);
-                                            if (hasMoved) { const preventClick = (eClick) => { eClick.stopPropagation(); sauvegarderEtatPrecedent(snapshot); eClick.preventDefault(); window.removeEventListener('click', preventClick, true); }; window.addEventListener('click', preventClick, true); setTimeout(() => window.removeEventListener('click', preventClick, true), 100); }
-                                          };
-                                          window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp);
-                                        }}>
-                                        
-                                        {/* LE CONTENU DU BLOC */}
+    const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
+    let hasMoved = false;
+    const track = e.currentTarget.closest('.flex-1.relative.my-1') || e.currentTarget.parentElement;
+    const rect = track.getBoundingClientRect();
+    const startX = e.clientX;
+
+    const onMouseMove = (moveEvent) => {
+      if (Math.abs(moveEvent.clientX - startX) > 4) hasMoved = true;
+      if (!hasMoved) return;
+
+      let deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
+      if (deltaMins !== 0) {
+        let newStart = startMins + deltaMins;
+        let newEnd = newStart + durationMins;
+        if (newStart < limitesHeures.baseMins) { newStart = limitesHeures.baseMins; newEnd = newStart + durationMins; }
+        if (newEnd > limitesHeures.baseMins + limitesHeures.span) { newEnd = limitesHeures.baseMins + limitesHeures.span; newStart = newEnd - durationMins; }
+
+        const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+        if (evt.extendedProps?.isAbsence) {
+          const cleanId = String(evt.id).replace('abs_', '').split('_')[0];
+          setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(newStart)}:00`, end: `${dateStr}T${formatTime(newEnd)}:00` } : a));
+        } else {
+          applyAction('update', { id: evt.id, start: `${dateStr}T${formatTime(newStart)}:00`, end: `${dateStr}T${formatTime(newEnd)}:00` });
+        }
+      }
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      if (hasMoved) {
+        sauvegarderEtatPrecedent(snapshot);
+      } else {
+        // AUCUN MOUVEMENT = C'EST UN CLIC NORMAL !
+        ouvrirEdition(evt);
+      }
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }}>                                         
+                                      {/* LE CONTENU DU BLOC */}
                                         <div className={`w-full h-full flex pointer-events-none overflow-hidden ${isVeryShort ? 'flex-col items-center justify-center' : 'flex-col justify-center'}`}>
                                           {isVeryShort ? (
                                             <span className="font-bold tracking-widest uppercase truncate w-full text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '9px' }}>
@@ -2575,7 +2592,7 @@ const durationMins = endMins - startMins;
                           const nomJour = nomsJours[dayIndex];
 
                           return (
-                            <div key={dateStr} className="flex flex-col border-b-4 border-black/15 dark:border-white/10 relative z-10">
+                            <div key={dateStr} className="flex flex-col border-b-4 border-black/15 dark:border-white/10 relative z-10 hover:z-[60]">
                               {/* Bandeau du jour */}
                               <div className={`px-4 py-1.5 font-bold uppercase text-xs tracking-wider sticky left-0 z-20 ${t.bgLight} ${t.header} border-b ${t.borderLight}`}>
                                 {nomJour} {dateDuJour.getDate()}/{dateDuJour.getMonth()+1}
@@ -2654,7 +2671,7 @@ const durationMins = endMins - startMins;
                                         updateGhost(startMins, currentEndMins);
 
                                         const onMouseMove = (moveEvent) => {
-                                          hasMoved = true;
+                                          if (Math.abs(moveEvent.clientX - startX) > 3) hasMoved = true;
                                           const movePercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
                                           currentEndMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
                                           updateGhost(startMins, currentEndMins);
@@ -2691,7 +2708,7 @@ const durationMins = endMins - startMins;
                                         window.addEventListener('mouseup', onMouseUp);
                                       }}
                                     >
-                                      {/* Événements de la ligne */}
+                                  {/* Événements de la ligne */}
                                       {eventsDeLaLigne.map(evt => {
                                         const startD = new Date(evt.start); 
                                         const endD = new Date(evt.end);
@@ -2725,56 +2742,69 @@ const durationMins = endMins - startMins;
                                         return (
                                           <div 
                                             key={evt.id} 
-                                            className={`event-item absolute top-1 bottom-1 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 border cursor-grab active:cursor-grabbing hover:ring-2 transition-all z-10 group/item ${!evt.extendedProps?.isAbsence && conflitsIds.has(String(evt.id).split('_')[0]) ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
+                                            className={`event-item absolute top-1 bottom-1 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 border cursor-pointer hover:ring-2 transition-colors z-10 group/item ${!evt.extendedProps?.isAbsence && conflitsIds.has(String(evt.id).split('_')[0]) ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
                                             style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evtBgColor, borderColor: evtBorderColor, color: evtTextColor }}
-                                            onClick={(e) => { 
-                                              e.stopPropagation(); 
+                                            onMouseDown={(e) => {
+                                              if (e.button !== 0) return;
+                                              e.stopPropagation();
+
+                                              // --- GESTION DU CTRL+CLIC (COPIE) ---
                                               if (e.ctrlKey || e.metaKey) {
                                                 e.preventDefault();
                                                 setCopiedEvent({ title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins });
                                                 return;
                                               }
-                                              ouvrirEdition(evt); 
-                                            }}
-                                            onMouseDown={(e) => {
-                                              if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
-                                              e.stopPropagation();
+
                                               const snapshot = { templateVersions: JSON.parse(JSON.stringify(templateVersions)), customWeeks: JSON.parse(JSON.stringify(customWeeks)), absences: JSON.parse(JSON.stringify(absences)) };
                                               let hasMoved = false;
+                                              let isDraggingStarted = false;
                                               const track = e.currentTarget.parentElement;
                                               const rect = track.getBoundingClientRect();
                                               const startX = e.clientX;
 
                                               const onMouseMove = (moveEvent) => {
-                                                hasMoved = true;
-                                                let deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
-                                                let newStart = startMins + deltaMins;
-                                                let newEnd = newStart + durationMins;
-                                                if (newStart < limitesHeures.baseMins) { newStart = limitesHeures.baseMins; newEnd = newStart + durationMins; }
-                                                if (newEnd > limitesHeures.baseMins + limitesHeures.span) { newEnd = limitesHeures.baseMins + limitesHeures.span; newStart = newEnd - durationMins; }
+                                                if (Math.abs(moveEvent.clientX - startX) > 4) {
+                                                  isDraggingStarted = true;
+                                                  hasMoved = true;
+                                                }
+                                                if (!isDraggingStarted) return;
 
-                                                const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                                if (evt.extendedProps?.isAbsence) {
-                                                  const cleanId = String(evt.id).replace('abs_', '').split('_')[0];
-                                                  setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(newStart)}:00`, end: `${dateStr}T${formatTime(newEnd)}:00` } : a));
-                                                } else {
-                                                  applyAction('update', { id: evt.id, start: `${dateStr}T${formatTime(newStart)}:00`, end: `${dateStr}T${formatTime(newEnd)}:00` });
+                                                let deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
+                                                if (deltaMins !== 0) {
+                                                  let newStart = startMins + deltaMins;
+                                                  let newEnd = newStart + durationMins;
+                                                  if (newStart < limitesHeures.baseMins) { newStart = limitesHeures.baseMins; newEnd = newStart + durationMins; }
+                                                  if (newEnd > limitesHeures.baseMins + limitesHeures.span) { newEnd = limitesHeures.baseMins + limitesHeures.span; newStart = newEnd - durationMins; }
+
+                                                  const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                                  if (evt.extendedProps?.isAbsence) {
+                                                    const cleanId = String(evt.id).replace('abs_', '').split('_')[0];
+                                                    setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(newStart)}:00`, end: `${dateStr}T${formatTime(newEnd)}:00` } : a));
+                                                  } else {
+                                                    applyAction('update', { id: evt.id, start: `${dateStr}T${formatTime(newStart)}:00`, end: `${dateStr}T${formatTime(newEnd)}:00` });
+                                                  }
                                                 }
                                               };
+
                                               const onMouseUp = () => {
                                                 window.removeEventListener('mousemove', onMouseMove);
                                                 window.removeEventListener('mouseup', onMouseUp);
-                                                if (hasMoved) {
-                                                  const preventClick = (eClick) => {
-                                                    eClick.stopPropagation();
-                                                    sauvegarderEtatPrecedent(snapshot);
-                                                    eClick.preventDefault();
-                                                    window.removeEventListener('click', preventClick, true);
-                                                  };
-                                                  window.addEventListener('click', preventClick, true);
-                                                  setTimeout(() => window.removeEventListener('click', preventClick, true), 100);
+                                                
+                                                if (isDraggingStarted && hasMoved) {
+                                                  const preventClick = (eClick) => { 
+                                                    eClick.stopPropagation(); 
+                                                    sauvegarderEtatPrecedent(snapshot); 
+                                                    eClick.preventDefault(); 
+                                                    window.removeEventListener('click', preventClick, true); 
+                                                  }; 
+                                                  window.addEventListener('click', preventClick, true); 
+                                                  setTimeout(() => window.removeEventListener('click', preventClick, true), 100); 
+                                                } else {
+                                                  // AUCUN MOUVEMENT = CLIC SIMPLE (OUVERTURE FENETRE)
+                                                  ouvrirEdition(evt);
                                                 }
                                               };
+                                              
                                               window.addEventListener('mousemove', onMouseMove);
                                               window.addEventListener('mouseup', onMouseUp);
                                             }}
@@ -2793,22 +2823,22 @@ const durationMins = endMins - startMins;
                                               )}
                                             </div>
 
-                                            {/* Poignées de redimensionnement */}
-                                            <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier le début" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.closest('.event-item').parentElement; const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newStart = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; if (evt.extendedProps?.isAbsence) { const cleanId = String(evt.id).replace('abs_', '').split('_')[0]; setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(newStart)}:00` } : a)); } else { applyAction('update', { id: evt.id, start: `${dateStr}T${formatTime(newStart)}:00`, end: evt.end }); } }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
-                                            <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier la fin" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.closest('.event-item').parentElement; const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newEnd = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; if (evt.extendedProps?.isAbsence) { const cleanId = String(evt.id).replace('abs_', '').split('_')[0]; setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, end: `${dateStr}T${formatTime(newEnd)}:00` } : a)); } else { applyAction('update', { id: evt.id, start: evt.start, end: `${dateStr}T${formatTime(newEnd)}:00` }); } }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
+                                            {/* Poignées */}
+                                            <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier le début" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.parentElement.parentElement; const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newStart = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; if (evt.extendedProps?.isAbsence) { const cleanId = String(evt.id).replace('abs_', '').split('_')[0]; setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(newStart)}:00` } : a)); } else { applyAction('update', { id: evt.id, start: `${dateStr}T${formatTime(newStart)}:00`, end: evt.end }); } }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
+                                            <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 group-hover/item:opacity-100 opacity-0 transition-opacity" title="Modifier la fin" onMouseDown={(e) => { e.stopPropagation(); const track = e.currentTarget.parentElement.parentElement; const onMouseMove = (moveEvent) => { const rect = track.getBoundingClientRect(); const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width)); let newEnd = Math.round((limitesHeures.baseMins + (percent * limitesHeures.span)) / 5) * 5; newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span)); const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; if (evt.extendedProps?.isAbsence) { const cleanId = String(evt.id).replace('abs_', '').split('_')[0]; setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, end: `${dateStr}T${formatTime(newEnd)}:00` } : a)); } else { applyAction('update', { id: evt.id, start: evt.start, end: `${dateStr}T${formatTime(newEnd)}:00` }); } }; const onMouseUp = () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); }; window.addEventListener('mousemove', onMouseMove); window.addEventListener('mouseup', onMouseUp); }}></div>
                                             
                                             {/* Tooltip */}
-                                            <div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[9999] pointer-events-none top-full left-1/2 -translate-x-1/2 mt-1.5 w-max min-w-[130px] text-center border border-gray-700">
+                                            <div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[99999] pointer-events-none top-full left-1/2 -translate-x-1/2 mt-1.5 w-max min-w-[130px] text-center border border-gray-700">
                                                 <span className="font-black text-sm text-blue-300 leading-tight mb-1">{evtTitle}</span>
                                                 <span className="font-semibold text-xs leading-none">{agent?.nom || evt.extendedProps?.agentNom || 'Agent'}</span>
                                                 <span className="text-gray-400 font-mono text-[10px] mt-1">{extractTimeStr(evt.start)} - {extractTimeStr(evt.end)}</span>
                                                 {extInfo && <span className="text-gray-300 text-[10px] italic mt-1">{extInfo}</span>}
-                                                {/* Flèche pointant vers le haut */}
                                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900"></div>
-                                              </div>
-                                              </div>
+                                            </div>
+                                          </div>
                                         );
-                                      })}
+                                      })}                                      
+
                                     </div>
                                   </div>
                                 );
