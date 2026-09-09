@@ -1,21 +1,37 @@
-// src/TimelineComponents.jsx
 import React, { useState, useRef } from 'react';
 
-export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, onAddCopy, onAddLasso, children }) => {
+// 🧲 Fonction de magnétisme (Snap-to-edge)
+const getClosestSnap = (value, points, threshold = 10) => {
+  if (!points || points.length === 0) return value;
+  let closest = value;
+  let minDiff = threshold + 1;
+  points.forEach(p => {
+    const diff = Math.abs(p - value);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = p;
+    }
+  });
+  return closest;
+};
+
+export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoints = [], onAddCopy, onAddLasso, children }) => {
   const [lasso, setLasso] = useState(null);
   const trackRef = useRef(null);
 
   const handleMouseDown = (e) => {
-    if (e.target.closest('.event-item')) return; // Ignore les clics sur les créneaux
+    if (e.target.closest('.event-item')) return; // Ignore clics sur créneaux
     if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
     e.preventDefault();
 
     const rect = trackRef.current.getBoundingClientRect();
     const startX = e.clientX;
     const startPercent = Math.max(0, Math.min(1, (startX - rect.left) / rect.width));
-    const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
+    let startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
+    
+    // Magnétisme du clic initial
+    startMins = getClosestSnap(startMins, snapPoints, 10);
 
-    // Coller un créneau copié
     if (copiedEvent) {
       onAddCopy(startMins);
       return;
@@ -26,8 +42,10 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, onAddCopy
     const onMouseMove = (moveEvent) => {
       if (Math.abs(moveEvent.clientX - startX) > 4) hasMoved = true;
       const movePercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
-      const currentMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
+      let currentMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
       
+      currentMins = getClosestSnap(currentMins, snapPoints, 10);
+
       if (hasMoved) {
         setLasso({
           min: Math.min(startMins, currentMins),
@@ -84,9 +102,9 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, onAddCopy
 
 export const TimelineEvent = ({
   startMins, endMins, limitesHeures, isLocked, bgColor, borderColor, textColor,
-  title, subtitle, extInfo, conflit, onUpdate, onClick, onCopy
+  title, subtitle, extInfo, conflit, snapPoints = [], onUpdate, onClick, onCopy
 }) => {
-  const [dragState, setDragState] = useState(null); // Gère nativement la position visuelle !
+  const [dragState, setDragState] = useState(null); 
 
   const activeStart = dragState ? dragState.min : startMins;
   const activeEnd = dragState ? dragState.max : endMins;
@@ -113,17 +131,47 @@ export const TimelineEvent = ({
     const startX = e.clientX;
     let isDragging = false;
 
+    // On exclut les bornes actuelles du créneau pour éviter qu'il s'ancre sur lui-même
+    const otherSnaps = snapPoints.filter(p => p !== startMins && p !== endMins);
+
     const onMouseMove = (moveEvent) => {
       if (!isDragging && Math.abs(moveEvent.clientX - startX) > 3) isDragging = true;
       if (!isDragging) return;
 
       const deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
 
-      setDragState({
-        type: actionType,
-        min: actionType === 'move' ? Math.max(limitesHeures.baseMins, Math.min(startMins + deltaMins, limitesHeures.baseMins + limitesHeures.span - (endMins - startMins))) : (actionType === 'resizeStart' ? Math.max(limitesHeures.baseMins, Math.min(startMins + deltaMins, endMins - 5)) : startMins),
-        max: actionType === 'move' ? Math.max(limitesHeures.baseMins + (endMins - startMins), Math.min(endMins + deltaMins, limitesHeures.baseMins + limitesHeures.span)) : (actionType === 'resizeEnd' ? Math.max(startMins + 5, Math.min(endMins + deltaMins, limitesHeures.baseMins + limitesHeures.span)) : endMins)
-      });
+      if (actionType === 'resizeStart') {
+        let newStart = startMins + deltaMins;
+        newStart = getClosestSnap(newStart, otherSnaps, 10);
+        newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5));
+        setDragState({ type: actionType, min: newStart, max: endMins });
+      } 
+      else if (actionType === 'resizeEnd') {
+        let newEnd = endMins + deltaMins;
+        newEnd = getClosestSnap(newEnd, otherSnaps, 10);
+        newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span));
+        setDragState({ type: actionType, min: startMins, max: newEnd });
+      } 
+      else if (actionType === 'move') {
+        let newStart = startMins + deltaMins;
+        let newEnd = endMins + deltaMins;
+        
+        // Magnétisme prioritaire sur le début, puis la fin
+        const snappedStart = getClosestSnap(newStart, otherSnaps, 10);
+        const snappedEnd = getClosestSnap(newEnd, otherSnaps, 10);
+
+        if (snappedStart !== newStart) {
+          newStart = snappedStart;
+          newEnd = newStart + durationMins;
+        } else if (snappedEnd !== newEnd) {
+          newEnd = snappedEnd;
+          newStart = newEnd - durationMins;
+        }
+
+        newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, limitesHeures.baseMins + limitesHeures.span - durationMins));
+        newEnd = newStart + durationMins;
+        setDragState({ type: actionType, min: newStart, max: newEnd });
+      }
     };
 
     const onMouseUp = () => {
@@ -136,7 +184,7 @@ export const TimelineEvent = ({
             onUpdate(currentDrag.min, currentDrag.max);
           }
         } else if (actionType === 'move') {
-          onClick(); // C'était juste un clic !
+          onClick();
         }
         return null;
       });

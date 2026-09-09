@@ -4,17 +4,17 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 
 // --- IMPORTS EXTERNES ---
-// --- IMPORTS EXTERNES ---
 import { 
   THEMES, hexToRgb, getContrastYIQ, 
   formatHeureTableau, parseHeureSaisie, extractTimeStr, getMondayStr,
   resetAllData, exporterDonnees, importerDonnees,
   generateGrid, calculerContratBetty, formatHeureMinutes,
-  detecterChevauchements // 👈 AJOUTEZ CECI
+  detecterChevauchements
 } from './utils';
 import { SetupWizard } from './SetupWizard';
 import { PrintTimeGridView, PrintDailyView, PrintAgentYearlyView } from './PrintViews';
-import { TimelineTrack, TimelineEvent } from './TimelineComponents'; // 👈 AJOUTEZ CECI
+import { TimelineTrack, TimelineEvent } from './TimelineComponents';
+
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
   const [vueActive, setVueActive] = useState('template'); 
   const [agentConsulte, setAgentConsulte] = useState(null); 
@@ -25,7 +25,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   });
   const [agents, setAgents] = useState(() => JSON.parse(localStorage.getItem('edt-agents') || '[]'));
   const [postes, setPostes] = useState(() => JSON.parse(localStorage.getItem('edt-postes') || '[]'));
-  const [jourTemplate, setJourTemplate] = useState(1); // 1 = Lundi, 5 = Vendredi
+  const [jourTemplate, setJourTemplate] = useState(1); 
   const [periodesFeriees, setPeriodesFeriees] = useState(() => {
     const s = localStorage.getItem('edt-periodes');
     if (!s) return [];
@@ -131,12 +131,17 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   });
   const [sonneriesText, setSonneriesText] = useState(() => sonneries.join(', '));
   
-const [absences, setAbsences] = useState(() => {
+  // Tableau statique des sonneries en minutes (pour le magnétisme)
+  const sonneriesMins = useMemo(() => sonneries.map(s => {
+    const [h, m] = s.split(':').map(Number);
+    return h * 60 + m;
+  }), [sonneries]);
+
+  const [absences, setAbsences] = useState(() => {
     const s = localStorage.getItem('edt-absences-retards');
     if (!s) return [];
     const parsed = JSON.parse(s);
     return parsed.map(a => {
-      // Nettoyage et compatibilité avec l'ancien système
       let type = a.type || 'absence';
       if (type === 'recup' || type === 'rattrapage') type = 'heures_supp';
       
@@ -161,10 +166,8 @@ const [absences, setAbsences] = useState(() => {
     });
   });
 
-
-  // --- HISTORIQUE (CTRL+Z / CTRL+Y) ---
   const historyRef = useRef([]);
-  const redoRef = useRef([]); // 👈 La nouvelle mémoire pour le "Refaire"
+  const redoRef = useRef([]); 
   const [showUndoToast, setShowUndoToast] = useState(false);
   const [showRedoToast, setShowRedoToast] = useState(false);
 
@@ -174,14 +177,12 @@ const [absences, setAbsences] = useState(() => {
       customWeeks: JSON.parse(JSON.stringify(customWeeks)),
       absences: JSON.parse(JSON.stringify(absences))
     };
-    historyRef.current = [...historyRef.current, stateToSave].slice(-30); // Garde les 30 dernières actions
-    redoRef.current = []; // 👈 On efface le futur alternatif si on fait une nouvelle action
+    historyRef.current = [...historyRef.current, stateToSave].slice(-30); 
+    redoRef.current = []; 
   };
 
   const annulerAction = () => {
     if (historyRef.current.length === 0) return;
-    
-    // On sauvegarde l'état actuel dans le Redo avant de l'écraser
     const currentState = {
       templateVersions: JSON.parse(JSON.stringify(templateVersions)),
       customWeeks: JSON.parse(JSON.stringify(customWeeks)),
@@ -198,8 +199,6 @@ const [absences, setAbsences] = useState(() => {
 
   const refaireAction = () => {
     if (redoRef.current.length === 0) return;
-    
-    // On sauvegarde l'état actuel dans l'historique avant d'avancer
     const currentState = {
       templateVersions: JSON.parse(JSON.stringify(templateVersions)),
       customWeeks: JSON.parse(JSON.stringify(customWeeks)),
@@ -247,12 +246,12 @@ const [absences, setAbsences] = useState(() => {
   const [agentActif, setAgentActif] = useState(null);
   const [posteActif, setPosteActif] = useState(null);
   
-const [currentViewMonday, setCurrentViewMonday] = useState(() => getMondayStr(templateVersions[0]?.dateDebut || new Date()));  const [showNotificationMenu, setShowNotificationMenu] = useState(false);
+  const [currentViewMonday, setCurrentViewMonday] = useState(() => getMondayStr(templateVersions[0]?.dateDebut || new Date())); 
+  const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const isInitialMount = useRef(true);
   const [needsBackup, setNeedsBackup] = useState(false);
   const [copiedEvent, setCopiedEvent] = useState(null);
 
-  // --- VARIABLES DERIVEES OPTIMISEES ---
   const getSchoolYearBase = () => {
      if (templateVersions.length > 0 && templateVersions[0].dateDebut) {
         const d = new Date(templateVersions[0].dateDebut);
@@ -360,11 +359,9 @@ const [currentViewMonday, setCurrentViewMonday] = useState(() => getMondayStr(te
           const hJour = getHeuresTheoriquesJour(agent.id, dateStr);
           const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr));
           
-          // Heures non travaillées déduites du Global
           const hDeductGlobal = absDuJour.filter(a => ['absence', 'retard'].includes(a.type) && a.impact === 'global')
                                          .reduce((tot, a) => tot + getHeuresAbsence(a), 0);
           
-          // Heures travaillées en plus ajoutées au Global
           const hSuppGlobal = absDuJour.filter(a => a.type === 'heures_supp' && a.impact === 'global')
                                        .reduce((tot, a) => tot + getHeuresAbsence(a), 0);
 
@@ -504,7 +501,6 @@ const activeAlerts = useMemo(() => {
     const applicableT = [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= targetMon) || templateVersions[0];
     const besoins = (applicableT?.besoins || []).map(b => shiftEventToWeek(b, targetMon));
 
-    // 1. Vérification des sous-effectifs
     besoins.forEach(b => {
       const { isSousEffectif, minCount, missingAgents } = checkCoverage(b, realEvts, absences);
       if (isSousEffectif) {
@@ -518,7 +514,6 @@ const activeAlerts = useMemo(() => {
       }
     });
 
-    // 2. 🆕 Vérification des doubles affectations (chevauchements)
     const affectationsSemaine = realEvts.filter(e => !e.extendedProps?.isBesoin && !e.extendedProps?.isAbsence && e.extendedProps?.agentId);
     for (let i = 0; i < affectationsSemaine.length; i++) {
       for (let j = i + 1; j < affectationsSemaine.length; j++) {
@@ -544,27 +539,24 @@ const activeAlerts = useMemo(() => {
 
     return alerts;
   }, [agents, currentTemplate, currentViewMonday, customWeeks, absences, templateVersions]);
-  // --- EFFETS ---
+
 useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && copiedEvent) {
         setCopiedEvent(null);
       }
-      
-      // Si la touche Ctrl (Windows) ou Cmd (Mac) est enfoncée
       if (e.ctrlKey || e.metaKey) {
         const key = e.key.toLowerCase();
-        
         if (key === 'z') {
-          e.preventDefault(); // Bloque l'action du navigateur
+          e.preventDefault();
           if (e.shiftKey) {
-            refaireAction(); // Ctrl+Shift+Z = Refaire
+            refaireAction();
           } else {
-            annulerAction(); // Ctrl+Z = Annuler
+            annulerAction();
           }
         } else if (key === 'y') {
           e.preventDefault();
-          refaireAction(); // Ctrl+Y = Refaire
+          refaireAction();
         }
       }
     };
@@ -624,7 +616,7 @@ useEffect(() => {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [needsBackup]);
-// 👇 Force un recalcul d'affichage dès que le composant est monté
+
   useEffect(() => {
     const timer = setTimeout(() => {
       window.dispatchEvent(new Event('resize'));
@@ -642,15 +634,13 @@ useEffect(() => {
   useEffect(() => { localStorage.setItem('edt-amplitude', JSON.stringify(amplitude)); }, [amplitude]);
 useEffect(() => { 
     if (vueActive === 'planning') setModeEdition('agents');
-    
-    // 👇 On attend que React ait fini de peindre l'onglet, puis on force un double recalcul
     requestAnimationFrame(() => {
       setTimeout(() => {
         window.dispatchEvent(new Event('resize'));
       }, 100);
     });
   }, [vueActive]);
-  // --- METHODES ---
+
   const handleExport = () => { exporterDonnees(); setNeedsBackup(false); };
 
   const handleSonneriesBlur = () => {
@@ -697,7 +687,7 @@ const anneeScolaire = [
     { m: 0, y: baseYear+1, nom: 'JANVIER' }, { m: 1, y: baseYear+1, nom: 'FEVRIER' },
     { m: 2, y: baseYear+1, nom: 'MARS' }, { m: 3, y: baseYear+1, nom: 'AVRIL' },
     { m: 4, y: baseYear+1, nom: 'MAI' }, { m: 5, y: baseYear+1, nom: 'JUIN' },
-    { m: 6, y: baseYear+1, nom: 'JUILLET' }, { m: 7, y: baseYear+1, nom: 'AOÛT' } // 👈 Ajout ici
+    { m: 6, y: baseYear+1, nom: 'JUILLET' }, { m: 7, y: baseYear+1, nom: 'AOÛT' } 
   ];
 
   const declencherImpression = (e) => {
@@ -867,82 +857,32 @@ const ajouterAbsenceRetard = (e) => {
       hDetteRestante, hAvance
     };
   });
-  const gererSelection = (selectInfo) => {
-    if (vueActive === 'template' && currentTemplate.statut === 'valide') return;
-    selectInfo.view.calendar.unselect();
+
+  const validerBesoinMultiModal = (e) => {
+    e.preventDefault();
+    if (!modalBesoinMulti.posteId) return alert("Sélectionnez un poste.");
     
-    // --- COLLER UN CRÉNEAU COPIÉ ---
-    if (copiedEvent) {
-      const startD = new Date(selectInfo.startStr);
-      const endD = new Date(startD.getTime() + (copiedEvent.durationMins || 60) * 60000);
-      const pad = n => String(n).padStart(2, '0');
-      const formatISO = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-
-      const newEvt = {
-        id: String(Date.now() + Math.random()),
-        start: formatISO(startD),
-        end: formatISO(endD),
-        title: copiedEvent.title,
-        backgroundColor: copiedEvent.backgroundColor,
-        borderColor: copiedEvent.borderColor,
-        extendedProps: { ...copiedEvent.extendedProps }
-      };
-
-      applyAction('add', newEvt);
-      return;
-    }
-
-    // --- CRÉATION NORMALE ---
-    let dateJour = selectInfo.startStr;
-    if (dateJour.includes('T')) dateJour = dateJour.split('T')[0];
-
-    if (modeEdition === 'besoins') {
-      if (!posteActif) return alert("Sélectionnez un poste à gauche.");
-      const poste = postes.find(p => p.id === posteActif);
-      if (vueActive === 'template') updateCurrentTemplate(null, [...currentTemplate.besoins, { id: String(Date.now()), start: selectInfo.startStr, end: selectInfo.endStr, extendedProps: { posteId: poste.id, posteNom: poste.nom, qte: formBesoinQte } }]);
-      return;
-    }
-
-    setFormTypeEvent('affectation');
-    setFormTypeAbsence('absence');
-    setFormAbsImpact('local');
-    setFormAgent(agentActif || (agents[0] ? agents[0].id : ''));
-    setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
-    setFormNote('');
-    setModalCreation({
-      isOpen: true,
-      eventId: null,
-      date: dateJour,
-      start: extractTimeStr(selectInfo.startStr),
-      end: extractTimeStr(selectInfo.endStr)
-    });
+    const poste = postes.find(p => p.id === Number(modalBesoinMulti.posteId));
+    const generatedBesoins = generateBesoinsFromSlots(poste.id, poste.nom, modalBesoinMulti.qte, modalBesoinMulti.slots);
+    
+    updateCurrentTemplate(null, [...currentTemplate.besoins, ...generatedBesoins]);
+    setModalBesoinMulti({ isOpen: false, posteId: '', qte: 1, slots: [] });
   };
 
-  const gererModificationEvenement = (changeInfo) => { 
-    sauvegarderEtatPrecedent();
-    if (vueActive === 'template' && currentTemplate.statut === 'valide') return changeInfo.revert();
-    applyAction('update_content', { id: changeInfo.event.id, start: changeInfo.event.startStr, end: changeInfo.event.endStr }); 
-  };
-
-  const gererClicEvenement = (evt) => { 
-    sauvegarderEtatPrecedent();
-    if (vueActive === 'template' && currentTemplate.statut === 'valide') {
-      alert("Ce modèle est verrouillé. Cliquez sur '🔓 Déverrouiller' dans le menu latéral pour le modifier.");
-      return;
-    }
-    if (evt.extendedProps.isBesoin) {
-      if (vueActive === 'template') {
-        const cleanId = String(evt.id).split('_')[0];
-        updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id).split('_')[0] !== cleanId)); 
-      } else {
-        alert("Pour supprimer un besoin structurel, veuillez repasser en vue 'Modèle'.");
-      }
-    } else if (evt.extendedProps.isAbsence) {
-      const cleanId = String(evt.id).replace('abs_', '').split('_')[0];
-      supprimerAbsence(cleanId);
+  const validerEditBesoin = (e) => {
+    e.preventDefault();
+    if (modalEditBesoin.qte <= 0) {
+      updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id).split('_')[0] !== modalEditBesoin.id));
     } else {
-      applyAction('delete', { id: evt.id, start: evt.start }); 
+      const templateDateStr = currentTemplate.dateDebut;
+      const newStart = `${templateDateStr}T${modalEditBesoin.start}:00`;
+      const newEnd = `${templateDateStr}T${modalEditBesoin.end}:00`;
+      
+      updateCurrentTemplate(null, currentTemplate.besoins.map(b => String(b.id).split('_')[0] === modalEditBesoin.id ? { 
+        ...b, start: newStart, end: newEnd, extendedProps: { ...b.extendedProps, qte: Number(modalEditBesoin.qte) } 
+      } : b));
     }
+    setModalEditBesoin({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' });
   };
 
   const ouvrirEditionBesoin = (evt) => {
@@ -960,7 +900,7 @@ const ajouterAbsenceRetard = (e) => {
 
     setFormTypeEvent(isAbs ? 'absence' : 'affectation');
     setFormTypeAbsence(extProps.typeAbsence || 'absence');
-    setFormAbsImpact(extProps.impact || 'local'); // 👈 CORRECTION ICI (Fini le crash !)
+    setFormAbsImpact(extProps.impact || 'local');
     setFormAgent(extProps.agentId || '');
     setFormPoste(extProps.posteId || postes.find(p => p.nom === extProps.posteNom)?.id || '');
     setFormNote(extProps.motif || extProps.note || '');
@@ -1008,1220 +948,568 @@ const ajouterAbsenceRetard = (e) => {
     setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' });
   };
 
-  const renderEventContent = (arg) => {
-    const tS = arg.event.start;
-    const tE = arg.event.end;
-    const timeStr = (tS && tE) ? `${tS.getHours()}h${String(tS.getMinutes()).padStart(2,'0')}-${tE.getHours()}h${String(tE.getMinutes()).padStart(2,'0')}` : '';
-    
-    const isLocked = vueActive === 'template' && currentTemplate.statut === 'valide';
-    const textColor = t.isDark ? '#e5e7eb' : '#111827';
-    
-    const durationMins = tS && tE ? Math.round((tE - tS) / 60000) : 60;
-    const isVeryShort = durationMins <= 45; // Texte Vertical
-    const isLong = durationMins >= 120; // Texte Agrandi
 
-    const handleEventClick = (e) => {
+  // --- GESTION CENTRALISÉE DE LA SOURIS (DRAG & DROP, LASSO, RESIZE) ---
+  const updateEventTime = (evt, newStartMins, newEndMins, targetDateStr, viewName, isBesoins) => {
+      const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+      const newStartISO = `${targetDateStr}T${formatTime(newStartMins)}:00`;
+      const newEndISO = `${targetDateStr}T${formatTime(newEndMins)}:00`;
+
+      sauvegarderEtatPrecedent();
+
+      if (viewName === 'template' && isBesoins) {
+          const cleanId = String(evt.id).split('_')[0];
+          const newBesoins = currentTemplate.besoins.map(b => String(b.id).split('_')[0] === cleanId ? { ...b, start: newStartISO, end: newEndISO } : b);
+          updateCurrentTemplate(null, newBesoins);
+      } else if (viewName !== 'template' && evt.extendedProps?.isAbsence) {
+          const cleanId = String(evt.id).replace('abs_', '').split('_')[0];
+          setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, start: newStartISO, end: newEndISO } : a));
+      } else {
+          applyAction('update', { id: evt.id, start: newStartISO, end: newEndISO });
+      }
+  };
+
+  const handleTrackMouseDown = (e, targetDateStr, viewName, isBesoins, rowId) => {
+      if (e.target.closest('.event-item')) return;
+      if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
+      if (viewName === 'template' && currentTemplate.statut === 'valide') return;
+      
+      e.preventDefault();
+      const track = e.currentTarget;
+      const rect = track.getBoundingClientRect();
+      const startX = e.clientX;
+
+      if (copiedEvent) {
+           const startPercent = Math.max(0, Math.min(1, (startX - rect.left) / rect.width));
+           const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
+           const duration = copiedEvent.durationMins || 60;
+           const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
+           const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+           
+           sauvegarderEtatPrecedent();
+           const newStartISO = `${targetDateStr}T${formatTime(startMins)}:00`;
+           const newEndISO = `${targetDateStr}T${formatTime(endMins)}:00`;
+
+           if (viewName === 'template' && isBesoins && copiedEvent.extendedProps?.isBesoin) {
+              const posteNom = postes.find(p=>p.id===rowId)?.nom;
+              updateCurrentTemplate(null, [...currentTemplate.besoins, { 
+                id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO, 
+                extendedProps: { ...copiedEvent.extendedProps, posteId: rowId, posteNom, qte: formBesoinQte } 
+              }]);
+           } else if (!isBesoins && !copiedEvent.extendedProps?.isBesoin) {
+              const agentNom = agents.find(a=>a.id===rowId)?.nom;
+              applyAction('add', { 
+                id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO,
+                title: `${copiedEvent.extendedProps?.posteNom} - ${agentNom}`,
+                backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
+                extendedProps: { ...copiedEvent.extendedProps, agentId: rowId, agentNom }
+              });
+           }
+           return;
+      }
+
+      const startPercent = Math.max(0, Math.min(1, (startX - rect.left) / rect.width));
+      const startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
+      let currentEndMins = Math.min(startMins + 60, limitesHeures.baseMins + limitesHeures.span);
+      let hasMoved = false;
+
+      const ghostEl = document.createElement('div');
+      ghostEl.className = `absolute top-1 bottom-1 rounded border-2 border-dashed z-30 pointer-events-none flex items-center justify-center text-[10px] font-bold shadow-md ${isBesoins ? 'bg-red-500/40 border-red-600 text-red-950 dark:text-red-100' : 'bg-blue-500/40 border-blue-600 text-blue-950 dark:text-blue-100'}`;
+      track.appendChild(ghostEl);
+
+      const updateGhost = (m1, m2) => {
+          const minM = Math.min(m1, m2);
+          const maxM = Math.max(m1, m2);
+          const l = Math.max(0, ((minM - limitesHeures.baseMins) / limitesHeures.span) * 100);
+          const w = Math.min(100 - l, ((maxM - minM) / limitesHeures.span) * 100);
+          ghostEl.style.left = `${l}%`;
+          ghostEl.style.width = `${w}%`;
+          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+          ghostEl.textContent = `${formatTime(minM)} - ${formatTime(maxM)}`;
+      };
+      updateGhost(startMins, currentEndMins);
+
+      const onMouseMove = (moveEvent) => {
+          if (Math.abs(moveEvent.clientX - startX) > 4) hasMoved = true;
+          const movePercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
+          currentEndMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
+          updateGhost(startMins, currentEndMins);
+      };
+
+      const onMouseUp = () => {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+          ghostEl.remove();
+          
+          const finalStart = Math.min(startMins, currentEndMins);
+          const finalEnd = Math.max(startMins, currentEndMins);
+          const actualEnd = hasMoved ? finalEnd : (finalStart + 60);
+
+          if (actualEnd - finalStart >= 5) {
+              const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+              if (viewName === 'template' && isBesoins) {
+                   const posteNom = postes.find(p => p.id === rowId)?.nom;
+                   updateCurrentTemplate(null, [...currentTemplate.besoins, { 
+                      id: String(Date.now()), start: `${targetDateStr}T${formatTime(finalStart)}:00`, end: `${targetDateStr}T${formatTime(actualEnd)}:00`, 
+                      extendedProps: { posteId: rowId, posteNom, qte: formBesoinQte } 
+                   }]);
+              } else {
+                   setFormTypeEvent('affectation');
+                   setFormTypeAbsence('absence');
+                   setFormAbsImpact('local');
+                   setFormAgent(rowId);
+                   setFormPoste(posteActif || (postes[0] ? postes[0].id : ''));
+                   setFormNote('');
+                   setModalCreation({ isOpen: true, eventId: null, date: targetDateStr, start: formatTime(finalStart), end: formatTime(actualEnd) });
+              }
+          }
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+  };
+
+  const handleEventMouseDown = (e, evt, startMins, endMins, targetDateStr, viewName, isBesoins) => {
+      if (e.button !== 0 || (viewName === 'template' && currentTemplate.statut === 'valide')) return;
+      e.stopPropagation();
+      e.preventDefault();
+
       if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        setCopiedEvent({
-          title: arg.event.title,
-          backgroundColor: arg.event.backgroundColor,
-          borderColor: arg.event.borderColor,
-          extendedProps: { ...arg.event.extendedProps },
-          durationMins
-        });
-        return;
+          setCopiedEvent({ 
+              title: evt.title || evt.extendedProps?.posteNom || 'Poste', 
+              backgroundColor: e.currentTarget.style.backgroundColor, 
+              borderColor: e.currentTarget.style.borderColor, 
+              extendedProps: { ...evt.extendedProps }, 
+              durationMins: endMins - startMins 
+          });
+          return;
       }
-      if (!isLocked) ouvrirEdition(arg.event);
-    };
 
-    if (arg.event.extendedProps.isBesoin) {
-      const isSous = arg.event.extendedProps.isSousEffectif;
-      if (isShort) {
-        return (
-          <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className="flex items-center w-full h-full overflow-hidden rounded text-xs shadow-sm relative group" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a', color: '#ffffff' }}>
-            <div className="flex-1 truncate px-1.5 flex justify-between items-center">
-              <span>🎯 {arg.event.extendedProps.posteNom} ({arg.event.extendedProps.minCount}/{arg.event.extendedProps.qte})</span>
-              <span className="opacity-90 font-mono text-[10px] ml-1 shrink-0">{timeStr}</span>
-            </div>
-          </div>
-        );
-      }
-      return (
-        <div onClick={() => !isLocked && ouvrirEditionBesoin(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-xs shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-red-400' : ''}`} style={{ color: textColor }}>
-          <div className="px-1.5 py-1 font-bold flex justify-between items-center" style={{ backgroundColor: isSous ? '#dc2626' : '#16a34a', color: '#ffffff' }}>
-            <span className="truncate">🎯 {arg.event.extendedProps.posteNom} <span className="text-[10px] font-normal opacity-90 ml-1">({timeStr})</span></span>
-            {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-white/50 rounded px-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✖</button>}
-          </div>
-          <div className="p-1.5 flex flex-col justify-center items-center flex-1 leading-tight text-center" style={{ backgroundColor: isSous ? '#fee2e2' : '#dcfce7' }}>
-            <span className="font-bold text-sm" style={{ color: isSous ? '#991b1b' : '#166534' }}>{arg.event.extendedProps.minCount} / {arg.event.extendedProps.qte} pers.</span>
-          </div>
-        </div>
-      );
-    }
+      const track = e.currentTarget.parentElement;
+      const eventEl = e.currentTarget;
+      const rect = track.getBoundingClientRect();
+      const startX = e.clientX;
+      let isDragging = false;
+      
+      const initialLeft = eventEl.style.left;
+      let finalStartMins = startMins;
+      let finalEndMins = endMins;
+      const durationMins = endMins - startMins;
 
-if (arg.event.extendedProps.isAbsence) {
-      const typeAbs = arg.event.extendedProps.typeAbsence;
-      const impact = arg.event.extendedProps.impact;
-      const isAbs = typeAbs === 'absence';
-      const isRet = typeAbs === 'retard';
-      const isSupp = typeAbs === 'heures_supp';
+      const onMouseMove = (moveEvent) => {
+          if (!isDragging && Math.abs(moveEvent.clientX - startX) > 4) {
+              isDragging = true;
+              eventEl.style.zIndex = '9999';
+              eventEl.style.opacity = '0.8';
+              eventEl.style.pointerEvents = 'none';
+          }
+          if (!isDragging) return;
 
-      const bgCol = isAbs ? 'bg-red-500' : isRet ? 'bg-orange-500' : 'bg-green-600';
-      const bgColLight = isAbs ? 'bg-red-500/20 border-red-500' : isRet ? 'bg-orange-500/20 border-orange-500' : 'bg-green-600/20 border-green-600';
-      const iconTxtShort = isAbs ? '🚫 ABS' : isRet ? '⏰ RET' : '🟢 SUPP';
-      const iconTxt = isAbs ? '🚫 ABSENCE' : isRet ? '⏰ RETARD' : '🟢 HEURES SUPP';
-      const badgeImpact = impact === 'global' ? '🌍 Global' : impact === 'local' ? '📍 Local' : '⚪ Neutre';
+          const deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
+          let newStart = startMins + deltaMins;
+          let newEnd = newStart + durationMins;
+          
+          if (newStart < limitesHeures.baseMins) {
+              newStart = limitesHeures.baseMins;
+              newEnd = newStart + durationMins;
+          }
+          if (newEnd > limitesHeures.baseMins + limitesHeures.span) {
+              newEnd = limitesHeures.baseMins + limitesHeures.span;
+              newStart = newEnd - durationMins;
+          }
 
-      if (isShort) {
-        return (
-          <div onClick={() => ouvrirEdition(arg.event)} className={`flex items-center w-full h-full overflow-hidden rounded text-xs font-bold shadow-md relative group cursor-pointer ${bgCol}`} style={{ color: '#ffffff' }}>
-            <div className="flex-1 truncate px-1.5 flex justify-between items-center">
-              <span>{iconTxtShort} : {arg.event.extendedProps.agentNom}</span>
-              <span className="opacity-90 font-mono text-[10px] ml-1 shrink-0">{timeStr}</span>
-            </div>
-          </div>
-        );
-      }
-      return (
-        <div onClick={() => ouvrirEdition(arg.event)} className={`flex flex-col w-full h-full overflow-hidden rounded text-xs border border-black/10 shadow-md relative group cursor-pointer hover:ring-2 transition-all z-50 opacity-90 ${bgColLight}`} style={{ color: textColor }}>
-          <div className={`px-1.5 py-1 font-bold flex justify-between items-center ${bgCol}`} style={{ color: '#ffffff' }}>
-            <span className="truncate">{iconTxt} <span className="text-[10px] font-normal opacity-90 ml-1">({timeStr})</span></span>
-            <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print text-white bg-black/30 hover:bg-black/50 rounded px-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✖</button>
-          </div>
-          <div className="p-1.5 flex flex-col flex-1 leading-tight justify-center">
-            <div className="flex justify-between items-start">
-              <span className="font-bold text-sm truncate">{arg.event.extendedProps.agentNom}</span>
-              <span className="text-[9px] font-bold bg-white/50 rounded px-1 text-black shadow-sm ml-1 shrink-0">{badgeImpact}</span>
-            </div>
-            <span className="text-[11px] italic truncate mt-0.5">{arg.event.extendedProps.motif}</span>
-          </div>
-        </div>
-      );
-    }
-    const agentColor = arg.event.backgroundColor || '#3b82f6';
-    const bgColorWithOpacity = agentColor + '66';
-    const headerColor = arg.event.extendedProps?.posteCouleur || '#3b82f6';
-    const headerTextColor = getContrastYIQ(headerColor);
+          finalStartMins = newStart;
+          finalEndMins = newEnd;
 
-    // 🎯 Utilisation directe de la liste globale des conflits
-    const cleanEvtId = String(arg.event.id).split('_')[0];
-    const estEnConflit = conflitsIds.has(cleanEvtId);
+          const l = Math.max(0, ((newStart - limitesHeures.baseMins) / limitesHeures.span) * 100);
+          eventEl.style.left = `${l}%`;
+      };
 
-    if (isShort) {
-      return (
-        <div onClick={handleEventClick} 
-             className={`flex items-center w-full h-full overflow-hidden rounded text-xs shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''} ${estEnConflit ? 'ring-4 ring-red-600 animate-pulse bg-red-500/40' : ''}`}
-             style={{ backgroundColor: estEnConflit ? '#dc2626' : headerColor, color: headerTextColor, border: `1px solid ${estEnConflit ? '#991b1b' : agentColor}` }}
-             title={estEnConflit ? "⚠️ CONFLIT : Double affectation !" : "Clic pour modifier • Ctrl+Clic pour copier"}>
-          <div className="flex-1 truncate px-1.5 flex justify-between items-center">
-            <span><strong>{estEnConflit ? '⚠️ ' : ''}{arg.event.extendedProps?.posteNom}</strong> <span className="opacity-80 hidden md:inline">({arg.event.extendedProps?.agentNom})</span></span>
-            <span className="font-mono text-[10px] opacity-90 ml-1 shrink-0">{timeStr}</span>
-          </div>
-        </div>
-      );
-    }
-return (
-      <div onClick={handleEventClick} 
-           className={`flex flex-col w-full h-full overflow-visible rounded text-xs border shadow-sm relative group transition-all ${!isLocked ? 'cursor-pointer hover:ring-2 hover:ring-blue-400' : ''} ${estEnConflit ? 'ring-4 ring-red-600 animate-pulse' : ''}`}
-           style={{ backgroundColor: estEnConflit ? '#fee2e2' : bgColorWithOpacity, border: `1px solid ${estEnConflit ? '#dc2626' : agentColor}`, color: textColor }}>
-        
-        <div className={`w-full h-full flex pointer-events-none overflow-hidden ${isVeryShort ? 'flex-col items-center justify-center' : 'flex-col items-start'}`}>
-            <div className={`w-full px-1.5 py-1 font-bold flex justify-between items-center shrink-0 ${isVeryShort ? 'hidden' : ''}`} style={{ backgroundColor: estEnConflit ? '#dc2626' : headerColor, color: headerTextColor }}>
-              <span className={`truncate ${isLong ? 'text-sm' : 'text-[10px]'}`}>
-                {estEnConflit ? '⚠️ CONFLIT ! ' : ''}{arg.event.extendedProps?.posteNom}
-              </span>
-              {!isLocked && <button onClick={(e) => { e.stopPropagation(); gererClicEvenement(arg.event); }} className="no-print bg-black/20 hover:bg-red-500 rounded px-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" style={{ color: headerTextColor }}>✖</button>}
-            </div>
-            
-            {isVeryShort ? (
-              <span className="font-bold tracking-widest uppercase truncate w-full text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '9px', color: textColor }}>
-                {arg.event.extendedProps?.posteNom}
-              </span>
-            ) : (
-              <div className="p-1.5 flex flex-col flex-1 leading-tight w-full justify-center">
-                <span className={`font-semibold truncate pr-1 ${isLong ? 'text-sm' : 'text-[11px]'}`}>{arg.event.extendedProps?.agentNom}</span>
-                <span className={`opacity-85 font-mono mt-0.5 ${isLong ? 'text-xs' : 'text-[9px]'}`}>{timeStr}</span>
-                {arg.event.extendedProps?.note && <span className="text-[10px] opacity-80 truncate italic mt-1 bg-black/5 dark:bg-white/10 rounded px-1">{arg.event.extendedProps?.note}</span>}
-              </div>
-            )}
-        </div>
+      const onMouseUp = () => {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+          
+          if (isDragging) {
+              eventEl.style.zIndex = '';
+              eventEl.style.opacity = '';
+              eventEl.style.pointerEvents = '';
+              eventEl.style.left = initialLeft;
+              
+              if (finalStartMins !== startMins) {
+                  updateEventTime(evt, finalStartMins, finalEndMins, targetDateStr, viewName, isBesoins);
+              }
+          } else {
+              if (evt.extendedProps?.isBesoin) ouvrirEditionBesoin(evt); else ouvrirEdition(evt);
+          }
+      };
 
-        {/* LE NOUVEAU TOOLTIP FLOTTANT */}
-        <div className="absolute hidden group-hover:flex flex-col opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-900 text-white p-2.5 rounded-lg shadow-2xl z-[100] pointer-events-none bottom-full left-1/2 -translate-x-1/2 mb-2 w-max min-w-[140px] text-left border border-gray-700">
-          <span className="font-black text-sm text-blue-300 leading-tight mb-1">{arg.event.extendedProps?.posteNom}</span>
-          <span className="font-semibold text-xs leading-none">{arg.event.extendedProps?.agentNom}</span>
-          <span className="text-gray-400 font-mono text-[10px] mt-1">{timeStr}</span>
-          {arg.event.extendedProps?.note && <span className="text-gray-300 text-[10px] italic mt-1">{arg.event.extendedProps?.note}</span>}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-        </div>
-      </div>
-    );
-
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
   };
 
+  const handleResizeMouseDown = (e, evt, startMins, endMins, targetDateStr, viewName, isBesoins, isStartHandle) => {
+      if (e.button !== 0 || (viewName === 'template' && currentTemplate.statut === 'valide')) return;
+      e.stopPropagation(); e.preventDefault();
+      const track = e.currentTarget.parentElement.parentElement;
+      const eventEl = e.currentTarget.parentElement;
+      const rect = track.getBoundingClientRect();
+      const startX = e.clientX;
+      let isResizing = false;
+      
+      let finalStartMins = startMins;
+      let finalEndMins = endMins;
+      
+      const initialLeft = eventEl.style.left;
+      const initialWidth = eventEl.style.width;
 
-  /* REMPLACER PAR : */
-  const getActiveContract = (agentData, dateStr) => {
-    if (!agentData.avenants || agentData.avenants.length === 0) return { quotite: agentData.quotite, estEtudiant: agentData.estEtudiant };
-    const sorted = [...agentData.avenants].sort((a, b) => a.date.localeCompare(b.date));
-    let active = { quotite: agentData.quotite, estEtudiant: agentData.estEtudiant };
-    for (const av of sorted) {
-      if (av.date && dateStr >= av.date) {
-        active = { quotite: av.quotite, estEtudiant: av.estEtudiant };
-      }
-    }
-    return active;
-  };
+      const onMouseMove = (moveEvent) => {
+          if (!isResizing && Math.abs(moveEvent.clientX - startX) > 4) {
+              isResizing = true;
+              eventEl.style.zIndex = '9999';
+              eventEl.style.opacity = '0.8';
+              eventEl.style.pointerEvents = 'none';
+          }
+          if (!isResizing) return;
 
-  const calculerContratProratise = (agentData, bYear) => {
-    if (!agentData.avenants || agentData.avenants.length === 0) return calculerContratBetty(agentData.quotite, agentData.estEtudiant);
-    
-    let totalHours = 0;
-    const startD = new Date(bYear, 8, 1); // 1er Septembre
-    const endD = new Date(bYear + 1, 7, 31); // 31 Août
-    const daysInYear = Math.round((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
-    
-    for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
-      const pad = n => String(n).padStart(2, '0');
-      const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-      const active = getActiveContract(agentData, dateStr);
-      const annualHoursForDay = calculerContratBetty(active.quotite, active.estEtudiant);
-      totalHours += (annualHoursForDay / daysInYear);
-    }
-    return Math.round(totalHours);
-  };
+          const deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
+          
+          if (isStartHandle) {
+              let newStart = startMins + deltaMins;
+              newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5));
+              finalStartMins = newStart;
+              
+              const l = Math.max(0, ((newStart - limitesHeures.baseMins) / limitesHeures.span) * 100);
+              const w = Math.min(100 - l, ((endMins - newStart) / limitesHeures.span) * 100);
+              eventEl.style.left = `${l}%`;
+              eventEl.style.width = `${w}%`;
+          } else {
+              let newEnd = endMins + deltaMins;
+              newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span));
+              finalEndMins = newEnd;
 
-  const handleEditAgentChange = (champ, valeur) => {
-    const newAgent = { ...modalAgent, [champ]: valeur };
-    if (champ === 'quotite' || champ === 'estEtudiant') {
-      newAgent.hContrat = calculerContratProratise(newAgent, baseYear);
-    }
-    setModalAgent(newAgent);
-  };
+              const l = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
+              const w = Math.min(100 - l, ((newEnd - startMins) / limitesHeures.span) * 100);
+              eventEl.style.left = `${l}%`;
+              eventEl.style.width = `${w}%`;
+          }
+      };
 
-  const validerAgentModal = (e) => {
-    e.preventDefault();
-    if (!modalAgent.nom.trim()) return alert('Obligatoire.');
-    const q = parseFloat(String(modalAgent.quotite).replace(',', '.')) || 100;
-    const hC = typeof modalAgent.hContrat === 'string' ? parseHeureSaisie(modalAgent.hContrat) : modalAgent.hContrat;
-    
-    if (modalAgent.id) {
-      setAgents(agents.map(a => a.id === modalAgent.id ? { ...a, nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours, avenants: modalAgent.avenants } : a));
-      updateCurrentTemplate(currentTemplate.events.map(evt => evt.extendedProps?.agentId === modalAgent.id ? { ...evt, extendedProps: { ...evt.extendedProps, agentNom: modalAgent.nom }, backgroundColor: modalAgent.couleurFond, borderColor: modalAgent.couleurFond } : evt), null);
-    } else {
-      setAgents([...agents, { id: Date.now(), nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours, avenants: modalAgent.avenants || [] }]);
-    }
-    setModalAgent({ ...modalAgent, isOpen: false });
-  };
+      const onMouseUp = () => {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+          if (isResizing) {
+              eventEl.style.zIndex = '';
+              eventEl.style.opacity = '';
+              eventEl.style.pointerEvents = '';
+              eventEl.style.left = initialLeft;
+              eventEl.style.width = initialWidth;
 
-  const supprimerAgent = (id, n, e) => { e.stopPropagation(); if(confirm(`Supprimer l'agent ${n} ?`)) { setAgents(agents.filter(a => a.id !== id)); updateCurrentTemplate(currentTemplate.events.filter(e => e.extendedProps?.agentId !== id), null); if (agentActif === id) setAgentActif(null); } };
-  
-  const validerNouveauPoste = (e) => {
-    e.preventDefault();
-    if (modalNewPoste.nom.trim()) {
-      setPostes([...postes, { id: Date.now(), nom: modalNewPoste.nom.trim(), couleur: '#8B5CF6' }]);
-      setModalNewPoste({ isOpen: false, nom: '' });
-    }
-  };
-
-  const gererClicJourAgent = (agentId, dateStr, hActuel, noteActuelle) => {
-    setModalException({
-      isOpen: true,
-      agentId,
-      dateStr,
-      h: formatHeureTableau(hActuel, true) || '0h00',
-      note: noteActuelle || ''
-    });
-  };
-
-  // 🆕 Fonction pour supprimer la note et rétablir la case normale
-  const supprimerExceptionJour = () => {
-    const newExceptions = { ...exceptions };
-    delete newExceptions[`${modalException.agentId}_${modalException.dateStr}`];
-    setExceptions(newExceptions);
-    setModalException({ isOpen: false, agentId: null, dateStr: null, h: '0h00', note: '' });
-  };
-
-  const validerExceptionJourModal = (e) => {
-    e.preventDefault();
-    const hDecimal = parseHeureSaisie(modalException.h);
-    const newExceptions = { ...exceptions };
-    newExceptions[`${modalException.agentId}_${modalException.dateStr}`] = { h: hDecimal, note: modalException.note || '' };
-    setExceptions(newExceptions);
-    setModalException({ isOpen: false, agentId: null, dateStr: null, h: '0h00', note: '' });
-  };
-
-  const reinitialiserSemaineReelle = () => {
-    if(confirm('Annuler toutes les modifications de cette semaine ?')) {
-      const newCustom = {...customWeeks};
-      delete newCustom[currentViewMonday];
-      setCustomWeeks(newCustom);
-    }
-  };
-
-  const ajouterPeriodeFeriee = (e) => {
-    e.preventDefault();
-    if (!formPeriode.nom || !formPeriode.debut) return;
-    const dateFin = formPeriode.fin || formPeriode.debut;
-    if (dateFin < formPeriode.debut) return alert("La date de fin doit être après le début.");
-    setPeriodesFeriees([...periodesFeriees, { id: Date.now(), nom: formPeriode.nom, debut: formPeriode.debut, fin: dateFin, type: formPeriode.type }].sort((a,b) => a.debut.localeCompare(b.debut)));
-    setFormPeriode({ nom: '', debut: '', fin: '', type: 'vacances' });
-  };
-  const supprimerPeriodeFeriee = (id) => setPeriodesFeriees(periodesFeriees.filter(p => p.id !== id));
-
-  const changeJourQuotidien = (jours) => {
-    const d = new Date(jourConsulte);
-    d.setDate(d.getDate() + jours);
-    const pad = n => String(n).padStart(2, '0');
-    setJourConsulte(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`);
+              if (finalStartMins !== startMins || finalEndMins !== endMins) {
+                  updateEventTime(evt, finalStartMins, finalEndMins, targetDateStr, viewName, isBesoins);
+              }
+          }
+      };
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
   };
 
   return (
-    <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
-      {modalNewVersion.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">➕ Créer une évolution</h3></div>
-            <form onSubmit={validerCreationVersionModal}>
-              <div className="p-5 space-y-4">
-                <div>
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Date de début</label>
-                  <input type="date" required value={modalNewVersion.dateDebut} onChange={e => setModalNewVersion({...modalNewVersion, dateDebut: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
-                </div>
-                <div>
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nom court du modèle</label>
-                  <input type="text" required value={modalNewVersion.nom} onChange={e => setModalNewVersion({...modalNewVersion, nom: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
-                </div>
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
-                <button type="button" onClick={() => setModalNewVersion({...modalNewVersion, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
-                <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>Créer</button>
-              </div>
-            </form>
+    <>
+{/* 1. VUE QUOTIDIENNE */}
+{vueActive === 'journee' && (() => {
+  const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
+  return (
+    <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
+      <div className="p-4 pb-2 no-print shrink-0">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>⏱️ Vue Quotidienne</h2>
+          <div className="flex items-center gap-3">
+            <button onClick={() => changeJourQuotidien(-1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>◀ Jour Précédent</button>
+            <input type="date" value={jourConsulte} onChange={(e) => setJourConsulte(e.target.value)} className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold ${t.cardBg} ${t.header} outline-none shadow-sm`} />
+            <button onClick={() => changeJourQuotidien(1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>Jour Suivant ▶</button>
           </div>
         </div>
-      )}
-
-      {modalPoste.isOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4 shrink-0 flex justify-between items-center`}>
-              <h3 className="font-bold text-lg">{modalPoste.id ? 'Modifier le poste' : 'Nouveau poste & Grille de besoins'}</h3>
-              <button type="button" onClick={() => setModalPoste({...modalPoste, isOpen: false})} className="hover:opacity-75 font-bold text-lg">✖</button>
-            </div>
-            <form onSubmit={validerPosteModal} className="flex flex-col overflow-hidden">
-              <div className="p-5 space-y-4 overflow-y-auto">
-                <div className="flex gap-4">
-                  <div className="flex-[2]">
-                    <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Nom du poste</label>
-                    <input type="text" required value={modalPoste.nom} onChange={e => setModalPoste({...modalPoste, nom: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold`} placeholder="Ex: Loge, Cantine..." autoFocus />
-                  </div>
-                  <div className="flex-1">
-                    <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Effectif (Qte)</label>
-                    <input type="number" min="1" required value={modalPoste.qte} onChange={e => setModalPoste({...modalPoste, qte: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm text-center font-bold bg-transparent`} />
-                  </div>
-                  <div>
-                    <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Couleur</label>
-                    <input type="color" value={modalPoste.couleur} onChange={e => setModalPoste({...modalPoste, couleur: e.target.value})} className="w-10 h-10 rounded cursor-pointer p-0 border-0" />
-                  </div>
-                </div>
-                
-                <div className={`border ${t.borderLight} rounded-xl p-4 ${t.bgLight}`}>
-                  <div className="flex justify-between items-center mb-3">
-                    <div>
-                      <h4 className={`font-bold text-sm ${t.header}`}>Grille horaire des besoins</h4>
-                      <p className="text-[11px] text-gray-500">Définissez les créneaux récurrents de ce poste pour la semaine type.</p>
-                    </div>
-                    <button type="button" onClick={() => setModalPoste({...modalPoste, slots: [...modalPoste.slots, { id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]})} className={`text-xs ${t.btnPrimary} px-2.5 py-1.5 rounded font-bold shadow-sm`}>➕ Ajouter une plage</button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {modalPoste.slots.map((slot, idx) => (
-                      <div key={idx} className={`p-3 rounded-lg border ${t.borderLight} ${t.cardBg} flex flex-col gap-2 shadow-xs`}>
-                        <div className="flex items-center gap-2">
-                          <input type="time" required value={slot.start} onChange={e => {
-                            const ns = [...modalPoste.slots]; ns[idx].start = e.target.value; setModalPoste({...modalPoste, slots: ns});
-                          }} className={`border ${t.borderLight} p-1.5 text-xs rounded bg-transparent w-28 text-center font-bold ${t.header}`} />
-                          <span className="text-gray-400 text-xs font-bold">à</span>
-                          <input type="time" required value={slot.end} onChange={e => {
-                            const ns = [...modalPoste.slots]; ns[idx].end = e.target.value; setModalPoste({...modalPoste, slots: ns});
-                          }} className={`border ${t.borderLight} p-1.5 text-xs rounded bg-transparent w-28 text-center font-bold ${t.header}`} />
-                          
-                          <button type="button" onClick={() => {
-                            const ns = [...modalPoste.slots]; ns.splice(idx, 1); setModalPoste({...modalPoste, slots: ns});
-                          }} className="text-red-500 hover:text-red-700 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ml-auto" title="Retirer cette plage">✖</button>
-                        </div>
-                        <div className="flex gap-1.5 mt-1">
-                          {[1, 2, 3, 4, 5].map(day => (
-                            <label key={day} className={`flex-1 flex items-center justify-center py-1 rounded border text-[11px] font-bold cursor-pointer transition-colors ${slot.days[day] ? `${t.btnPrimary} border-transparent shadow-xs` : `bg-transparent text-gray-500 border-black/10 hover:bg-black/5`}`}>
-                              <input type="checkbox" className="hidden" checked={slot.days[day]} onChange={e => {
-                                const ns = [...modalPoste.slots]; ns[idx].days[day] = e.target.checked; setModalPoste({...modalPoste, slots: ns});
-                              }} />
-                              {nomsJours[day % 7]}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                    {modalPoste.slots.length === 0 && (
-                      <p className="text-xs italic text-gray-500 text-center py-2">Aucune plage horaire définie. Cliquez sur "Ajouter une plage".</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} shrink-0 flex justify-end gap-3`}>
-                <button type="button" onClick={() => setModalPoste({...modalPoste, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium text-sm">Annuler</button>
-                <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-bold text-sm shadow`}>{modalPoste.id ? 'Mettre à jour' : 'Créer le poste'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {modalException.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">Modifier le jour ({modalException.dateStr})</h3></div>
-            <form onSubmit={validerExceptionJourModal}>
-              <div className="p-5 space-y-4">
-                <div>
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Heures travaillées (ex: 8h45 ou 0)</label>
-                  <input type="text" required value={modalException.h} onChange={e => setModalException({...modalException, h: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} autoFocus />
-                </div>
-                <div>
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif / Note (ex: Toussaint, Stage)</label>
-                  <input type="text" value={modalException.note} onChange={e => setModalException({...modalException, note: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
-                </div>
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center`}>
-                <button type="button" onClick={supprimerExceptionJour} className="px-3 py-2 text-red-500 hover:bg-red-500/10 rounded font-bold text-xs transition-colors">🗑️ Rétablir l'horaire normal</button>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setModalException({isOpen: false, agentId: null, dateStr: null, h: '0h00', note: ''})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
-                  <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>Enregistrer</button>
-                </div>
-              </div>
-              </form>
-          </div>
-        </div>
-      )}
-
-      {modalParametres && (
-        <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh] border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-5 flex justify-between items-center shrink-0`}>
-              <h3 className="font-bold text-xl">⚙️ Paramètres Généraux</h3>
-              <button onClick={() => setModalParametres(false)} className="hover:opacity-50 font-bold text-xl transition-opacity">✖</button>
-            </div>
-            
-            <div className={`p-6 overflow-y-auto flex-1 ${t.bgMain}`}>
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
-                <div className="lg:col-span-7 flex flex-col gap-6">
-                  
-                  <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm`}>
-                    <h4 className={`font-bold text-lg ${t.header} mb-4`}>🕒 Horaires & Amplitude</h4>
-                    
-                    <div className="flex gap-4 mb-4 pb-4 border-b border-black/10 dark:border-white/10">
-                      <div className="flex-1">
-                        <label className="text-xs font-bold text-gray-500 uppercase">Début de journée</label>
-                        <input type="time" value={amplitude.start} onChange={e => setAmplitude({...amplitude, start: e.target.value})} className={`mt-1 w-full border ${t.borderLight} rounded-lg p-2 text-sm bg-transparent font-bold`} />
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-xs font-bold text-gray-500 uppercase">Fin de journée</label>
-                        <input type="time" value={amplitude.end} onChange={e => setAmplitude({...amplitude, end: e.target.value})} className={`mt-1 w-full border ${t.borderLight} rounded-lg p-2 text-sm bg-transparent font-bold`} />
-                      </div>
-                    </div>
-
-                    <h5 className={`font-bold text-sm ${t.header} mb-1`}>🔔 Heures de Sonneries</h5>
-                    <p className="text-xs text-gray-500 mb-3">Séparez par des virgules. Elles apparaîtront en traits pleins.</p>
-                    <textarea 
-                      value={sonneriesText} 
-                      onChange={(e) => setSonneriesText(e.target.value)}
-                      onBlur={handleSonneriesBlur}
-                      className={`w-full border ${t.borderLight} rounded-lg p-3 text-sm bg-transparent font-mono shadow-inner`}
-                      rows="2"
-                      placeholder="Ex: 08:00, 08:55, 10:05..."
-                    />
-                  </div>
-
-                  <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm flex-1 flex flex-col`}>
-                    <h4 className={`font-bold text-lg ${t.header} mb-4`}>🏖️ Périodes de Vacances & Fériés</h4>
-                    
-                    <form onSubmit={ajouterPeriodeFeriee} className={`p-4 rounded-lg border ${t.borderLight} ${t.bgLight} mb-6`}>
-                      <h5 className="font-bold text-xs text-gray-500 uppercase mb-3">➕ Ajouter une nouvelle période</h5>
-                      <div className="space-y-3">
-                        <div className="flex gap-3">
-                          <input type="text" required placeholder="Nom (ex: Pont Ascension)" value={formPeriode.nom} onChange={e => setFormPeriode({...formPeriode, nom: e.target.value})} className="flex-[2] border rounded p-2 text-sm bg-transparent" />
-                          <select value={formPeriode.type} onChange={e => setFormPeriode({...formPeriode, type: e.target.value})} className="flex-1 border rounded p-2 text-sm bg-transparent">
-                            <option value="vacances">Vacances (0h)</option>
-                            <option value="ferie">Jour Férié / Pont</option>
-                          </select>
-                        </div>
-                        <div className="flex gap-3">
-                          <div className="flex-1"><label className="text-xs font-bold text-gray-500">Début</label><input type="date" required value={formPeriode.debut} onChange={e => setFormPeriode({...formPeriode, debut: e.target.value})} className="w-full border rounded p-2 text-sm bg-transparent" /></div>
-                          <div className="flex-1"><label className="text-xs font-bold text-gray-500">Fin (Optionnel)</label><input type="date" value={formPeriode.fin} onChange={e => setFormPeriode({...formPeriode, fin: e.target.value})} className="w-full border rounded p-2 text-sm bg-transparent" /></div>
-                          <div className="flex items-end"><button type="submit" className={`h-9 px-5 ${t.btnPrimary} rounded text-sm font-bold shadow`}>Ajouter</button></div>
-                        </div>
-                      </div>
-                    </form>
-
-                    <h5 className="font-bold text-xs text-gray-500 uppercase mb-2">Périodes enregistrées</h5>
-                    <ul className="space-y-2 overflow-y-auto pr-2 flex-1 max-h-[250px]">
-                      {periodesFeriees.length === 0 && <p className="text-sm italic text-gray-500 text-center py-4">Aucune période configurée.</p>}
-                      {periodesFeriees.map(p => (
-                        <li key={p.id} className={`${t.bgMain} p-3 rounded-lg border ${t.borderLight} flex justify-between items-center text-sm shadow-sm`}>
-                          <div>
-                            <span className={`font-bold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{p.nom}</span> 
-                            <span className={`ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-white ${p.type === 'ferie' ? 'bg-green-600' : 'bg-blue-600'}`}>
-                              {p.type === 'ferie' ? 'Férié (Payé)' : 'Vacances (0h)'}
-                            </span>
-                            <br/><span className="text-gray-500 text-xs">({p.debut === p.fin ? p.debut : `Du ${p.debut} au ${p.fin}`})</span>
-                          </div>
-                          <button onClick={() => supprimerPeriodeFeriee(p.id)} className="text-red-500 hover:bg-red-500/20 px-2 py-1 rounded transition-colors font-bold">✖</button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="lg:col-span-5 flex flex-col gap-6">
-                  <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm`}>
-                    <div className="flex justify-between items-center mb-4">
-                      <h4 className={`font-bold text-lg ${t.header}`}>🎨 Thème visuel</h4>
-                      <button type="button" onClick={toggleDarkMode} className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all ${isDarkMode ? 'bg-gray-700 text-yellow-300 border border-gray-600' : 'bg-white text-gray-800 border border-gray-300'}`}>
-                        {isDarkMode ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
-                      </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 gap-3 mb-6">
-                      {Object.entries(THEMES).filter(([id]) => id !== 'personnalise').map(([id, theme]) => {
-                        const currentMode = isDarkMode ? theme.dark : theme.light;
-                        return (
-                          <button type="button" key={id} onClick={() => changeTheme(id)} className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all ${themeId === id ? `border-[${theme.fcPrimary}] shadow-md ${currentMode.cardBg}` : `border-transparent hover:border-black/5 dark:hover:border-white/5 ${t.bgMain}`}`}>
-                            <div className={`flex shrink-0 overflow-hidden rounded-full w-10 h-10 border border-black/10 dark:border-white/10 shadow-inner ${currentMode.cardBg}`}>
-                              <div className={`w-1/2 h-full ${currentMode.sidebar.split(' ')[0]}`}></div>
-                              <div className={`w-1/2 h-full ${theme.btnPrimary.split(' ')[0]}`}></div>
-                            </div>
-                            <span className={`text-sm font-bold text-left leading-tight ${t.header}`}>{theme.nom}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className={`pt-5 border-t ${t.borderLight}`}>
-                      <h5 className={`font-bold text-sm mb-3 ${t.header}`}>✨ Thème Personnalisé</h5>
-                      <div className="flex items-end gap-3">
-                        <label className={`flex flex-col text-[10px] font-bold uppercase ${t.textMenuMuted}`}>
-                          Dominante
-                          <input type="color" value={customColors.primary} onChange={(e) => updateCustomColor('primary', e.target.value)} className="w-12 h-10 mt-1 cursor-pointer border-0 rounded p-0 bg-transparent" />
-                        </label>
-                        <label className={`flex flex-col text-[10px] font-bold uppercase ${t.textMenuMuted}`}>
-                          Accent
-                          <input type="color" value={customColors.accent} onChange={(e) => updateCustomColor('accent', e.target.value)} className="w-12 h-10 mt-1 cursor-pointer border-0 rounded p-0 bg-transparent" />
-                        </label>
-                        <button type="button" onClick={() => changeTheme('personnalise')} className={`flex-1 px-3 h-10 text-xs font-bold rounded shadow transition-all ${themeId === 'personnalise' ? 'bg-blue-600 text-white' : `${t.bgLight} ${t.header} hover:opacity-80`}`}>
-                          {themeId === 'personnalise' ? '✅ Actif' : 'Activer'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {modalCreation.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">{modalCreation.eventId ? 'Modifier l\'affectation' : 'Nouvelle affectation'}</h3></div>
-            <form onSubmit={validerCreationModal}>
-              <div className="p-5 space-y-4">
-                {(vueActive === 'planning' || vueActive === 'journee') && !modalCreation.eventId && (
-                  <div>
-                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Type d'action</label>
-                    <select value={formTypeEvent} onChange={e => setFormTypeEvent(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 ${t.bgLight} font-bold text-sm`}>
-                      <option value="affectation">Affectation de poste</option>
-                      <option value="absence">Absence ou Retard</option>
-                    </select>
-                  </div>
-                )}
-
-                <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>👤 Agent</label><select value={formAgent} onChange={e => setFormAgent(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`}><option value="" disabled>-- Sélectionner --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></div>
-                
-                {formTypeEvent === 'absence' ? (
-                  <>
-                    <div>
-                      <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nature</label>
-                      <select value={formTypeAbsence} onChange={e => setFormTypeAbsence(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`}>
-                      <option value="absence">🚫 Absence (Plage horaire)</option>
-                      <option value="retard">⏰ Retard</option>
-                      <option value="heures_supp">🟢 Heures Supp' / Rattrapage</option>                      </select>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-semibold mb-1 mt-2 ${t.header}`}>Impact sur les compteurs</label>
-                      <select value={formAbsImpact} onChange={e => setFormAbsImpact(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent font-bold text-sm`}>
-                        <option value="global">🌍 Bilan Annuel Global</option>
-                        <option value="local">📍 Compteur Local (Dette / Compensation)</option>
-                        {['absence', 'retard'].includes(formTypeAbsence) && <option value="neutre">⚪ Neutre (Ignoré)</option>}
-                      </select>
-                    </div>
-                  </>
-                ) : (
-                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>📍 Poste</label><select value={formPoste} onChange={e => setFormPoste(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`}><option value="" disabled>-- Sélectionner --</option>{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select></div>
-                )}
-
-                <div className="flex gap-4">
-                  <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Début</label><input type="time" required value={extractTimeStr(modalCreation.start)} onChange={e => setModalCreation({...modalCreation, start: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div>
-                  <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin</label><input type="time" required value={extractTimeStr(modalCreation.end)} onChange={e => setModalCreation({...modalCreation, end: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div>
-                </div>
-                <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>📝 {formTypeEvent === 'absence' ? 'Motif' : 'Note'}</label><input type="text" value={formNote} onChange={e => setFormNote(e.target.value)} placeholder={formTypeEvent === 'absence' ? "Ex: Maladie..." : "Ex: Réunion..."} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} autoFocus={!!modalCreation.eventId} /></div>
-              </div>
-              
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center`}>
-                <div>
-                  {modalCreation.eventId && (
-                    <button type="button" onClick={() => {
-                      if(window.confirm('Voulez-vous vraiment supprimer cet élément ?')) {
-                        if (formTypeEvent === 'absence') {
-                          supprimerAbsence(String(modalCreation.eventId).replace('abs_','').split('_')[0]);
-                        } else {
-                          applyAction('delete', { 
-                            id: modalCreation.eventId, 
-                            start: `${modalCreation.date}T${modalCreation.start || '08:00'}:00` 
-                          });
-                        }
-                        setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' });
-                      }
-                    }} className="px-3 py-2 bg-red-500/10 text-red-600 hover:bg-red-500/20 rounded font-bold transition-colors text-sm shadow-sm flex items-center gap-1">
-                      🗑️ Supprimer
-                    </button>
-                  )}
-                </div>
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
-                  <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>{modalCreation.eventId ? 'Enregistrer' : 'Créer'}</button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {modalBesoinMulti.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
-            <div className="bg-red-700 text-white p-4 shrink-0"><h3 className="font-bold text-lg">🎯 Saisie d'une grille de besoins</h3></div>
-            <form onSubmit={validerBesoinMultiModal} className="flex flex-col overflow-hidden">
-              <div className="p-5 space-y-4 overflow-y-auto">
-                <div className="flex gap-4">
-                  <div className="flex-[2]"><label className="block text-sm font-semibold mb-1 text-red-600">Poste requis</label><select required value={modalBesoinMulti.posteId} onChange={e => setModalBesoinMulti({...modalBesoinMulti, posteId: e.target.value})} className="w-full border border-red-500/50 rounded p-2 bg-transparent"><option value="" disabled>-- Sélectionner --</option>{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select></div>
-                  <div className="flex-1"><label className="block text-sm font-semibold mb-1 text-red-600">Effectif</label><input type="number" min="1" required value={modalBesoinMulti.qte} onChange={e => setModalBesoinMulti({...modalBesoinMulti, qte: e.target.value})} className="w-full border border-red-500/50 rounded p-2 text-center font-bold bg-transparent" /></div>
-                </div>
-                
-                <div className="border border-red-500/30 rounded p-3 bg-red-900/10">
-                  <div className="flex justify-between items-center mb-3">
-                    <p className="text-sm font-bold text-red-600">Créez vos plages horaires et cochez les jours :</p>
-                    <button type="button" onClick={() => setModalBesoinMulti({...modalBesoinMulti, slots: [...modalBesoinMulti.slots, { id: Date.now(), start: '08:00', end: '10:00', days: { 1: false, 2: false, 3: false, 4: false, 5: false } }]})} className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 font-semibold shadow">➕ Plage</button>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    {modalBesoinMulti.slots.map((slot, idx) => (
-                      <div key={idx} className="flex flex-col gap-2 border-b border-red-500/30 pb-3 last:border-0 last:pb-0">
-                        <div className="flex items-center gap-2">
-                          <input type="time" required value={slot.start} onChange={e => {
-                            const ns = [...modalBesoinMulti.slots]; ns[idx].start = e.target.value; setModalBesoinMulti({...modalBesoinMulti, slots: ns});
-                          }} className="border border-red-500/50 p-1 text-sm rounded bg-transparent w-24 text-center text-red-600 font-bold" />
-                          <span className="text-gray-500 text-xs font-bold">à</span>
-                          <input type="time" required value={slot.end} onChange={e => {
-                            const ns = [...modalBesoinMulti.slots]; ns[idx].end = e.target.value; setModalBesoinMulti({...modalBesoinMulti, slots: ns});
-                          }} className="border border-red-500/50 p-1 text-sm rounded bg-transparent w-24 text-center text-red-600 font-bold" />
-                          {modalBesoinMulti.slots.length > 1 && (
-                            <button type="button" onClick={() => {
-                              const ns = [...modalBesoinMulti.slots]; ns.splice(idx, 1); setModalBesoinMulti({...modalBesoinMulti, slots: ns});
-                            }} className="text-red-400 hover:text-red-600 text-xs rounded-full w-5 h-5 flex items-center justify-center shadow-sm ml-auto" title="Retirer cette plage">✖</button>
-                          )}
-                        </div>
-                        <div className="flex gap-2 pl-1 mt-1">
-                          {[1, 2, 3, 4, 5].map(day => (
-                            <label key={day} className={`flex items-center gap-1 px-2 py-1 rounded border text-xs font-bold cursor-pointer transition-colors ${slot.days[day] ? 'bg-red-600 text-white border-red-700 shadow-sm' : `bg-transparent text-gray-500 border-gray-500/30 hover:${t.bgLight}`}`}>
-                              <input type="checkbox" className="hidden" checked={slot.days[day]} onChange={e => {
-                                const ns = [...modalBesoinMulti.slots]; ns[idx].days[day] = e.target.checked; setModalBesoinMulti({...modalBesoinMulti, slots: ns});
-                              }} />
-                              {nomsJours[day % 7]}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} shrink-0 flex justify-end gap-3`}><button type="button" onClick={() => setModalBesoinMulti({ isOpen: false, posteId: '', qte: 1, slots: [] })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button><button type="submit" className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium shadow">Générer la grille</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {modalEditBesoin.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
-            <div className="bg-red-700 text-white p-4"><h3 className="font-bold text-lg">Modifier le besoin</h3></div>
-            <form onSubmit={validerEditBesoin}>
-              <div className="p-5 space-y-4">
-                <div><label className="block text-sm font-semibold mb-1 text-red-600">Effectif attendu (Tapez 0 pour supprimer)</label><input type="number" min="0" required value={modalEditBesoin.qte} onChange={e => setModalEditBesoin({...modalEditBesoin, qte: e.target.value})} className="w-full border border-red-500/50 rounded p-2 text-center font-bold text-lg bg-transparent" autoFocus /></div>
-                <div className="flex gap-4"><div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Début</label><input type="time" required value={modalEditBesoin.start} onChange={e => setModalEditBesoin({...modalEditBesoin, start: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div><div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin</label><input type="time" required value={modalEditBesoin.end} onChange={e => setModalEditBesoin({...modalEditBesoin, end: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div></div>
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}><button type="button" onClick={() => setModalEditBesoin({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button><button type="submit" className="px-5 py-2 bg-red-600 text-white rounded font-medium">Mettre à jour</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {modalAgent.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-md overflow-hidden border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">{modalAgent.id ? 'Modifier un agent' : 'Nouvel agent'}</h3></div>
-            <form onSubmit={validerAgentModal}>
-              <div className="p-5 space-y-4">
-                <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nom complet</label><input type="text" required value={modalAgent.nom} onChange={e => setModalAgent({...modalAgent, nom: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} autoFocus /></div>
-                <div className="flex gap-4">
-                  <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Quotité (%)</label><input type="number" step="0.1" required value={modalAgent.quotite} onChange={e => handleEditAgentChange('quotite', e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 font-bold text-center bg-transparent`} /></div>
-                  <div className="flex-1 flex flex-col justify-end"><label className={`flex items-center gap-2 p-2 border ${t.borderLight} ${t.bgLight} rounded cursor-pointer font-bold text-sm ${t.header}`}><input type="checkbox" checked={modalAgent.estEtudiant} onChange={e => handleEditAgentChange('estEtudiant', e.target.checked)} className="w-4 h-4" />🎓 Statut Étudiant</label></div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Contrat (Calculé)</label>
-                    <input type="text" required value={typeof modalAgent.hContrat === 'number' ? formatHeureMinutes(modalAgent.hContrat) : modalAgent.hContrat} onChange={e => setModalAgent({...modalAgent, hContrat: e.target.value})} onBlur={e => setModalAgent({...modalAgent, hContrat: parseHeureSaisie(e.target.value)})} className={`w-full border ${t.borderLight} rounded p-2 font-mono text-center bg-transparent`} />
-                  </div>
-                  <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Couleur</label><div className="flex items-center gap-3"><input type="color" value={modalAgent.couleurFond} onChange={e => setModalAgent({...modalAgent, couleurFond: e.target.value})} className={`w-10 h-10 p-1 border ${t.borderLight} rounded cursor-pointer bg-transparent`} /><span className={`text-sm uppercase ${t.header}`}>{modalAgent.couleurFond}</span></div></div>
-                </div>
-                
-                <div className="flex flex-col mt-2">
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Jours de présence (Semaine Type)</label>
-                  <div className="flex gap-2">
-                    {[1, 2, 3, 4, 5].map(day => (
-                      <label key={day} className={`flex-1 flex items-center justify-center py-1.5 rounded border text-[11px] font-bold cursor-pointer transition-colors ${modalAgent.jours?.[day] ? `${t.btnPrimary} border-transparent shadow-sm` : `bg-transparent text-gray-400 border-gray-300 hover:bg-black/5`}`}>
-                        <input type="checkbox" className="hidden" checked={modalAgent.jours?.[day] || false} onChange={e => setModalAgent({...modalAgent, jours: {...(modalAgent.jours || {1:true,2:true,3:true,4:true,5:true}), [day]: e.target.checked}})} />
-                        {['LUN', 'MAR', 'MER', 'JEU', 'VEN'][day - 1]}
-                      </label>
-                    ))}
-</div>
-                  </div>
-
-                  {/* AJOUT: GESTION DES AVENANTS */}
-                  <div className="flex flex-col mt-4 pt-4 border-t border-black/10 dark:border-white/10">
-                    <div className="flex justify-between items-center mb-2">
-                        <label className={`text-sm font-semibold ${t.header}`}>Avenants (Changement en cours d'année)</label>
-                        <button type="button" onClick={() => {
-                            const newAv = [...(modalAgent.avenants || []), { date: '', quotite: 100, estEtudiant: false }];
-                            setModalAgent({...modalAgent, avenants: newAv});
-                        }} className="text-xs bg-black/10 hover:bg-black/20 px-2 py-1 rounded font-bold transition-colors">➕ Ajouter</button>
-                    </div>
-                    {(modalAgent.avenants || []).map((av, idx) => (
-                        <div key={idx} className="flex gap-2 items-center mb-2 bg-black/5 p-2 rounded shadow-inner">
-                            <input type="date" required value={av.date} onChange={e => {
-                                const newAv = [...modalAgent.avenants]; newAv[idx].date = e.target.value;
-                                const newAgent = {...modalAgent, avenants: newAv};
-                                newAgent.hContrat = calculerContratProratise(newAgent, baseYear);
-                                setModalAgent(newAgent);
-                            }} className="flex-1 border border-black/20 rounded p-1 text-xs bg-transparent" />
-                            <input type="number" step="0.1" required value={av.quotite} onChange={e => {
-                                const newAv = [...modalAgent.avenants]; newAv[idx].quotite = e.target.value;
-                                const newAgent = {...modalAgent, avenants: newAv};
-                                newAgent.hContrat = calculerContratProratise(newAgent, baseYear);
-                                setModalAgent(newAgent);
-                            }} className="w-16 border border-black/20 rounded p-1 text-xs text-center bg-transparent font-bold" placeholder="%" />
-                            <label className="flex items-center gap-1 text-[10px] font-bold cursor-pointer">
-                                <input type="checkbox" checked={av.estEtudiant} onChange={e => {
-                                    const newAv = [...modalAgent.avenants]; newAv[idx].estEtudiant = e.target.checked;
-                                    const newAgent = {...modalAgent, avenants: newAv};
-                                    newAgent.hContrat = calculerContratProratise(newAgent, baseYear);
-                                    setModalAgent(newAgent);
-                                }} /> Étud.
-                            </label>
-                            <button type="button" onClick={() => {
-                                const newAv = [...modalAgent.avenants]; newAv.splice(idx, 1);
-                                const newAgent = {...modalAgent, avenants: newAv};
-                                newAgent.hContrat = calculerContratProratise(newAgent, baseYear);
-                                setModalAgent(newAgent);
-                            }} className="text-red-500 hover:text-red-700 px-1 font-black transition-colors" title="Supprimer cet avenant">✖</button>
-                        </div>
-                    ))}
-                    {(modalAgent.avenants || []).length > 0 && (
-                        <p className="text-[10px] text-gray-500 italic leading-tight mt-1">Le contrat global est recalculé automatiquement au prorata exact des jours de l'année scolaire (1er Sept. au 31 Août).</p>
-                    )}
-                  </div>
-
-                </div>
-                <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}><button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded">Annuler</button><button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-bold`}>{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-
-{/* PANNEAU LATÉRAL (Rétractable) */}
-      <div className={`${isSidebarOpen ? 'w-80' : 'w-0'} ${t.sidebar} shadow-lg flex flex-col z-20 border-r ${isSidebarOpen ? t.borderLight : 'border-transparent'} no-print shrink-0 transition-all duration-300 ease-in-out`}>
-        <div className="w-80 flex flex-col h-full overflow-hidden transition-opacity duration-300" style={{ opacity: isSidebarOpen ? 1 : 0, visibility: isSidebarOpen ? 'visible' : 'hidden' }}>
-          <div className={`p-4 ${t.sidebarText} flex flex-col gap-3 shrink-0`}>
-            <div className="flex justify-between items-center">
-              <h1 className="text-xl font-bold tracking-wider">Planning CPE</h1>
-              <button onClick={() => setIsSidebarOpen(false)} className={`${t.sidebarIconBtn} w-7 h-7 rounded flex items-center justify-center text-xs shadow-sm border transition-colors hover:scale-105`} title="Masquer le menu">
-                ◀
+      </div>
+      
+      <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
+        {isPrinting ? (
+          <PrintDailyView agents={agents} jourConsulte={jourConsulte} getEventsForWeek={getEventsForWeek} absences={absences} sonneries={sonneries} limitesHeures={limitesHeures} postes={postes} getMondayStr={getMondayStr} amplitude={amplitude} />
+        ) : (
+          <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
+            <div className={`flex flex-wrap gap-2 p-3 border-b ${t.borderLight} ${t.bgLight} justify-center items-center shrink-0`}>
+              <span className="text-xs font-bold text-gray-500 mr-2 uppercase tracking-wider">Légende & Postes :</span>
+              {postes.map(p => (
+                <span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold shadow-sm flex items-center gap-1.5" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>
+                  {p.nom}
+                  <button onClick={() => ouvrirEditionPoste(p)} className="hover:opacity-75 text-xs ml-0.5 cursor-pointer" title="Modifier ce poste">⚙️</button>
+                  <button onClick={() => {
+                    if (confirm(`Voulez-vous vraiment supprimer le poste "${p.nom}" ?`)) {
+                      setPostes(postes.filter(x => x.id !== p.id));
+                    }
+                  }} className="hover:opacity-60 text-xs font-black ml-0.5 cursor-pointer" title="Supprimer ce poste">✖</button>
+                </span>
+              ))}
+              <button onClick={ouvrirCreationPoste} className={`ml-2 px-2.5 py-1 rounded text-xs font-bold ${t.btnPrimary} shadow-sm transition-transform hover:scale-105`}>
+                ➕ Ajouter un poste
               </button>
             </div>
 
-          
-          <div className="flex items-center justify-between bg-black/10 p-1.5 rounded-lg gap-1">
-            <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
-            <button onClick={() => document.getElementById('import-file').click()} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Restaurer une sauvegarde">⬆️</button>
-            <button onClick={handleExport} className={`relative p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500 text-white' : t.sidebarIconBtn}`} title="Sauvegarder les données (Fichier JSON)">
-              ⬇️{needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
-            </button>
-
-            <div className="relative flex-1 flex justify-center">
-              <button 
-                onClick={() => setShowNotificationMenu(!showNotificationMenu)} 
-                className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors w-full flex items-center justify-center relative`}
-                title="Centre de notifications"
-              >
-                🔔
-                {activeAlerts.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-sm">
-                    {activeAlerts.length}
-                  </span>
-                )}
-              </button>
-
-              {showNotificationMenu && (
-                <div className={`absolute left-0 mt-9 w-72 rounded-xl shadow-2xl border ${t.borderLight} ${t.cardBg} z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150`}>
-                  <div className={`${t.headerBg} p-3 flex justify-between items-center border-b ${t.borderLight}`}>
-                    <h3 className={`font-bold text-xs uppercase tracking-wider ${t.headerText}`}>Centre d'alertes</h3>
-                    <button onClick={() => setShowNotificationMenu(false)} className="text-xs font-bold opacity-70 hover:opacity-100">✖</button>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto p-2 space-y-2">
-                    {activeAlerts.length === 0 ? (
-                      <div className="text-center py-6 text-gray-400 text-xs italic">
-                        Aucun problème détecté tout est en ordre 👍
-                      </div>
-                    ) : (
-                      activeAlerts.map((alert, idx) => (
-                        <div key={idx} className={`p-2.5 rounded-lg border ${t.borderLight} ${t.bgLight} text-xs flex gap-2 items-start shadow-xs`}>
-                          <span className="text-base leading-none">⚠️</span>
-                          <div className="flex-1">
-                            <p className={`font-bold ${t.header}`}>{alert.title}</p>
-                            <p className="text-gray-500 text-[11px] mt-0.5">{alert.message}</p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
-            <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Paramètres">⚙️</button>
-            <button onClick={declencherImpression} className={`${t.sidebarIconBtn} p-2 rounded text-xs font-bold border transition-colors flex-1 flex justify-center`} title="Imprimer">🖨️</button>
-            <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
-          </div>
-
-          <div className="flex flex-col bg-black/10 rounded p-2 shadow-inner gap-1 mt-2">
-            <button onClick={() => setVueActive('template')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
-            <button onClick={() => setVueActive('journee')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'journee' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>⏱️ Vue Quotidienne</button>
-            <button onClick={() => setVueActive('planning')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'planning' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📅 Planning Hebdo (Réel)</button>
-            <button onClick={() => setVueActive('dashboard')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'dashboard' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📊 Bilan Équipe</button>
-            <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-base font-medium py-2 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>👤 Calendriers Individuels</button>
-            <button onClick={() => setVueActive('absences')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📋 Absences & Retards</button>
-          </div>
-        </div>
-
-        {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
-          <div className={`p-4 flex-1 overflow-y-auto space-y-4 ${t.bgMain}`}>
-            {vueActive === 'template' && currentTemplate.statut === 'brouillon' && (
-              <div className={`flex ${t.bgLight} rounded p-1 mb-2 border ${t.borderLight}`}>
-                <button onClick={() => setModeEdition('agents')} className={`flex-1 text-xs py-1.5 rounded transition ${modeEdition === 'agents' ? `${t.cardBg} font-bold ${t.textAccent} shadow-sm border ${t.borderLight}` : `${t.textMenuMuted} hover:${t.header}`}`}>🖌️ Agents</button>
-                <button onClick={() => setModeEdition('besoins')} className={`flex-1 text-xs py-1.5 rounded transition ${modeEdition === 'besoins' ? `${t.cardBg} font-bold text-red-500 shadow-sm border ${t.borderLight}` : `${t.textMenuMuted} hover:${t.header}`}`}>🎯 Besoins</button>
-              </div>
-            )}
-
-            {vueActive === 'template' && currentTemplate.statut === 'valide' && (
-              <div className={`${t.bgLight} border ${t.borderLight} p-4 rounded text-center mb-4`}>
-                <span className="text-2xl block mb-1">🔒</span>
-                <p className={`text-sm font-bold ${t.header}`}>Modèle Validé</p>
-                <p className="text-xs text-gray-500 mt-1">Structure verrouillée pour protéger le compte d'heures passé.</p>
-                <button onClick={() => setModalNewVersion({ isOpen: true, dateDebut: `${baseYear+1}-01-04`, nom: 'Évolution Hiver' })} className={`mt-3 ${t.btnPrimary} text-xs font-bold px-3 py-2 rounded shadow w-full flex items-center justify-center gap-1`}>➕ Créer une évolution</button>
-                <button onClick={deverrouillerModele} className="mt-2 text-xs text-gray-500 hover:text-gray-800 underline">🔓 Déverrouiller (Corriger erreur)</button>
-              </div>
-            )}
-
-            {modeEdition === 'agents' && (
-              <div className="animate-in fade-in">
-                <div>
-                  <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600">+</button></div>
-                  <ul className="space-y-1">
-                    {statsAgents.map((agent) => {
-                    const weekEvents = vueActive === 'template' ? currentTemplate.events : getEventsForWeek(targetMonday);
-                    const agentWeekMins = weekEvents.filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence).reduce((acc, evt) => {
-                        return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
-                      }, 0);
-                      const agentWeekHours = agentWeekMins / 60;
-                      const objectifHebdoAgent = agent.hContrat / 36;
-                      const diffAgentHebdo = agentWeekHours - objectifHebdoAgent;
-
-                      return (
-                        <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-3 rounded border-l-4 cursor-pointer ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 border-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
-                          <div className="flex flex-col leading-tight">
-                            <span className={`text-base font-bold ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</span>
-                            <div className="flex gap-2 mt-1">
-                              <span className="text-xs font-mono text-gray-500 font-semibold" title="Total planifié cette semaine">
-                                Sem: {formatHeureTableau(agentWeekHours, true)}
-                              </span>
-                              <span className={`text-xs font-mono font-bold ${diffAgentHebdo >= 0 ? 'text-emerald-600' : 'text-orange-500'}`} title="Écart par rapport à l'objectif hebdo théorique">
-                                ({diffAgentHebdo > 0 ? '+' : ''}{formatHeureTableau(diffAgentHebdo, true)})
-                              </span>
-                            </div>
-                            <span className={`text-xs font-mono mt-1 ${agent.soldeGlobal > 0 ? 'text-green-600' : (agent.soldeGlobal < 0 ? 'text-red-500' : 'text-gray-500')}`}>
-                              Solde global: {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}
-                            </span>
-                          </div>
-                          <div className="flex gap-1.5 items-center shrink-0">
-                            <button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className="text-gray-400 hover:text-gray-800 text-sm px-1">⚙️</button>
-                            <button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-sm px-1">✖</button>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-                <div className="mt-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h2 className={`font-bold ${t.header} text-sm`}>Postes</h2>
-                    <button onClick={ouvrirCreationPoste} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600 flex items-center justify-center">+</button>
-                  </div>
-                  <ul className="space-y-1">
-                    {postes.map((poste) => (
-                      <li key={poste.id} onClick={() => setPosteActif(posteActif === poste.id ? null : poste.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${posteActif === poste.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 border-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: poste.couleur }}>
-                        <span className={t.header}>{poste.nom}</span>
-                        <div className="flex gap-1 items-center shrink-0">
-                          <button onClick={(e) => { e.stopPropagation(); ouvrirEditionPoste(poste); }} className="text-gray-400 hover:text-gray-800 text-xs px-1">⚙️</button>
-                          <button onClick={(e) => supprimerPoste(poste.id, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-            {vueActive === 'template' && currentTemplate.statut === 'brouillon' && modeEdition === 'besoins' && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <div className="bg-red-900/10 border border-red-500/30 p-3 rounded text-sm text-red-500">
-                  <p className="font-bold mb-2">1. Grille Hebdo (Clavier) :</p>
-                  <button onClick={() => setModalBesoinMulti({ isOpen: true, posteId: '', qte: 1, slots: [{ id: Date.now(), start: '08:00', end: '10:00', days: { 1: false, 2: false, 3: false, 4: false, 5: false } }]})} className="w-full bg-red-600 text-white rounded p-2 text-xs font-bold hover:bg-red-700 shadow flex items-center justify-center gap-1 mb-4">➕ Générer une grille complète</button>
-                  <p className="font-bold mb-2 border-t border-red-500/30 pt-3">2. Dessin libre (Souris) :</p>
-                  <label className="text-xs font-bold mb-1 block">Effectif requis :</label>
-                  <input type="number" min="1" value={formBesoinQte} onChange={e => setFormBesoinQte(Number(e.target.value))} className="w-full p-2 rounded border border-red-500/50 font-bold text-center mb-2 bg-transparent" />
-                  <p className="text-[11px] italic opacity-80 leading-tight">Glissez la souris sur la ligne d'un Poste (à droite) pour dessiner un besoin.</p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      </div>
-{/* ========================================================= */}
-      {/* ZONE PRINCIPALE D'AFFICHAGE (LE CALENDRIER ET LES BILANS) */}
-      {/* ========================================================= */}
-      <div id="print-area" className={`flex-1 flex flex-col h-full overflow-hidden ${t.cardBg}`}>  
-      {/* Bouton pour rouvrir le menu (flottant à gauche) */}
-        {!isSidebarOpen && (
-          <button 
-            onClick={() => setIsSidebarOpen(true)} 
-            className={`absolute top-1/2 left-0 -translate-y-1/2 z-50 ${t.sidebar} border border-l-0 ${t.borderLight} ${t.sidebarText} py-5 px-1.5 rounded-r-xl shadow-lg flex items-center justify-center no-print hover:pl-3 transition-all duration-200 group`}
-            title="Ouvrir le menu"
-          >
-            <span className="group-hover:scale-125 transition-transform font-black">▶</span>
-          </button>
-        )}
-{/* ========================================================= */}
-        {/* ZONE DU CALENDRIER (ALLEGEE GRACE A TIMELINECOMPONENTS) */}
-        {/* ========================================================= */}
-        
-        {/* 1. VUE QUOTIDIENNE */}
-        {vueActive === 'journee' && (() => {
-          const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
-          return (
-            <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
-              <div className="p-4 pb-2 no-print shrink-0">
-                <div className="flex justify-between items-center mb-2">
-                  <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>⏱️ Vue Quotidienne</h2>
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => changeJourQuotidien(-1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>◀ Jour Précédent</button>
-                    <input type="date" value={jourConsulte} onChange={(e) => setJourConsulte(e.target.value)} className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold ${t.cardBg} ${t.header} outline-none shadow-sm`} />
-                    <button onClick={() => changeJourQuotidien(1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>Jour Suivant ▶</button>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
-                {isPrinting ? (
-                  <PrintDailyView agents={agents} jourConsulte={jourConsulte} getEventsForWeek={getEventsForWeek} absences={absences} sonneries={sonneries} limitesHeures={limitesHeures} postes={postes} getMondayStr={getMondayStr} amplitude={amplitude} />
-                ) : (
-                  <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
-                    <div className={`flex flex-wrap gap-2 p-3 border-b ${t.borderLight} ${t.bgLight} justify-center items-center shrink-0`}>
-                      <span className="text-xs font-bold text-gray-500 mr-2 uppercase tracking-wider">Légende & Postes :</span>
-                      {postes.map(p => (
-                        <span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold shadow-sm flex items-center gap-1.5" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>
-                          {p.nom}
-                          <button onClick={() => ouvrirEditionPoste(p)} className="hover:opacity-75 text-xs ml-0.5 cursor-pointer" title="Modifier ce poste">⚙️</button>
-                          <button onClick={() => { if (confirm(`Supprimer le poste "${p.nom}" ?`)) setPostes(postes.filter(x => x.id !== p.id)); }} className="hover:opacity-60 text-xs font-black ml-0.5 cursor-pointer" title="Supprimer ce poste">✖</button>
-                        </span>
-                      ))}
-                      <button onClick={ouvrirCreationPoste} className={`ml-2 px-2.5 py-1 rounded text-xs font-bold ${t.btnPrimary} shadow-sm transition-transform hover:scale-105`}>➕ Ajouter un poste</button>
+<div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">                      <div className="min-w-[800px] flex-1 flex flex-col relative">
+                <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
+                  {gridLabelsDaily.map(lbl => (
+                    <div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
+                      {lbl.timeStr}
                     </div>
-
-                    <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
-                      <div className="min-w-[800px] flex-1 flex flex-col relative">
-                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
-                          {gridLabelsDaily.map(lbl => (<div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>{lbl.timeStr}</div>))}
-                        </div>
-                        
-                        <div className="flex-1 relative z-10 flex flex-col">
-                          <div className="absolute inset-0 left-32 pointer-events-none z-0">
-                            {gridLines.map(line => (<div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie || line.isStartDay ? '2px solid currentColor' : '1px dashed currentColor' }}></div>))}
-                          </div>
-
-                          {agents.map(agent => {
-                            const mondayStr = getMondayStr(jourConsulte);
-                            const allEvents = getEventsForWeek(mondayStr);
-                            const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
-
-                            const totalMinsJour = eventsDuJour.reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
-                            const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
-
-                            return (
-                              <div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
-                                <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
-                                  <span className="text-sm font-black text-right leading-tight">{agent.nom}</span>
-                                  <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
-                                </div>
-                                
-                                <TimelineTrack 
-                                  limitesHeures={limitesHeures} isBesoins={false} copiedEvent={copiedEvent}
-                                  onAddCopy={(startMins) => {
-                                    const duration = copiedEvent.durationMins || 60;
-                                    const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
-                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                    sauvegarderEtatPrecedent();
-                                    applyAction('add', { 
-                                      id: String(Date.now() + Math.random()), start: `${jourConsulte}T${formatTime(startMins)}:00`, end: `${jourConsulte}T${formatTime(endMins)}:00`,
-                                      title: `${copiedEvent.extendedProps?.posteNom} - ${agent.nom}`,
-                                      backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
-                                      extendedProps: { ...copiedEvent.extendedProps, agentId: agent.id, agentNom: agent.nom }
-                                    });
-                                    setCopiedEvent(null);
-                                  }}
-                                  onAddLasso={(startMins, endMins) => {
-                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                    setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(agent.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
-                                    setModalCreation({ isOpen: true, eventId: null, date: jourConsulte, start: formatTime(startMins), end: formatTime(endMins) });
-                                  }}
-                                >
-                                  {eventsDuJour.map(evt => {
-                                    const startD = new Date(evt.start); const endD = new Date(evt.end);
-                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
-                                    const posteCouleur = evt.extendedProps?.posteCouleur || '#3b82f6';
-                                    
-                                    return (
-                                      <TimelineEvent 
-                                        key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={false} 
-                                        bgColor={posteCouleur} borderColor='rgba(0,0,0,0.2)' textColor={getContrastYIQ(posteCouleur)} 
-                                        title={evt.extendedProps?.posteNom || 'Poste'} subtitle={agent.nom} extInfo={null} conflit={false}
-                                        onUpdate={(min, max) => {
-                                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                          sauvegarderEtatPrecedent();
-                                          applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(min)}:00`, end: `${jourConsulte}T${formatTime(max)}:00` });
-                                        }}
-                                        onClick={() => ouvrirEdition(evt)}
-                                        onCopy={(dur) => setCopiedEvent({ title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: dur })}
-                                      />
-                                    );
-                                  })}
-                                </TimelineTrack>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* 2. VUE MODELE (SEMAINE TYPE) */}
-        {vueActive === 'template' && (() => {
-          const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
-          const templateDateObj = new Date(currentTemplate.dateDebut);
-          templateDateObj.setDate(templateDateObj.getDate() + (jourTemplate - 1));
-          const pad = n => String(n).padStart(2, '0');
-          const currentTemplateDateStr = `${templateDateObj.getFullYear()}-${pad(templateDateObj.getMonth()+1)}-${pad(templateDateObj.getDate())}`;
-
-          const isBesoinsMode = modeEdition === 'besoins';
-          const rowsItems = isBesoinsMode ? postes : agents;
-
-          return (
-            <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden min-h-0`}>
-              <div className="p-4 pb-2 no-print shrink-0">
-                <div className="flex justify-between items-center mb-2">
-                  <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>📐 Modèle : {currentTemplate.nom}</h2>
-                  <div className="flex gap-2 items-center">
-                    {currentTemplate.statut === 'brouillon' && (<button onClick={validerModele} className="bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded hover:bg-green-700 shadow-sm animate-pulse">✅ Valider et Appliquer</button>)}
-                    <select value={activeTemplateId} onChange={e => setActiveTemplateId(Number(e.target.value))} className={`border ${t.borderLight} rounded p-1.5 text-xs font-bold ${t.cardBg} ${t.header} outline-none`}>
-                      {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.statut==='valide'?'🔒':'✏️'} {tv.nom}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-3 items-center">
-                  {[1, 2, 3, 4, 5].map(d => (
-                    <button key={d} onClick={() => setJourTemplate(d)} className={`px-5 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${jourTemplate === d ? t.activeTab : `${t.cardBg} ${t.textMenuMuted} border border-transparent hover:border-black/10`}`}>{['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][d - 1]}</button>
                   ))}
-                  <div className="ml-auto text-xs font-bold px-3 py-1.5 rounded-full border border-black/10 shadow-inner bg-black/5">Lignes : {isBesoinsMode ? '🎯 Postes (Besoins structurels)' : '👤 Agents (Affectations nominatives)'}</div>
                 </div>
-              </div>
+                
+                <div className="flex-1 relative z-10 flex flex-col">
+                  <div className="absolute inset-0 left-32 pointer-events-none z-0">
+                    {gridLines.map(line => (
+                      <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie || line.isStartDay ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
+                    ))}
+                  </div>
 
-              <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
-                <div className={`${t.cardBg} rounded-xl shadow border ${currentTemplate.statut === 'brouillon' ? 'border-[#3B82F6] border-2' : t.borderLight} flex-1 flex flex-col overflow-hidden`}>
-                  <div className={`h-full flex flex-col transition-all duration-300 ${currentTemplate.statut === 'valide' ? 'pointer-events-none opacity-85 grayscale-[15%]' : ''}`}>
-                    <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
-                      <div className="min-w-[800px] flex-1 flex flex-col relative">
-                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
-                          {gridLabelsDaily.map(lbl => (<div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>{lbl.timeStr}</div>))}
+                  {agents.map(agent => {
+                    const mondayStr = getMondayStr(jourConsulte);
+                    const allEvents = getEventsForWeek(mondayStr);
+                    const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
+
+                    const totalMinsJour = eventsDuJour.reduce((acc, evt) => {
+                      return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
+                    }, 0);
+                    const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
+
+                    const allLineSnapPoints = [...sonneriesMins, ...eventsDuJour.flatMap(e => {
+                        const s = new Date(e.start), ed = new Date(e.end);
+                        return [s.getHours() * 60 + s.getMinutes(), ed.getHours() * 60 + ed.getMinutes()];
+                    })];
+
+                    return (
+<div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
+                        <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
+                          <span className="text-sm font-black text-right leading-tight">{agent.nom}</span>
+                          <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
                         </div>
                         
-                        <div className="flex-1 relative z-10 flex flex-col">
-                          <div className="absolute inset-0 left-32 pointer-events-none z-0">
-                            {gridLines.map(line => (<div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>))}
-                          </div>
-
-                          {rowsItems.map(item => {
-                            const dateStr = currentTemplateDateStr;
-                            const eventsDeLaLigne = displayEvents.filter(e => {
-                              if (!e.start.startsWith(dateStr)) return false;
-                              if (isBesoinsMode) return e.extendedProps?.isBesoin && e.extendedProps?.posteId === item.id;
-                              return !e.extendedProps?.isBesoin && e.extendedProps?.agentId === item.id;
+                        <TimelineTrack 
+                          limitesHeures={limitesHeures} isBesoins={false} copiedEvent={copiedEvent} snapPoints={allLineSnapPoints}
+                          onAddCopy={(startMins) => {
+                            const duration = copiedEvent.durationMins || 60;
+                            const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
+                            const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                            sauvegarderEtatPrecedent();
+                            applyAction('add', { 
+                              id: String(Date.now() + Math.random()), start: `${jourConsulte}T${formatTime(startMins)}:00`, end: `${jourConsulte}T${formatTime(endMins)}:00`,
+                              title: `${copiedEvent.extendedProps?.posteNom} - ${agent.nom}`,
+                              backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
+                              extendedProps: { ...copiedEvent.extendedProps, agentId: agent.id, agentNom: agent.nom }
                             });
-
-                            const rowBgColor = isBesoinsMode ? item.couleur : item.couleurFond;
-                            const totalMinsJour = eventsDeLaLigne.reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
-                            const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
-
+                            setCopiedEvent(null);
+                          }}
+                          onAddLasso={(startMins, endMins) => {
+                            const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                            setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(agent.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
+                            setModalCreation({ isOpen: true, eventId: null, date: jourConsulte, start: formatTime(startMins), end: formatTime(endMins) });
+                          }}
+                        >
+                          {eventsDuJour.map(evt => {
+                            const startD = new Date(evt.start); const endD = new Date(evt.end);
+                            const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
+                            const posteCouleur = evt.extendedProps?.posteCouleur || '#3b82f6';
+                            
                             return (
-                              <div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
-                                <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: rowBgColor, color: getContrastYIQ(rowBgColor) }}>
-                                  <span className="text-sm font-black text-right leading-tight">{item.nom}</span>
-                                  <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
-                                </div>
-                                
-                                <TimelineTrack 
-                                  limitesHeures={limitesHeures} isBesoins={isBesoinsMode} copiedEvent={copiedEvent}
-                                  onAddCopy={(startMins) => {
-                                    if (currentTemplate.statut === 'valide') return;
-                                    const duration = copiedEvent.durationMins || 60;
-                                    const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
-                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                    sauvegarderEtatPrecedent();
-                                    const newStartISO = `${currentTemplateDateStr}T${formatTime(startMins)}:00`;
-                                    const newEndISO = `${currentTemplateDateStr}T${formatTime(endMins)}:00`;
-
-                                    if (isBesoinsMode && copiedEvent.extendedProps?.isBesoin) {
-                                      updateCurrentTemplate(null, [...currentTemplate.besoins, { 
-                                        id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO, extendedProps: { ...copiedEvent.extendedProps, posteId: item.id, posteNom: item.nom } 
-                                      }]);
-                                    } else if (!isBesoinsMode && !copiedEvent.extendedProps?.isBesoin) {
-                                      applyAction('add', { 
-                                        id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO,
-                                        title: `${copiedEvent.extendedProps?.posteNom} - ${item.nom}`,
-                                        backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
-                                        extendedProps: { ...copiedEvent.extendedProps, agentId: item.id, agentNom: item.nom }
-                                      });
-                                    }
-                                    setCopiedEvent(null);
-                                  }}
-                                  onAddLasso={(startMins, endMins) => {
-                                    if (currentTemplate.statut === 'valide') return;
-                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                    if (isBesoinsMode) {
-                                      updateCurrentTemplate(null, [...currentTemplate.besoins, { 
-                                        id: String(Date.now()), start: `${currentTemplateDateStr}T${formatTime(startMins)}:00`, end: `${currentTemplateDateStr}T${formatTime(endMins)}:00`, 
-                                        extendedProps: { posteId: item.id, posteNom: item.nom, qte: formBesoinQte } 
-                                      }]);
-                                    } else {
-                                      setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(item.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
-                                      setModalCreation({ isOpen: true, eventId: null, date: currentTemplateDateStr, start: formatTime(startMins), end: formatTime(endMins) });
-                                    }
-                                  }}
-                                >
-                                  {eventsDeLaLigne.map(evt => {
-                                    const startD = new Date(evt.start); const endD = new Date(evt.end);
-                                    const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
-                                    const isLocked = currentTemplate.statut === 'valide';
-                                    
-                                    let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo;
-                                    if (isBesoinsMode) {
-                                      const isSous = evt.extendedProps?.isSousEffectif;
-                                      evtBgColor = isSous ? '#dc2626' : '#16a34a'; evtBorderColor = isSous ? '#991b1b' : '#166534'; evtTextColor = '#ffffff';
-                                      evtTitle = `${evt.extendedProps?.minCount} / ${evt.extendedProps?.qte} pers.`;
-                                    } else {
-                                      evtBgColor = evt.extendedProps?.posteCouleur || '#3b82f6';
-                                      const estEnConflit = conflitsIds.has(String(evt.id).split('_')[0]);
-                                      if (estEnConflit) { evtBgColor = '#dc2626'; }
-                                      evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = getContrastYIQ(evtBgColor);
-                                      evtTitle = (estEnConflit ? '⚠️ ' : '') + (evt.extendedProps?.posteNom || 'Poste');
-                                      extInfo = evt.extendedProps?.note || null;
-                                    }
-                                    
-                                    return (
-                                      <TimelineEvent 
-                                        key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={isLocked} 
-                                        bgColor={evtBgColor} borderColor={evtBorderColor} textColor={evtTextColor} 
-                                        title={evtTitle} subtitle={!isBesoinsMode ? item.nom : null} extInfo={extInfo} conflit={!isBesoinsMode && conflitsIds.has(String(evt.id).split('_')[0])}
-                                        onUpdate={(min, max) => {
-                                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                          sauvegarderEtatPrecedent();
-                                          if (isBesoinsMode) {
-                                            const cleanId = String(evt.id).split('_')[0];
-                                            const newBesoins = currentTemplate.besoins.map(b => String(b.id).split('_')[0] === cleanId ? { ...b, start: `${currentTemplateDateStr}T${formatTime(min)}:00`, end: `${currentTemplateDateStr}T${formatTime(max)}:00` } : b);
-                                            updateCurrentTemplate(null, newBesoins);
-                                          } else {
-                                            applyAction('update', { id: evt.id, start: `${currentTemplateDateStr}T${formatTime(min)}:00`, end: `${currentTemplateDateStr}T${formatTime(max)}:00` });
-                                          }
-                                        }}
-                                        onClick={() => { if (!isLocked) { if (evt.extendedProps?.isBesoin) ouvrirEditionBesoin(evt); else ouvrirEdition(evt); } }}
-                                        onCopy={(dur) => setCopiedEvent({ title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: dur })}
-                                      />
-                                    );
-                                  })}
-                                </TimelineTrack>
-                              </div>
+                              <TimelineEvent 
+                                key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={false} 
+                                bgColor={posteCouleur} borderColor='rgba(0,0,0,0.2)' textColor={getContrastYIQ(posteCouleur)} 
+                                title={evt.extendedProps?.posteNom || 'Poste'} subtitle={agent.nom} extInfo={null} conflit={false} snapPoints={allLineSnapPoints}
+                                onUpdate={(min, max) => {
+                                  const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                  sauvegarderEtatPrecedent();
+                                  applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(min)}:00`, end: `${jourConsulte}T${formatTime(max)}:00` });
+                                }}
+                                onClick={() => ouvrirEdition(evt)}
+                                onCopy={(dur) => setCopiedEvent({ title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: dur })}
+                              />
                             );
                           })}
-                        </div>
+                        </TimelineTrack>
                       </div>
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-          );
-        })()}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+})()}
 
-        {/* 3. VUE PLANNING REEL */}
+{/* 2. VUE MODELE (SEMAINE TYPE) */}
+{vueActive === 'template' && (() => {
+  const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
+  const templateDateObj = new Date(currentTemplate.dateDebut);
+  templateDateObj.setDate(templateDateObj.getDate() + (jourTemplate - 1));
+  const pad = n => String(n).padStart(2, '0');
+  const currentTemplateDateStr = `${templateDateObj.getFullYear()}-${pad(templateDateObj.getMonth()+1)}-${pad(templateDateObj.getDate())}`;
+
+  const isBesoinsMode = modeEdition === 'besoins';
+  const rowsItems = isBesoinsMode ? postes : agents;
+
+  return (
+    <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden min-h-0`}>
+      <div className="p-4 pb-2 no-print shrink-0">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>📐 Modèle : {currentTemplate.nom}</h2>
+          <div className="flex gap-2 items-center">
+            {currentTemplate.statut === 'brouillon' && (<button onClick={validerModele} className="bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded hover:bg-green-700 shadow-sm animate-pulse">✅ Valider et Appliquer</button>)}
+            <select value={activeTemplateId} onChange={e => setActiveTemplateId(Number(e.target.value))} className={`border ${t.borderLight} rounded p-1.5 text-xs font-bold ${t.cardBg} ${t.header} outline-none`}>
+              {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.statut==='valide'?'🔒':'✏️'} {tv.nom}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-3 items-center">
+          {[1, 2, 3, 4, 5].map(d => (
+            <button key={d} onClick={() => setJourTemplate(d)} className={`px-5 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${jourTemplate === d ? t.activeTab : `${t.cardBg} ${t.textMenuMuted} border border-transparent hover:border-black/10`}`}>{['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][d - 1]}</button>
+          ))}
+          <div className="ml-auto text-xs font-bold px-3 py-1.5 rounded-full border border-black/10 shadow-inner bg-black/5">Lignes : {isBesoinsMode ? '🎯 Postes (Besoins structurels)' : '👤 Agents (Affectations nominatives)'}</div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
+        <div className={`${t.cardBg} rounded-xl shadow border ${currentTemplate.statut === 'brouillon' ? 'border-[#3B82F6] border-2' : t.borderLight} flex-1 flex flex-col overflow-hidden`}>
+          <div className={`h-full flex flex-col transition-all duration-300 ${currentTemplate.statut === 'valide' ? 'pointer-events-none opacity-85 grayscale-[15%]' : ''}`}>
+            <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
+              <div className="min-w-[800px] flex-1 flex flex-col relative">
+                <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
+                  {gridLabelsDaily.map(lbl => (<div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>{lbl.timeStr}</div>))}
+                </div>
+                
+                <div className="flex-1 relative z-10 flex flex-col">
+                  <div className="absolute inset-0 left-32 pointer-events-none z-0">
+                    {gridLines.map(line => (<div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>))}
+                  </div>
+
+                  {rowsItems.map(item => {
+                    const dateStr = currentTemplateDateStr;
+                    const eventsDeLaLigne = displayEvents.filter(e => {
+                      if (!e.start.startsWith(dateStr)) return false;
+                      if (isBesoinsMode) return e.extendedProps?.isBesoin && e.extendedProps?.posteId === item.id;
+                      return !e.extendedProps?.isBesoin && e.extendedProps?.agentId === item.id;
+                    });
+
+                    const rowBgColor = isBesoinsMode ? item.couleur : item.couleurFond;
+                    const totalMinsJour = eventsDeLaLigne.reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                    const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
+
+                    const allLineSnapPoints = [...sonneriesMins, ...eventsDeLaLigne.flatMap(e => {
+                        const s = new Date(e.start), ed = new Date(e.end);
+                        return [s.getHours() * 60 + s.getMinutes(), ed.getHours() * 60 + ed.getMinutes()];
+                    })];
+
+                    return (
+                      <div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
+                        <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: rowBgColor, color: getContrastYIQ(rowBgColor) }}>
+                          <span className="text-sm font-black text-right leading-tight">{item.nom}</span>
+                          <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
+                        </div>
+                        
+                        <TimelineTrack 
+                          limitesHeures={limitesHeures} isBesoins={isBesoinsMode} copiedEvent={copiedEvent} snapPoints={allLineSnapPoints}
+                          onAddCopy={(startMins) => {
+                            if (currentTemplate.statut === 'valide') return;
+                            const duration = copiedEvent.durationMins || 60;
+                            const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
+                            const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                            sauvegarderEtatPrecedent();
+                            const newStartISO = `${currentTemplateDateStr}T${formatTime(startMins)}:00`;
+                            const newEndISO = `${currentTemplateDateStr}T${formatTime(endMins)}:00`;
+
+                            if (isBesoinsMode && copiedEvent.extendedProps?.isBesoin) {
+                              updateCurrentTemplate(null, [...currentTemplate.besoins, { 
+                                id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO, extendedProps: { ...copiedEvent.extendedProps, posteId: item.id, posteNom: item.nom } 
+                              }]);
+                            } else if (!isBesoinsMode && !copiedEvent.extendedProps?.isBesoin) {
+                              applyAction('add', { 
+                                id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO,
+                                title: `${copiedEvent.extendedProps?.posteNom} - ${item.nom}`,
+                                backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
+                                extendedProps: { ...copiedEvent.extendedProps, agentId: item.id, agentNom: item.nom }
+                              });
+                            }
+                            setCopiedEvent(null);
+                          }}
+                          onAddLasso={(startMins, endMins) => {
+                            if (currentTemplate.statut === 'valide') return;
+                            const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                            if (isBesoinsMode) {
+                              updateCurrentTemplate(null, [...currentTemplate.besoins, { 
+                                id: String(Date.now()), start: `${currentTemplateDateStr}T${formatTime(startMins)}:00`, end: `${currentTemplateDateStr}T${formatTime(endMins)}:00`, 
+                                extendedProps: { posteId: item.id, posteNom: item.nom, qte: formBesoinQte } 
+                              }]);
+                            } else {
+                              setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(item.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
+                              setModalCreation({ isOpen: true, eventId: null, date: currentTemplateDateStr, start: formatTime(startMins), end: formatTime(endMins) });
+                            }
+                          }}
+                        >
+                          {eventsDeLaLigne.map(evt => {
+                            const startD = new Date(evt.start); const endD = new Date(evt.end);
+                            const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
+                            const isLocked = currentTemplate.statut === 'valide';
+                            
+                            let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo;
+                            if (isBesoinsMode) {
+                              const isSous = evt.extendedProps?.isSousEffectif;
+                              evtBgColor = isSous ? '#dc2626' : '#16a34a'; evtBorderColor = isSous ? '#991b1b' : '#166534'; evtTextColor = '#ffffff';
+                              evtTitle = `${evt.extendedProps?.minCount} / ${evt.extendedProps?.qte} pers.`;
+                            } else {
+                              evtBgColor = evt.extendedProps?.posteCouleur || '#3b82f6';
+                              const estEnConflit = conflitsIds.has(String(evt.id).split('_')[0]);
+                              if (estEnConflit) { evtBgColor = '#dc2626'; }
+                              evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = getContrastYIQ(evtBgColor);
+                              evtTitle = (estEnConflit ? '⚠️ ' : '') + (evt.extendedProps?.posteNom || 'Poste');
+                              extInfo = evt.extendedProps?.note || null;
+                            }
+                            
+                            return (
+                              <TimelineEvent 
+                                key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={isLocked} 
+                                bgColor={evtBgColor} borderColor={evtBorderColor} textColor={evtTextColor} 
+                                title={evtTitle} subtitle={!isBesoinsMode ? item.nom : null} extInfo={extInfo} conflit={!isBesoinsMode && conflitsIds.has(String(evt.id).split('_')[0])} snapPoints={allLineSnapPoints}
+                                onUpdate={(min, max) => {
+                                  const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                  sauvegarderEtatPrecedent();
+                                  if (isBesoinsMode) {
+                                    const cleanId = String(evt.id).split('_')[0];
+                                    const newBesoins = currentTemplate.besoins.map(b => String(b.id).split('_')[0] === cleanId ? { ...b, start: `${currentTemplateDateStr}T${formatTime(min)}:00`, end: `${currentTemplateDateStr}T${formatTime(max)}:00` } : b);
+                                    updateCurrentTemplate(null, newBesoins);
+                                  } else {
+                                    applyAction('update', { id: evt.id, start: `${currentTemplateDateStr}T${formatTime(min)}:00`, end: `${currentTemplateDateStr}T${formatTime(max)}:00` });
+                                  }
+                                }}
+                                onClick={() => { if (!isLocked) { if (evt.extendedProps?.isBesoin) ouvrirEditionBesoin(evt); else ouvrirEdition(evt); } }}
+                                onCopy={(dur) => setCopiedEvent({ title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: dur })}
+                              />
+                            );
+                          })}
+                        </TimelineTrack>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+})()}
+
+{/* 3. VUE PLANNING REEL */}
         {vueActive === 'planning' && (() => {
           const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
           const activeMonday = currentViewMonday || getMondayStr(new Date());
@@ -2279,6 +1567,11 @@ return (
                                   const totalMinsJour = eventsDeLaLigne.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                                   const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
 
+                                  const allLineSnapPoints = [...sonneriesMins, ...eventsDeLaLigne.flatMap(e => {
+                                      const s = new Date(e.start), ed = new Date(e.end);
+                                      return [s.getHours() * 60 + s.getMinutes(), ed.getHours() * 60 + ed.getMinutes()];
+                                  })];
+
                                   return (
                                     <div key={`${dateStr}-${agent.id}`} className={`flex border-b ${t.borderLight} h-14 relative group hover:bg-black/5 hover:z-50 transition-colors`}>
                                       <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-20 shadow-[2px_0_5px_rgba(0,0,0,0.05)] sticky left-0`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
@@ -2287,7 +1580,7 @@ return (
                                       </div>
                                       
                                       <TimelineTrack 
-                                        limitesHeures={limitesHeures} isBesoins={false} copiedEvent={copiedEvent}
+                                        limitesHeures={limitesHeures} isBesoins={false} copiedEvent={copiedEvent} snapPoints={allLineSnapPoints}
                                         onAddCopy={(startMins) => {
                                           const duration = copiedEvent.durationMins || 60;
                                           const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
@@ -2331,7 +1624,7 @@ return (
                                             <TimelineEvent 
                                               key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={false} 
                                               bgColor={evtBgColor} borderColor={evtBorderColor} textColor={evtTextColor} 
-                                              title={evtTitle} subtitle={agent?.nom || evt.extendedProps?.agentNom || 'Agent'} extInfo={extInfo} conflit={!evt.extendedProps?.isAbsence && conflitsIds.has(String(evt.id).split('_')[0])}
+                                              title={evtTitle} subtitle={agent?.nom || evt.extendedProps?.agentNom || 'Agent'} extInfo={extInfo} conflit={!evt.extendedProps?.isAbsence && conflitsIds.has(String(evt.id).split('_')[0])} snapPoints={allLineSnapPoints}
                                               onUpdate={(min, max) => {
                                                 const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
                                                 sauvegarderEtatPrecedent();
@@ -2363,7 +1656,8 @@ return (
             </div>
           );
         })()}
-
+        
+        {/* Le reste des Vues (Bilan & Agent) restent intactes, passez les accolades */}
         {/* 4. VUE BILAN EQUIPE */}
         {vueActive === 'dashboard' && (() => {
           const todayStr = new Date().toISOString().split('T')[0];
