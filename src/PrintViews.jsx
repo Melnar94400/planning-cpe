@@ -2,30 +2,8 @@ import React from 'react';
 import { generateGrid, getContrastYIQ } from './utils.js';
 
 export const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { baseMins: 460, span: 620 }, amplitude = { start: '07:30', end: '18:00' }, agents = [], joursAImprimer = [1, 2, 3, 4, 5], format = 'A4' }) => {
-  const { gridLines } = generateGrid(limitesHeures, sonneries, amplitude);
+  const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
   const nomsJours = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-
-  // Génération propre des graduations (toutes les 10 min) et des libellés (toutes les 30 min : 00 et :30)
-  const startTime = limitesHeures.baseMins;
-  const spanTime = limitesHeures.span;
-  const endTime = startTime + spanTime;
-
-  const ticks = [];
-  const labels = [];
-
-  let m = Math.ceil(startTime / 10) * 10;
-  while (m <= endTime) {
-    const topPercent = ((m - startTime) / spanTime) * 100;
-    ticks.push({ m, topPercent });
-
-    if (m % 30 === 0) {
-      const h = Math.floor(m / 60);
-      const min = m % 60;
-      const timeStr = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-      labels.push({ timeStr, topPercent });
-    }
-    m += 10;
-  }
 
   return (
     <div className="w-full bg-white text-black print:bg-white print:text-black">
@@ -62,12 +40,11 @@ export const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures
             </div>
 
             <div className="flex-1 flex flex-col relative border-2 border-black rounded-lg overflow-hidden bg-white">
-              {/* En-tête avec graduations 10 min et heures/demies */}
               <div className="flex border-b-2 border-black bg-gray-100 shrink-0 ml-28 relative h-7 items-center">
-                {ticks.map(tick => (
+                {gridTicks?.map(tick => (
                   <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/40" style={{ left: `${tick.topPercent}%` }}></div>
                 ))}
-                {labels.map(lbl => (
+                {gridLabelsDaily.map(lbl => (
                   <div key={lbl.timeStr} className="absolute text-[8px] font-black text-black top-1/2 -translate-y-1/2" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
                     {lbl.timeStr}
                   </div>
@@ -152,29 +129,8 @@ export const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures
 };
 
 export const PrintTemplateView = ({ template, joursAImprimer = [1, 2, 3, 4, 5], agents, limitesHeures, sonneries, amplitude, formatHeureTableau, format = 'A4' }) => {
-  const { gridLines } = generateGrid(limitesHeures, sonneries, amplitude);
+  const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
   const nomsJours = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-
-  const startTime = limitesHeures.baseMins;
-  const spanTime = limitesHeures.span;
-  const endTime = startTime + spanTime;
-
-  const ticks = [];
-  const labels = [];
-
-  let m = Math.ceil(startTime / 10) * 10;
-  while (m <= endTime) {
-    const topPercent = ((m - startTime) / spanTime) * 100;
-    ticks.push({ m, topPercent });
-
-    if (m % 30 === 0) {
-      const h = Math.floor(m / 60);
-      const min = m % 60;
-      const timeStr = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-      labels.push({ timeStr, topPercent });
-    }
-    m += 10;
-  }
 
   return (
     <div className="w-full bg-white print:bg-white text-black print:text-black">
@@ -213,10 +169,10 @@ export const PrintTemplateView = ({ template, joursAImprimer = [1, 2, 3, 4, 5], 
 
             <div className="flex-1 flex flex-col relative border-2 border-black rounded-lg overflow-hidden bg-white">
               <div className="flex border-b-2 border-black bg-gray-100 shrink-0 ml-32 relative h-7 items-center">
-                {ticks.map(tick => (
+                {gridTicks?.map(tick => (
                   <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/40" style={{ left: `${tick.topPercent}%` }}></div>
                 ))}
-                {labels.map(lbl => (
+                {gridLabelsDaily.map(lbl => (
                   <div key={lbl.timeStr} className="absolute text-[8px] font-black text-black top-1/2 -translate-y-1/2" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
                     {lbl.timeStr}
                   </div>
@@ -226,7 +182,7 @@ export const PrintTemplateView = ({ template, joursAImprimer = [1, 2, 3, 4, 5], 
               <div className="flex-1 relative z-10 flex flex-col bg-white overflow-hidden">
                 <div className="absolute inset-0 left-32 pointer-events-none z-0">
                   {gridLines.map(line => (
-                    <div key={line.timeStr} className="absolute top-0 bottom-0 border-black opacity-20" style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie || line.isStartDay ? '2px solid black' : '1px dashed black' }}></div>
+                    <div key={line.timeStr} className="absolute top-0 bottom-0 border-black opacity-20" style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid black' : '1px dashed black' }}></div>
                   ))}
                 </div>
 
@@ -306,7 +262,7 @@ export const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absence
   const mondayStr = getMondayStr(jourConsulte);
   const allEvents = getEventsForWeek(mondayStr);
   const extTime = (iso) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
-  const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries);
+  const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
 
   return (
     <div className="print-weekly-page flex flex-col bg-white p-2 h-full">
@@ -325,8 +281,11 @@ export const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absence
 
       <div className="flex-1 border border-black relative bg-white flex flex-col overflow-hidden">
         <div className="flex border-b border-black bg-gray-100 shrink-0 h-6 relative ml-28">
+           {gridTicks?.map(tick => (
+             <div key={tick.m} className="absolute bottom-0 w-[1px] h-1.5 bg-black/40" style={{ left: `${tick.topPercent}%` }}></div>
+           ))}
            {gridLabelsDaily.map(lbl => (
-              <div key={lbl.timeStr} className="absolute text-[10px] font-black text-black top-1" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
+              <div key={lbl.timeStr} className="absolute text-[10px] font-black text-black top-1/2 -translate-y-1/2" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
                  {lbl.timeStr}
               </div>
            ))}

@@ -5,7 +5,7 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
   const trackRef = useRef(null);
 
   const handleMouseDown = (e) => {
-    if (e.target.closest('.event-item')) return; // Ignore clics sur créneaux
+    if (e.target.closest('.event-item')) return;
     if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
     e.preventDefault();
 
@@ -51,7 +51,6 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
           return null;
         });
       } else {
-        // Clic simple = créneau d'1h par défaut
         onAddLasso(startMins, Math.min(startMins + 60, limitesHeures.baseMins + limitesHeures.span));
       }
     };
@@ -66,7 +65,14 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
     const l = Math.max(0, ((lasso.min - limitesHeures.baseMins) / limitesHeures.span) * 100);
     const w = Math.min(100 - l, ((lasso.max - lasso.min) / limitesHeures.span) * 100);
     lassoStyle = { left: `${l}%`, width: `${w}%` };
-    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+    
+    // Correction : Arrondi strict appliqué au lasso de création
+    const formatTime = (m) => {
+      const rounded = Math.round(m / 5) * 5;
+      const h = Math.floor(rounded / 60);
+      const min = Math.floor(rounded % 60);
+      return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+    };
     lassoText = `${formatTime(lasso.min)} - ${formatTime(lasso.max)}`;
   }
 
@@ -97,7 +103,6 @@ export const TimelineEvent = ({
   const durationMins = endMins - startMins; 
   const currentDuration = activeEnd - activeStart;
   
-  // Nouveaux paliers pour l'affichage du texte
   const isMicro = currentDuration <= 15;
   const isShort = currentDuration > 15 && currentDuration <= 45;
   const isLong = currentDuration >= 120;
@@ -176,10 +181,11 @@ export const TimelineEvent = ({
     window.addEventListener('mouseup', onMouseUp);
   };
 
+  // Formatage propre qui masque les décimales générées par le suivi fluide
   const formatTime = (m) => {
     const rounded = Math.round(m / 5) * 5;
     const h = Math.floor(rounded / 60);
-    const min = rounded % 60;
+    const min = Math.floor(rounded % 60);
     return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
   };
 
@@ -189,20 +195,16 @@ export const TimelineEvent = ({
       style={{ left: `${left}%`, width: `${width}%`, backgroundColor: bgColor, borderColor: borderColor, color: textColor, cursor: dragState ? 'grabbing' : 'pointer' }}
       onMouseDown={(e) => handleMouseDown(e, 'move')}
     >
-      <div className="w-full h-full flex pointer-events-none overflow-hidden flex-col items-center justify-center">
-        {/* On gère l'affichage vertical à la fois pour le Micro (5-15min) et le Short (15-45min) */}
+      <div className="w-full h-full flex pointer-events-none overflow-hidden flex-col items-center justify-center relative">
         {isMicro || isShort ? (
           <span 
-            className="font-bold uppercase text-center" 
+            className="font-bold uppercase text-center absolute" 
             style={{ 
               writingMode: 'vertical-rl', 
               transform: 'rotate(180deg)', 
               fontSize: isMicro ? '8px' : '9px',
               letterSpacing: isMicro ? 'normal' : '0.05em',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxHeight: '100%'
+              whiteSpace: 'nowrap'
             }}
           >
             {title}

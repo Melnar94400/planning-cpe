@@ -328,29 +328,55 @@ export const layoutDayEventsByAgent = (dayEvents, agents, dayIndex) => {
   return { workingAgentIds, layouted };
 };
 
-export const generateGrid = (limitesHeures, sonneries = [], amplitude = null) => {
-  const lines = [];
-  const labelsWeekly = [];
-  const labelsDaily = [];
+export const generateGrid = (limitesHeures, sonneries = [], amplitude = {}) => {
+  const gridLines = [];
+  const gridLabelsDaily = [];
+  const gridTicks = []; // <-- Nouveau tableau pour les graduations de 10 minutes
 
-  for (let m = limitesHeures.baseMins; m <= limitesHeures.baseMins + limitesHeures.span; m += 15) {
-    const h = Math.floor(m / 60);
-    const min = m % 60;
-    const timeStr = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-    const topPercent = ((m - limitesHeures.baseMins) / limitesHeures.span) * 100;
+  const startTime = limitesHeures.baseMins;
+  const spanTime = limitesHeures.span;
+  const endTime = startTime + spanTime;
+
+  // 1. Générer les graduations (10min) et les textes (30min) absolus
+  let m = Math.ceil(startTime / 10) * 10;
+  while (m <= endTime) {
+    const topPercent = ((m - startTime) / spanTime) * 100;
     
-    const isHeurePleine = min === 0;
-    const isSonnerie = sonneries.includes(timeStr);
-    const isStartDay = amplitude && timeStr === amplitude.start;
+    // Tick toutes les 10 min
+    gridTicks.push({ m, topPercent });
 
-    lines.push({ timeStr, topPercent, isHeurePleine, isSonnerie, isStartDay });
-
-    if (isHeurePleine || isSonnerie) {
-      labelsWeekly.push({ timeStr, topPercent, isSonnerie });
-      labelsDaily.push({ timeStr, topPercent, isSonnerie });
+    // Textes et lignes pleines toutes les 30 min (00 et 30)
+    if (m % 30 === 0) {
+      const h = Math.floor(m / 60);
+      const min = m % 60;
+      const timeStr = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      
+      gridLabelsDaily.push({ timeStr, topPercent });
+      gridLines.push({
+        timeStr,
+        topPercent,
+        isHeurePleine: min === 0,
+        isSonnerie: false
+      });
     }
+    m += 10;
   }
-  return { gridLines: lines, gridLabelsWeekly: labelsWeekly, gridLabelsDaily: labelsDaily };
+
+  // 2. Ajouter les sonneries en fond (lignes pointillées pour le repérage visuel)
+  sonneries.forEach(s => {
+    const [h, min] = s.split(':').map(Number);
+    const mins = h * 60 + min;
+    if (mins >= startTime && mins <= endTime && mins % 30 !== 0) {
+      gridLines.push({
+        timeStr: s,
+        topPercent: ((mins - startTime) / spanTime) * 100,
+        isHeurePleine: false,
+        isSonnerie: true
+      });
+    }
+  });
+
+  return { gridLines, gridLabelsDaily, gridTicks, gridLabelsWeekly: [] };
 };
 
 export const detecterChevauchements = (events) => {

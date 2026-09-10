@@ -1646,8 +1646,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
         {/* 1. VUE QUOTIDIENNE */}
         {vueActive === 'journee' && (() => {
-          const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
-          return (
+const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);          return (
             <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
               <div className="p-4 pb-2 no-print shrink-0">
                 <div className="flex justify-between items-center mb-2">
@@ -1685,14 +1684,19 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
                     <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
                       <div className="min-w-[800px] flex-1 flex flex-col relative">
-                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
-                          {gridLabelsDaily.map(lbl => (
-                            <div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
-                              {lbl.timeStr}
-                            </div>
-                          ))}
-                        </div>
-                        
+<div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
+  {/* Les graduations 10 min */}
+  {gridTicks?.map(tick => (
+    <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/20 dark:bg-white/20" style={{ left: `${tick.topPercent}%` }}></div>
+  ))}
+  
+  {/* Les textes (00 et 30) */}
+  {gridLabelsDaily.map(lbl => (
+    <div key={lbl.timeStr} className={`absolute text-[10px] font-black ${t.header} top-1/2 -translate-y-1/2`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
+      {lbl.timeStr}
+    </div>
+  ))}
+</div>                        
                         <div className="flex-1 relative z-10 flex flex-col">
                           <div className="absolute inset-0 left-32 pointer-events-none z-0">
                             {gridLines.map(line => (
@@ -1799,7 +1803,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               />
             );
           }
-          const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
+          const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
           const templateDateObj = new Date(currentTemplate?.dateDebut || baseYear + '-09-01');
           templateDateObj.setDate(templateDateObj.getDate() + (jourTemplate - 1));
           const pad = n => String(n).padStart(2, '0');
@@ -1833,9 +1837,19 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   <div className={`h-full flex flex-col transition-all duration-300 ${currentTemplate?.statut === 'valide' ? 'pointer-events-none opacity-85 grayscale-[15%]' : ''}`}>
                     <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
                       <div className="min-w-[800px] flex-1 flex flex-col relative">
-                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
-                          {gridLabelsDaily.map(lbl => (<div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>{lbl.timeStr}</div>))}
-                        </div>
+                      <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
+  {/* Les graduations 10 min */}
+  {gridTicks?.map(tick => (
+    <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/20 dark:bg-white/20" style={{ left: `${tick.topPercent}%` }}></div>
+  ))}
+  
+  {/* Les textes (00 et 30) */}
+  {gridLabelsDaily.map(lbl => (
+    <div key={lbl.timeStr} className={`absolute text-[10px] font-black ${t.header} top-1/2 -translate-y-1/2`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
+      {lbl.timeStr}
+    </div>
+  ))}
+</div>
                         
                         <div className="flex-1 relative z-10 flex flex-col">
                           <div className="absolute inset-0 left-32 pointer-events-none z-0">
@@ -1967,7 +1981,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
         {/* 3. VUE PLANNING REEL */}
         {vueActive === 'planning' && (() => {
-          const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
+          const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
           const activeMonday = currentViewMonday || getMondayStr(new Date());
           
           return (
@@ -2010,10 +2024,19 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
                     <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
                       <div className="min-w-[900px] flex-1 flex flex-col relative">
-                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center sticky top-0 z-30`}>
-                          {gridLabelsDaily.map(lbl => (<div key={lbl.timeStr} className={`absolute text-[11px] font-black ${t.header}`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>{lbl.timeStr}</div>))}
-                        </div>
-                        
+<div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
+  {/* Les graduations 10 min */}
+  {gridTicks?.map(tick => (
+    <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/20 dark:bg-white/20" style={{ left: `${tick.topPercent}%` }}></div>
+  ))}
+  
+  {/* Les textes (00 et 30) */}
+  {gridLabelsDaily.map(lbl => (
+    <div key={lbl.timeStr} className={`absolute text-[10px] font-black ${t.header} top-1/2 -translate-y-1/2`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
+      {lbl.timeStr}
+    </div>
+  ))}
+</div>                        
                         <div className="flex-1 flex flex-col relative">
                           <div className="absolute inset-0 left-32 pointer-events-none z-0">
                             {gridLines.map(line => (<div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>))}
