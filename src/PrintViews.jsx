@@ -2,8 +2,30 @@ import React from 'react';
 import { generateGrid, getContrastYIQ } from './utils.js';
 
 export const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { baseMins: 460, span: 620 }, amplitude = { start: '07:30', end: '18:00' }, agents = [], joursAImprimer = [1, 2, 3, 4, 5], format = 'A4' }) => {
-  const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
+  const { gridLines } = generateGrid(limitesHeures, sonneries, amplitude);
   const nomsJours = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+
+  // Génération propre des graduations (toutes les 10 min) et des libellés (toutes les 30 min : 00 et :30)
+  const startTime = limitesHeures.baseMins;
+  const spanTime = limitesHeures.span;
+  const endTime = startTime + spanTime;
+
+  const ticks = [];
+  const labels = [];
+
+  let m = Math.ceil(startTime / 10) * 10;
+  while (m <= endTime) {
+    const topPercent = ((m - startTime) / spanTime) * 100;
+    ticks.push({ m, topPercent });
+
+    if (m % 30 === 0) {
+      const h = Math.floor(m / 60);
+      const min = m % 60;
+      const timeStr = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      labels.push({ timeStr, topPercent });
+    }
+    m += 10;
+  }
 
   return (
     <div className="w-full bg-white text-black print:bg-white print:text-black">
@@ -40,9 +62,13 @@ export const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures
             </div>
 
             <div className="flex-1 flex flex-col relative border-2 border-black rounded-lg overflow-hidden bg-white">
+              {/* En-tête avec graduations 10 min et heures/demies */}
               <div className="flex border-b-2 border-black bg-gray-100 shrink-0 ml-28 relative h-7 items-center">
-                {gridLabelsDaily.map(lbl => (
-                  <div key={lbl.timeStr} className="absolute text-[10px] font-black text-black" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
+                {ticks.map(tick => (
+                  <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/40" style={{ left: `${tick.topPercent}%` }}></div>
+                ))}
+                {labels.map(lbl => (
+                  <div key={lbl.timeStr} className="absolute text-[8px] font-black text-black top-1/2 -translate-y-1/2" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
                     {lbl.timeStr}
                   </div>
                 ))}
@@ -105,10 +131,7 @@ export const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures
                                 ) : (
                                   <>
                                     <span className="font-bold truncate leading-none text-[9px] w-full text-center">{texte}</span>
-                                    {/* Masque les heures si le bloc est trop étroit pour éviter les superpositions en A4 */}
-                                    {durationMins >= 60 && (
-                                      <span className="opacity-90 font-mono truncate mt-0.5 text-[7px] w-full text-center">{formatTime(startMins)}-{formatTime(endMins)}</span>
-                                    )}
+                                    <span className="opacity-90 font-mono truncate mt-0.5 text-[7px] w-full text-center">{formatTime(startMins)}-{formatTime(endMins)}</span>
                                   </>
                                 )}
                               </div>
@@ -129,8 +152,29 @@ export const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures
 };
 
 export const PrintTemplateView = ({ template, joursAImprimer = [1, 2, 3, 4, 5], agents, limitesHeures, sonneries, amplitude, formatHeureTableau, format = 'A4' }) => {
-  const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
+  const { gridLines } = generateGrid(limitesHeures, sonneries, amplitude);
   const nomsJours = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+
+  const startTime = limitesHeures.baseMins;
+  const spanTime = limitesHeures.span;
+  const endTime = startTime + spanTime;
+
+  const ticks = [];
+  const labels = [];
+
+  let m = Math.ceil(startTime / 10) * 10;
+  while (m <= endTime) {
+    const topPercent = ((m - startTime) / spanTime) * 100;
+    ticks.push({ m, topPercent });
+
+    if (m % 30 === 0) {
+      const h = Math.floor(m / 60);
+      const min = m % 60;
+      const timeStr = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      labels.push({ timeStr, topPercent });
+    }
+    m += 10;
+  }
 
   return (
     <div className="w-full bg-white print:bg-white text-black print:text-black">
@@ -169,8 +213,11 @@ export const PrintTemplateView = ({ template, joursAImprimer = [1, 2, 3, 4, 5], 
 
             <div className="flex-1 flex flex-col relative border-2 border-black rounded-lg overflow-hidden bg-white">
               <div className="flex border-b-2 border-black bg-gray-100 shrink-0 ml-32 relative h-7 items-center">
-                {gridLabelsDaily.map(lbl => (
-                  <div key={lbl.timeStr} className="absolute text-[10px] font-black text-black" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%)' }}>
+                {ticks.map(tick => (
+                  <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/40" style={{ left: `${tick.topPercent}%` }}></div>
+                ))}
+                {labels.map(lbl => (
+                  <div key={lbl.timeStr} className="absolute text-[8px] font-black text-black top-1/2 -translate-y-1/2" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
                     {lbl.timeStr}
                   </div>
                 ))}
@@ -234,9 +281,7 @@ export const PrintTemplateView = ({ template, joursAImprimer = [1, 2, 3, 4, 5], 
                                 ) : (
                                   <>
                                     <span className="font-bold truncate leading-none text-[9px] w-full text-center">{evt.extendedProps?.posteNom}</span>
-                                    {durationMins >= 60 && (
-                                      <span className="opacity-90 font-mono truncate mt-0.5 text-[7px] w-full text-center">{formatTime(startMins)}-{formatTime(endMins)}</span>
-                                    )}
+                                    <span className="opacity-90 font-mono truncate mt-0.5 text-[7px] w-full text-center">{formatTime(startMins)}-{formatTime(endMins)}</span>
                                   </>
                                 )}
                               </div>
