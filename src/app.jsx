@@ -9,7 +9,7 @@ import {
   detecterChevauchements, getActiveContract, calculerContratProratise
 } from './utils.js';
 import { SetupWizard } from './SetupWizard.jsx';
-import { PrintTimeGridView, PrintDailyView, PrintAgentYearlyView } from './PrintViews.jsx';
+import { PrintTimeGridView, PrintDailyView, PrintAgentYearlyView, PrintTemplateView } from './PrintViews.jsx';
 import { TimelineTrack, TimelineEvent } from './TimelineComponents.jsx';
 import { useHistory } from './useHistory.js';
 
@@ -125,7 +125,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return arr.length > 0 ? arr[0].id : 1;
   });
 
-  
+
   const [customWeeks, setCustomWeeks] = useState(() => JSON.parse(localStorage.getItem('edt-custom-weeks') || '{}'));
   const [exceptions, setExceptions] = useState(() => JSON.parse(localStorage.getItem('edt-exceptions') || '{}'));
 
@@ -191,7 +191,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [formNote, setFormNote] = useState('');
 
   const [modalNewVersion, setModalNewVersion] = useState({ isOpen: false, dateDebut: '', nom: 'Évolution' });
-  const [modalPrintTemplate, setModalPrintTemplate] = useState({ isOpen: false, jours: [1, 2, 3, 4, 5] }); // LIGNE A AJOUTER
+  const [modalPrint, setModalPrint] = useState({ isOpen: false, type: 'template', jours: [1, 2, 3, 4, 5], format: 'A4' });
 
   const [modalException, setModalException] = useState({ isOpen: false, agentId: null, dateStr: null, h: '0h00', note: '' });
 
@@ -638,20 +638,16 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     { m: 6, y: baseYear+1, nom: 'JUILLET' }, { m: 7, y: baseYear+1, nom: 'AOÛT' } 
   ];
 
-const declencherImpression = (e) => {
+  const declencherImpression = (e) => {
     if (e) e.preventDefault();
-    
-    // Intercepter l'impression si on est sur la semaine type (template)
-    if (vueActive === 'template') {
-      setModalPrintTemplate({ isOpen: true, jours: [1, 2, 3, 4, 5] });
+    if (vueActive === 'template' || vueActive === 'planning') {
+      setModalPrint({ isOpen: true, type: vueActive, jours: [1, 2, 3, 4, 5], format: 'A4' });
       return;
     }
-    
     setPrintFilter({ type: 'all', id: null }); 
     setIsPrinting(true); 
     setTimeout(() => { window.print(); setIsPrinting(false); }, 800);
   };
-    
   const updateCurrentTemplate = (newEvents, newBesoins) => {
     const newVersions = templateVersions.map(tv => 
       String(tv.id) === String(activeTemplateId) ? { 
@@ -972,6 +968,44 @@ const declencherImpression = (e) => {
   return (
     <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
       {/* -------------------- MODALES -------------------- */}
+      {modalPrint.isOpen && (
+        <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
+          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
+            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">🖨️ Paramètres d'impression</h3></div>
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="text-sm font-bold mb-2">Format de la page :</p>
+                <select value={modalPrint.format} onChange={e => setModalPrint({...modalPrint, format: e.target.value})} className="w-full border border-black/10 dark:border-white/10 rounded p-2 text-sm bg-transparent">
+                  <option value="A4">A4 (Classique)</option>
+                  <option value="A3">A3 (Grand format)</option>
+                </select>
+              </div>
+              <div>
+                <p className="text-sm font-bold mb-2">Jours à imprimer (1 jour = 1 page) :</p>
+                <div className="flex flex-col gap-2 border border-black/10 dark:border-white/10 p-3 rounded-lg bg-black/5 dark:bg-white/5">
+                  {[1,2,3,4,5].map(d => (
+                    <label key={d} className="flex items-center gap-3 cursor-pointer font-bold text-sm hover:opacity-75">
+                      <input type="checkbox" className="w-4 h-4 cursor-pointer accent-[#3B82F6]" checked={modalPrint.jours.includes(d)} onChange={e => {
+                         const newJours = e.target.checked ? [...modalPrint.jours, d] : modalPrint.jours.filter(j => j !== d);
+                         setModalPrint({...modalPrint, jours: newJours.sort()});
+                      }} />
+                      {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][d-1]}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
+              <button onClick={() => setModalPrint({...modalPrint, isOpen: false})} className="px-4 py-2 text-gray-500 font-bold hover:bg-black/5 rounded transition">Annuler</button>
+              <button onClick={() => {
+                 setModalPrint({...modalPrint, isOpen: false});
+                 setIsPrinting(true);
+                 setTimeout(() => { window.print(); setIsPrinting(false); }, 800);
+              }} className={`px-5 py-2 ${t.btnPrimary} rounded font-bold shadow`}>Lancer l'impression</button>
+            </div>
+          </div>
+        </div>
+      )}
       {modalNewVersion.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
@@ -1751,6 +1785,20 @@ const declencherImpression = (e) => {
 
         {/* 2. VUE MODELE (SEMAINE TYPE) */}
         {vueActive === 'template' && (() => {
+          if (isPrinting) {
+            return (
+              <PrintTemplateView 
+                template={currentTemplate} 
+                joursAImprimer={modalPrint.jours} 
+                format={modalPrint.format} 
+                agents={agents} 
+                limitesHeures={limitesHeures} 
+                sonneries={sonneries} 
+                amplitude={amplitude} 
+                formatHeureTableau={formatHeureTableau} 
+              />
+            );
+          }
           const { gridLines, gridLabelsDaily } = generateGrid(limitesHeures, sonneries, amplitude);
           const templateDateObj = new Date(currentTemplate?.dateDebut || baseYear + '-09-01');
           templateDateObj.setDate(templateDateObj.getDate() + (jourTemplate - 1));
@@ -1946,8 +1994,19 @@ const declencherImpression = (e) => {
               
               <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
                 {isPrinting ? (
-                  <PrintTimeGridView events={displayEvents} agents={agents} limitesHeures={limitesHeures} amplitude={amplitude} titre={`Planning Hebdo du ${activeMonday}`} />
-                ) : (
+                  <PrintTimeGridView 
+                    events={displayEvents} 
+                    agents={agents} 
+                    limitesHeures={limitesHeures} 
+                    amplitude={amplitude} 
+                    titre={`Planning Hebdo du ${activeMonday}`} 
+                    joursAImprimer={modalPrint.jours} 
+                    format={modalPrint.format} 
+                    sonneries={sonneries} 
+                  />
+                  ) : (
+                    // ... le reste de l'affichage normal à l'écran
+
                   <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
                     <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
                       <div className="min-w-[900px] flex-1 flex flex-col relative">
