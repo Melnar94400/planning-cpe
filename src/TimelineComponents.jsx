@@ -1,21 +1,6 @@
 import React, { useState, useRef } from 'react';
 
-// 🧲 Fonction de magnétisme (Snap-to-edge)
-const getClosestSnap = (value, points, threshold = 10) => {
-  if (!points || points.length === 0) return value;
-  let closest = value;
-  let minDiff = threshold + 1;
-  points.forEach(p => {
-    const diff = Math.abs(p - value);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = p;
-    }
-  });
-  return closest;
-};
-
-export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoints = [], onAddCopy, onAddLasso, children }) => {
+export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, onAddCopy, onAddLasso, children }) => {
   const [lasso, setLasso] = useState(null);
   const trackRef = useRef(null);
 
@@ -27,10 +12,9 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
     const rect = trackRef.current.getBoundingClientRect();
     const startX = e.clientX;
     const startPercent = Math.max(0, Math.min(1, (startX - rect.left) / rect.width));
-    let startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
     
-    // Magnétisme du clic initial
-    startMins = getClosestSnap(startMins, snapPoints, 10);
+    // Arrondi à 5 minutes sans magnétisme
+    let startMins = Math.round((limitesHeures.baseMins + (startPercent * limitesHeures.span)) / 5) * 5;
 
     if (copiedEvent) {
       onAddCopy(startMins);
@@ -44,8 +28,6 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
       const movePercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
       let currentMins = Math.round((limitesHeures.baseMins + (movePercent * limitesHeures.span)) / 5) * 5;
       
-      currentMins = getClosestSnap(currentMins, snapPoints, 10);
-
       if (hasMoved) {
         setLasso({
           min: Math.min(startMins, currentMins),
@@ -102,7 +84,7 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
 
 export const TimelineEvent = ({
   startMins, endMins, limitesHeures, isLocked, bgColor, borderColor, textColor,
-  title, subtitle, extInfo, conflit, snapPoints = [], onUpdate, onClick, onCopy
+  title, subtitle, extInfo, conflit, onUpdate, onClick, onCopy
 }) => {
   const [dragState, setDragState] = useState(null); 
 
@@ -110,7 +92,8 @@ export const TimelineEvent = ({
   const activeEnd = dragState ? dragState.max : endMins;
 
   const durationMins = activeEnd - activeStart;
-  const isVeryShort = durationMins <= 45;
+  const isTiny = durationMins <= 15; // Retrait des paddings pour les tout petits blocs (ex: 5min)
+  const isVeryShort = durationMins <= 45; // Rotation du texte
   const isLong = durationMins >= 120;
 
   const left = Math.max(0, ((activeStart - limitesHeures.baseMins) / limitesHeures.span) * 100);
@@ -126,50 +109,47 @@ export const TimelineEvent = ({
       return;
     }
 
-    const track = e.currentTarget.parentElement;
+    const eventEl = e.currentTarget.closest('.event-item');
+    const track = eventEl.parentElement;
     const rect = track.getBoundingClientRect();
     const startX = e.clientX;
     let isDragging = false;
 
-    // On exclut les bornes actuelles du créneau pour éviter qu'il s'ancre sur lui-même
-    const otherSnaps = snapPoints.filter(p => p !== startMins && p !== endMins);
+    // Position de départ exacte en minutes
+    const initialPointerPercent = Math.max(0, Math.min(1, (startX - rect.left) / rect.width));
+    const initialPointerMins = Math.round((limitesHeures.baseMins + (initialPointerPercent * limitesHeures.span)) / 5) * 5;
 
     const onMouseMove = (moveEvent) => {
       if (!isDragging && Math.abs(moveEvent.clientX - startX) > 3) isDragging = true;
       if (!isDragging) return;
 
-      const deltaMins = Math.round(((moveEvent.clientX - startX) / rect.width * limitesHeures.span) / 5) * 5;
+      // Position actuelle absolue convertie en minutes
+      const currentPointerPercent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
+      const currentPointerMins = Math.round((limitesHeures.baseMins + (currentPointerPercent * limitesHeures.span)) / 5) * 5;
 
       if (actionType === 'resizeStart') {
-        let newStart = startMins + deltaMins;
-        newStart = getClosestSnap(newStart, otherSnaps, 10);
+        let newStart = currentPointerMins;
         newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, endMins - 5));
         setDragState({ type: actionType, min: newStart, max: endMins });
       } 
       else if (actionType === 'resizeEnd') {
-        let newEnd = endMins + deltaMins;
-        newEnd = getClosestSnap(newEnd, otherSnaps, 10);
+        let newEnd = currentPointerMins;
         newEnd = Math.max(startMins + 5, Math.min(newEnd, limitesHeures.baseMins + limitesHeures.span));
         setDragState({ type: actionType, min: startMins, max: newEnd });
       } 
       else if (actionType === 'move') {
+        const deltaMins = currentPointerMins - initialPointerMins;
         let newStart = startMins + deltaMins;
         let newEnd = endMins + deltaMins;
-        
-        // Magnétisme prioritaire sur le début, puis la fin
-        const snappedStart = getClosestSnap(newStart, otherSnaps, 10);
-        const snappedEnd = getClosestSnap(newEnd, otherSnaps, 10);
 
-        if (snappedStart !== newStart) {
-          newStart = snappedStart;
+        if (newStart < limitesHeures.baseMins) {
+          newStart = limitesHeures.baseMins;
           newEnd = newStart + durationMins;
-        } else if (snappedEnd !== newEnd) {
-          newEnd = snappedEnd;
+        } else if (newEnd > limitesHeures.baseMins + limitesHeures.span) {
+          newEnd = limitesHeures.baseMins + limitesHeures.span;
           newStart = newEnd - durationMins;
         }
 
-        newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, limitesHeures.baseMins + limitesHeures.span - durationMins));
-        newEnd = newStart + durationMins;
         setDragState({ type: actionType, min: newStart, max: newEnd });
       }
     };
@@ -198,13 +178,15 @@ export const TimelineEvent = ({
 
   return (
     <div 
-      className={`event-item absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-1 border transition-all group/item ${dragState ? 'z-[99999] opacity-90 scale-[1.02]' : 'z-10 hover:z-50 hover:ring-2'} ${conflit ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
+      className={`event-item absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center ${isTiny ? 'px-0' : 'px-1'} border transition-all group/item ${dragState ? 'z-[99999] opacity-90 scale-[1.02]' : 'z-10 hover:z-50 hover:ring-2'} ${conflit ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
       style={{ left: `${left}%`, width: `${width}%`, backgroundColor: bgColor, borderColor: borderColor, color: textColor, cursor: dragState ? 'grabbing' : 'pointer' }}
       onMouseDown={(e) => handleMouseDown(e, 'move')}
     >
-      <div className={`w-full h-full flex pointer-events-none overflow-hidden ${isVeryShort ? 'flex-col items-center justify-center' : 'flex-col justify-center'}`}>
+      <div className={`w-full h-full flex pointer-events-none ${isVeryShort ? 'items-center justify-center overflow-visible' : 'flex-col justify-center overflow-hidden'}`}>
         {isVeryShort ? (
-          <span className="font-bold tracking-widest uppercase truncate w-full text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '9px' }}>{title}</span>
+          <span className="font-bold uppercase text-center z-10 whitespace-nowrap drop-shadow-md" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '8.5px', letterSpacing: '-0.5px' }}>
+            {title}
+          </span>
         ) : (
           <>
             <span className={`font-bold truncate leading-none ${isLong ? 'text-sm' : 'text-[10px]'}`}>{title}</span>

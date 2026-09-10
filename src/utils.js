@@ -196,165 +196,230 @@ export const resetAllData = () => {
 
 export const exporterDonnees = () => {
   const data = {
-    agents: localStorage.getItem('edt-agents'),
-    postes: localStorage.getItem('edt-postes'),
-    periodes: localStorage.getItem('edt-periodes'),
-    templateVersions: localStorage.getItem('edt-template-versions'),
-    customWeeks: localStorage.getItem('edt-custom-weeks'),
-    exceptions: localStorage.getItem('edt-exceptions'),
-    absencesRetards: localStorage.getItem('edt-absences-retards'),
-    setupDone: localStorage.getItem('edt-setup-done'),
-    dotation: localStorage.getItem('edt-dotation'),
-    theme: localStorage.getItem('edt-theme'),
-    darkMode: localStorage.getItem('edt-dark-mode'),
-    customColors: localStorage.getItem('edt-custom-colors')
+    agents: JSON.parse(localStorage.getItem('edt-agents') || '[]'),
+    postes: JSON.parse(localStorage.getItem('edt-postes') || '[]'),
+    periodes: JSON.parse(localStorage.getItem('edt-periodes') || '[]'),
+    templateVersions: JSON.parse(localStorage.getItem('edt-template-versions') || '[]'),
+    customWeeks: JSON.parse(localStorage.getItem('edt-custom-weeks') || '{}'),
+    exceptions: JSON.parse(localStorage.getItem('edt-exceptions') || '{}'),
+    absences: JSON.parse(localStorage.getItem('edt-absences-retards') || '[]'),
+    dotation: localStorage.getItem('edt-dotation') || '0',
+    amplitude: JSON.parse(localStorage.getItem('edt-amplitude') || '{"start":"07:30","end":"18:00"}'),
+    sonneries: JSON.parse(localStorage.getItem('edt-sonneries') || '[]')
   };
-  
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `sauvegarde_planning_cpe_${new Date().toISOString().split('T')[0]}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-};
-
-export const executeImport = (file) => {
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    try {
-      const data = JSON.parse(event.target.result);
-      if (data.agents) localStorage.setItem('edt-agents', data.agents);
-      if (data.postes) localStorage.setItem('edt-postes', data.postes);
-      if (data.periodes) localStorage.setItem('edt-periodes', data.periodes);
-      if (data.templateVersions) localStorage.setItem('edt-template-versions', data.templateVersions);
-      if (data.customWeeks) localStorage.setItem('edt-custom-weeks', data.customWeeks);
-      if (data.exceptions) localStorage.setItem('edt-exceptions', data.exceptions);
-      if (data.absencesRetards) localStorage.setItem('edt-absences-retards', data.absencesRetards);
-      if (data.dotation !== undefined) localStorage.setItem('edt-dotation', data.dotation);
-      if (data.theme) localStorage.setItem('edt-theme', data.theme);
-      if (data.darkMode) localStorage.setItem('edt-dark-mode', data.darkMode);
-      if (data.customColors) localStorage.setItem('edt-custom-colors', data.customColors);
-      localStorage.setItem('edt-setup-done', 'true');
-      
-      window.location.reload();
-    } catch (err) {
-      alert("Erreur : le fichier de sauvegarde est invalide ou corrompu.");
-    }
-  };
-  reader.readAsText(file);
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+  const dlAnchorElem = document.createElement('a');
+  dlAnchorElem.setAttribute("href",     dataStr     );
+  dlAnchorElem.setAttribute("download", `edt_cpe_backup_${new Date().toISOString().split('T')[0]}.json`);
+  dlAnchorElem.click();
 };
 
 export const importerDonnees = (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  if (!window.confirm("⚠️ Attention : l'import va écraser vos données actuelles. Continuer ?")) {
-    e.target.value = null;
-    return;
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const data = JSON.parse(event.target.result);
+      if (data.agents) localStorage.setItem('edt-agents', JSON.stringify(data.agents));
+      if (data.postes) localStorage.setItem('edt-postes', JSON.stringify(data.postes));
+      if (data.periodes) localStorage.setItem('edt-periodes', JSON.stringify(data.periodes));
+      if (data.templateVersions) localStorage.setItem('edt-template-versions', JSON.stringify(data.templateVersions));
+      if (data.customWeeks) localStorage.setItem('edt-custom-weeks', JSON.stringify(data.customWeeks));
+      if (data.exceptions) localStorage.setItem('edt-exceptions', JSON.stringify(data.exceptions));
+      if (data.absences) localStorage.setItem('edt-absences-retards', JSON.stringify(data.absences));
+      if (data.dotation) localStorage.setItem('edt-dotation', data.dotation);
+      if (data.amplitude) localStorage.setItem('edt-amplitude', JSON.stringify(data.amplitude));
+      if (data.sonneries) localStorage.setItem('edt-sonneries', JSON.stringify(data.sonneries));
+      alert("Sauvegarde restaurée avec succès ! La page va se recharger.");
+      window.location.reload();
+    } catch (err) {
+      alert("Erreur lors de la lecture du fichier JSON.");
+    }
+  };
+  reader.readAsText(file);
+};
+
+export const getActiveContract = (agent, dateStr) => {
+  if (!agent.avenants || agent.avenants.length === 0) return agent;
+  const sortedAvenants = [...agent.avenants].sort((a, b) => b.date.localeCompare(a.date));
+  const activeAvenant = sortedAvenants.find(av => av.date <= dateStr);
+  
+  if (activeAvenant) {
+    return { ...agent, quotite: activeAvenant.quotite, estEtudiant: activeAvenant.estEtudiant };
   }
-  executeImport(file);
+  return agent; 
+};
+
+export const calculerContratProratise = (agent, baseYear, fnCalculBase) => {
+  if (!agent.avenants || agent.avenants.length === 0) {
+    return fnCalculBase(agent.quotite, agent.estEtudiant);
+  }
+  
+  const start = new Date(baseYear, 8, 1); 
+  const end = new Date(baseYear + 1, 7, 31); 
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const totalDays = Math.round((end - start) / msPerDay) + 1;
+  
+  let totalHours = 0;
+  
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(start.getTime() + i * msPerDay);
+    const pad = n => String(n).padStart(2, '0');
+    const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    
+    const active = getActiveContract(agent, dateStr);
+    const heuresAnnuellesType = fnCalculBase(active.quotite, active.estEtudiant);
+    totalHours += (heuresAnnuellesType / totalDays);
+  }
+  
+  return Math.round(totalHours * 100) / 100;
 };
 
 export const getJoursFerie = (year) => {
-  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
-  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const monthPaques = Math.floor((h + l - 7 * m + 114) / 31);
-  const dayPaques = ((h + l - 7 * m + 114) % 31) + 1;
+  // Calcul de la date de Pâques (Algorithme de Butcher-Meeus)
+  const paques = (y) => {
+    const a = y % 19;
+    const b = Math.floor(y / 100);
+    const c = y % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(y, month - 1, day);
+  };
 
-  const paques = new Date(year, monthPaques - 1, dayPaques);
-  const lundiPaques = new Date(paques); lundiPaques.setDate(paques.getDate() + 1);
-  const ascension = new Date(paques); ascension.setDate(paques.getDate() + 39);
-  const pentecote = new Date(paques); pentecote.setDate(paques.getDate() + 50);
+  const p = paques(year);
+  const addDays = (date, days) => {
+    const d = new Date(date);
+    d.setDate(d.getDate() + days);
+    return d;
+  };
 
-  const pad = n => String(n).padStart(2, '0');
-  const formatDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const format = (d) => {
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
 
   return [
-    { nom: "Jour de l'An", date: `${year}-01-01` }, { nom: "Fête du Travail", date: `${year}-05-01` }, 
-    { nom: "Victoire 1945", date: `${year}-05-08` }, { nom: "Fête Nationale", date: `${year}-07-14` }, 
-    { nom: "Assomption", date: `${year}-08-15` }, { nom: "Toussaint", date: `${year}-11-01` }, 
-    { nom: "Armistice", date: `${year}-11-11` }, { nom: "Noël", date: `${year}-12-25` },
-    { nom: "Lundi de Pâques", date: formatDate(lundiPaques) }, 
-    { nom: "Jeudi de l'Ascension", date: formatDate(ascension) }, 
-    { nom: "Lundi de Pentecôte", date: formatDate(pentecote) }
-  ];
+    { nom: "Jour de l'An", date: `${year}-01-01` },
+    { nom: "Fête du Travail", date: `${year}-05-01` },
+    { nom: "Victoire 1945", date: `${year}-05-08` },
+    { nom: "Fête Nationale", date: `${year}-07-14` },
+    { nom: "Assomption", date: `${year}-08-15` },
+    { nom: "Toussaint", date: `${year}-11-01` },
+    { nom: "Armistice 1918", date: `${year}-11-11` },
+    { nom: "Noël", date: `${year}-12-25` },
+    { nom: "Lundi de Pâques", date: format(addDays(p, 1)) },
+    { nom: "Ascension", date: format(addDays(p, 39)) },
+    { nom: "Lundi de Pentecôte", date: format(addDays(p, 50)) }
+  ].sort((a, b) => a.date.localeCompare(b.date));
 };
 
-export const generateGrid = (limitesHeures, sonneries = [], amplitude) => {
-  const gridLines = [];
-  const gridLabelsWeekly = []; 
-  const gridLabelsDaily = []; 
-
-  for (let i = limitesHeures.baseMins; i <= limitesHeures.baseMins + limitesHeures.span; i += 5) {
-     const h = String(Math.floor(i/60)).padStart(2,'0');
-     const m = String(i%60).padStart(2,'0');
-     const timeStr = `${h}:${m}`;
-     const isSonnerie = sonneries.includes(timeStr);
-     const is15Min = i % 15 === 0;
-     const isHeurePleine = i % 60 === 0;
-     const topPercent = ((i - limitesHeures.baseMins) / limitesHeures.span) * 100;
-     
-     if ((isSonnerie || is15Min) && topPercent > 0.5) {
-         gridLines.push({ timeStr, mins: i, isSonnerie, topPercent, isHeurePleine, is15Min });
-     }
-
-     if (isHeurePleine) {
-         gridLabelsWeekly.push({ timeStr, mins: i, topPercent });
-         gridLabelsDaily.push({ timeStr, mins: i, topPercent });
-     }
-  }
-  return { gridLines, gridLabelsWeekly, gridLabelsDaily };
+export const executeImport = (data) => {
+  if (data.agents) localStorage.setItem('edt-agents', JSON.stringify(data.agents));
+  if (data.postes) localStorage.setItem('edt-postes', JSON.stringify(data.postes));
+  if (data.periodes) localStorage.setItem('edt-periodes', JSON.stringify(data.periodes));
+  if (data.templateVersions) localStorage.setItem('edt-template-versions', JSON.stringify(data.templateVersions));
+  if (data.customWeeks) localStorage.setItem('edt-custom-weeks', JSON.stringify(data.customWeeks));
+  if (data.exceptions) localStorage.setItem('edt-exceptions', JSON.stringify(data.exceptions));
+  if (data.absences) localStorage.setItem('edt-absences-retards', JSON.stringify(data.absences));
+  if (data.dotation !== undefined) localStorage.setItem('edt-dotation', data.dotation.toString());
+  if (data.amplitude) localStorage.setItem('edt-amplitude', JSON.stringify(data.amplitude));
+  if (data.sonneries) localStorage.setItem('edt-sonneries', JSON.stringify(data.sonneries));
 };
 
-export const layoutDayEventsByAgent = (dayEvents, agentsList, dayIndex) => {
-  const workingAgentIds = agentsList
-    .filter(a => (a.jours ? a.jours[dayIndex] : true) || dayEvents.some(e => e.extendedProps?.agentId === a.id))
-    .map(a => a.id);
+// --- FONCTIONS POUR LE CALCUL DES GRILLES ET CONFLITS ---
+
+export const layoutDayEventsByAgent = (dayEvents, agents, dayIndex) => {
+  const workingAgentIds = [...new Set(dayEvents.map(e => e.extendedProps?.agentId))].filter(Boolean);
+  
+  // Trier les agents présents dans l'ordre de la liste principale
+  workingAgentIds.sort((a, b) => {
+    const idxA = agents.findIndex(ag => ag.id === a);
+    const idxB = agents.findIndex(ag => ag.id === b);
+    return idxA - idxB;
+  });
 
   const totalCols = Math.max(1, workingAgentIds.length);
+  const layouted = [];
 
-  return {
-    workingAgentIds,
-    layouted: dayEvents.map(evt => {
-      const startD = new Date(evt.start);
-      const endD = new Date(evt.end);
-      const agentId = evt.extendedProps?.agentId;
-      const col = Math.max(0, workingAgentIds.indexOf(agentId));
+  dayEvents.forEach(evt => {
+    const agentId = evt.extendedProps?.agentId;
+    let col = workingAgentIds.indexOf(agentId);
+    if (col === -1) col = 0;
 
-      return {
-        evt,
-        startMins: startD.getHours() * 60 + startD.getMinutes(),
-        endMins: endD.getHours() * 60 + endD.getMinutes(),
-        col: col !== -1 ? col : 0,
-        totalCols
-      };
-    })
-  };
+    const startD = new Date(evt.start);
+    const endD = new Date(evt.end);
+    const startMins = startD.getHours() * 60 + startD.getMinutes();
+    const endMins = endD.getHours() * 60 + endD.getMinutes();
+
+    layouted.push({
+      evt,
+      startMins,
+      endMins,
+      col,
+      totalCols
+    });
+  });
+
+  return { workingAgentIds, layouted };
 };
 
-export const detecterChevauchements = (eventsList) => {
-  const idsEnConflit = new Set();
-  const affectations = eventsList.filter(e => !e.extendedProps?.isBesoin && !e.extendedProps?.isAbsence && e.extendedProps?.agentId);
+export const generateGrid = (limitesHeures, sonneries = [], amplitude = null) => {
+  const lines = [];
+  const labelsWeekly = [];
+  const labelsDaily = [];
 
+  for (let m = limitesHeures.baseMins; m <= limitesHeures.baseMins + limitesHeures.span; m += 15) {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    const timeStr = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    const topPercent = ((m - limitesHeures.baseMins) / limitesHeures.span) * 100;
+    
+    const isHeurePleine = min === 0;
+    const isSonnerie = sonneries.includes(timeStr);
+    const isStartDay = amplitude && timeStr === amplitude.start;
+
+    lines.push({ timeStr, topPercent, isHeurePleine, isSonnerie, isStartDay });
+
+    if (isHeurePleine || isSonnerie) {
+      labelsWeekly.push({ timeStr, topPercent, isSonnerie });
+      labelsDaily.push({ timeStr, topPercent, isSonnerie });
+    }
+  }
+  return { gridLines: lines, gridLabelsWeekly: labelsWeekly, gridLabelsDaily: labelsDaily };
+};
+
+export const detecterChevauchements = (events) => {
+  const conflits = new Set();
+  const affectations = events.filter(e => !e.extendedProps?.isBesoin && !e.extendedProps?.isAbsence);
+  
   for (let i = 0; i < affectations.length; i++) {
     for (let j = i + 1; j < affectations.length; j++) {
       const e1 = affectations[i];
       const e2 = affectations[j];
-
-      if (Number(e1.extendedProps.agentId) === Number(e2.extendedProps.agentId)) {
-        const start1 = new Date(e1.start).getTime();
+      
+      if (e1.extendedProps?.agentId === e2.extendedProps?.agentId) {
+        const s1 = new Date(e1.start).getTime();
         const end1 = new Date(e1.end).getTime();
-        const start2 = new Date(e2.start).getTime();
+        const s2 = new Date(e2.start).getTime();
         const end2 = new Date(e2.end).getTime();
-
-        if (start1 < end2 && start2 < end1) {
-          idsEnConflit.add(String(e1.id).split('_')[0]);
-          idsEnConflit.add(String(e2.id).split('_')[0]);
+        
+        // S'il y a intersection dans le temps
+        if (s1 < end2 && s2 < end1) {
+          conflits.add(String(e1.id).split('_')[0]);
+          conflits.add(String(e2.id).split('_')[0]);
         }
       }
     }
   }
-  return idsEnConflit;
+  return conflits;
 };
