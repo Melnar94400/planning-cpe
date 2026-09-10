@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-
+import { loadAppData, saveAppData, clearAppData } from './storage.js';
 // --- IMPORTS EXTERNES ---
 import { 
   THEMES, hexToRgb, getContrastYIQ, 
   formatHeureTableau, parseHeureSaisie, extractTimeStr, getMondayStr,
-  resetAllData, exporterDonnees, importerDonnees,
   generateGrid, calculerContratBetty, formatHeureMinutes,
   detecterChevauchements, getActiveContract, calculerContratProratise
 } from './utils.js';
@@ -13,18 +12,9 @@ import { PrintTimeGridView, PrintDailyView, PrintAgentYearlyView, PrintTemplateV
 import { TimelineTrack, TimelineEvent } from './TimelineComponents.jsx';
 import { useHistory } from './useHistory.js';
 
-// --- FONCTION DE SÉCURITÉ ANTI-CRASH ---
-const loadSafeArray = (key) => {
-  try {
-    let val = localStorage.getItem(key);
-    if (!val) return [];
-    let parsed = JSON.parse(val);
-    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch(e) { return []; }
-};
-
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+
   const [vueActive, setVueActive] = useState('template'); 
   const [agentConsulte, setAgentConsulte] = useState(null); 
   const [jourConsulte, setJourConsulte] = useState(() => {
@@ -33,16 +23,71 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   });
   
-  const [agents, setAgents] = useState(() => loadSafeArray('edt-agents'));
-  const [postes, setPostes] = useState(() => loadSafeArray('edt-postes'));
+  // -- ÉTATS VIDES AU DÉMARRAGE (Remontés par IndexedDB) --
+  const [agents, setAgents] = useState([]);
+  const [postes, setPostes] = useState([]);
   const [jourTemplate, setJourTemplate] = useState(1); 
-  
-  const [periodesFeriees, setPeriodesFeriees] = useState(() => {
-    return loadSafeArray('edt-periodes').map(p => ({
-      ...p,
-      type: p.type || (p.nom?.toLowerCase().includes('vacance') ? 'vacances' : 'ferie')
-    }));
-  });
+  const [periodesFeriees, setPeriodesFeriees] = useState([]);
+  const [dotation, setDotation] = useState(0);
+  const [templateVersions, setTemplateVersions] = useState([{ id: 1, nom: 'Chargement...', dateDebut: `2024-09-01`, statut: 'brouillon', events: [], besoins: [] }]);
+  const [activeTemplateId, setActiveTemplateId] = useState(1);
+  const [customWeeks, setCustomWeeks] = useState({});
+  const [exceptions, setExceptions] = useState({});
+  const [amplitude, setAmplitude] = useState({ start: '07:30', end: '18:00' });
+  const [sonneries, setSonneries] = useState(['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40']);
+  const [sonneriesText, setSonneriesText] = useState('');
+  const [absences, setAbsences] = useState([]);
+
+  // =========================================================================
+  // CHARGEMENT INITIAL (INDEXED DB)
+  // =========================================================================
+  useEffect(() => {
+    const initData = async () => {
+      const data = await loadAppData();
+      if (data) {
+        if (data.agents) setAgents(data.agents);
+        if (data.postes) setPostes(data.postes);
+        if (data.periodesFeriees) setPeriodesFeriees(data.periodesFeriees);
+        if (data.dotation) setDotation(data.dotation);
+        if (data.customWeeks) setCustomWeeks(data.customWeeks);
+        if (data.exceptions) setExceptions(data.exceptions);
+        if (data.absences) setAbsences(data.absences);
+        if (data.amplitude) setAmplitude(data.amplitude);
+        if (data.sonneries) {
+          setSonneries(data.sonneries);
+          setSonneriesText(data.sonneries.join(', '));
+        }
+        if (data.templateVersions && data.templateVersions.length > 0) {
+          setTemplateVersions(data.templateVersions.map(p => ({ ...p, statut: p.statut || 'valide' })));
+          setActiveTemplateId(data.templateVersions[0].id);
+        } else {
+          const now = new Date();
+          const baseY = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+          setTemplateVersions([{ id: 1, nom: 'Semaine Type par défaut', dateDebut: `${baseY}-09-01`, statut: 'brouillon', events: [], besoins: [] }]);
+        }
+      } else {
+        const now = new Date();
+        const baseY = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+        setTemplateVersions([{ id: 1, nom: 'Semaine Type par défaut', dateDebut: `${baseY}-09-01`, statut: 'brouillon', events: [], besoins: [] }]);
+        setSonneriesText(sonneries.join(', '));
+      }
+      setIsDataLoaded(true); 
+    };
+    initData();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // =========================================================================
+  // SAUVEGARDE SILENCIEUSE (DEBOUNCED)
+  // =========================================================================
+  useEffect(() => {
+    if (!isDataLoaded) return;
+    const timer = setTimeout(() => {
+      saveAppData({ agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, amplitude, sonneries });
+    }, 1500); 
+    return () => clearTimeout(timer);
+  }, [agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, amplitude, sonneries, isDataLoaded]);
+
+  // --- FIN GESTION BASE DE DONNÉES ---
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [modalPoste, setModalPoste] = useState({ isOpen: false, id: null, nom: '', couleur: '#8B5CF6', qte: 1, slots: [] });
@@ -108,67 +153,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const supprimerPoste = (id, e) => { e.stopPropagation(); setPostes(postes.filter(p => p.id !== id)); };
 
-  const [dotation, setDotation] = useState(() => parseFloat(localStorage.getItem('edt-dotation')) || 0);
-
-  const [templateVersions, setTemplateVersions] = useState(() => {
-    const arr = loadSafeArray('edt-template-versions');
-    if (arr.length > 0) return arr.map(p => ({ ...p, statut: p.statut || 'valide' }));
-    
-    const now = new Date();
-    const baseY = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
-    return [{ id: 1, nom: 'Semaine Type par défaut', dateDebut: `${baseY}-09-01`, statut: 'brouillon', events: [], besoins: [] }];
-  });
-  window.__templateVersions__ = templateVersions;
-
-  const [activeTemplateId, setActiveTemplateId] = useState(() => {
-    const arr = loadSafeArray('edt-template-versions');
-    return arr.length > 0 ? arr[0].id : 1;
-  });
-
-
-  const [customWeeks, setCustomWeeks] = useState(() => JSON.parse(localStorage.getItem('edt-custom-weeks') || '{}'));
-  const [exceptions, setExceptions] = useState(() => JSON.parse(localStorage.getItem('edt-exceptions') || '{}'));
-
-  const [amplitude, setAmplitude] = useState(() => {
-    const s = localStorage.getItem('edt-amplitude');
-    return s ? JSON.parse(s) : { start: '07:30', end: '18:00' };
-  });
-
-  const [sonneries, setSonneries] = useState(() => {
-    const s = localStorage.getItem('edt-sonneries');
-    return s ? JSON.parse(s) : ['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40'];
-  });
-  const [sonneriesText, setSonneriesText] = useState(() => sonneries.join(', '));
-  
   const sonneriesMins = useMemo(() => sonneries.map(s => {
     const [h, m] = s.split(':').map(Number);
     return h * 60 + m;
   }), [sonneries]);
-
-  const [absences, setAbsences] = useState(() => {
-    const s = localStorage.getItem('edt-absences-retards');
-    if (!s) return [];
-    const parsed = JSON.parse(s);
-    return parsed.map(a => {
-      let type = a.type || 'absence';
-      if (type === 'recup' || type === 'rattrapage') type = 'heures_supp';
-      let impact = a.impact;
-      if (!impact) {
-        if (a.rattrape || type === 'heures_supp') impact = 'local';
-        else if (a.deduire) impact = 'local';
-        else impact = 'global';
-      }
-      if (a.start && a.end) return { ...a, type, impact };
-      const h = a.heures || Math.floor(a.dureeTotale || a.duree || 0);
-      const m = a.minutes || Math.round(((a.dureeTotale || a.duree || 0) - h) * 60);
-      const startD = new Date(`${a.date}T08:00:00`);
-      const endD = new Date(startD);
-      endD.setHours(startD.getHours() + h, startD.getMinutes() + m);
-      const pad = n => String(n).padStart(2, '0');
-      const formatLocal = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-      return { id: a.id || String(Date.now() + Math.random()), agentId: a.agentId, type, start: formatLocal(startD), end: formatLocal(endD), motif: a.motif || '', impact, journeeComplete: a.journeeComplete };
-    });
-  });
 
   const getCurrentState = useCallback(() => ({
     templateVersions, customWeeks, absences
@@ -217,7 +205,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [agentActif, setAgentActif] = useState(null);
   const [posteActif, setPosteActif] = useState(null);
   
-  const [currentViewMonday, setCurrentViewMonday] = useState(() => getMondayStr(templateVersions[0]?.dateDebut || new Date())); 
+  const [currentViewMonday, setCurrentViewMonday] = useState(() => getMondayStr(new Date())); 
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const isInitialMount = useRef(true);
   const [needsBackup, setNeedsBackup] = useState(false);
@@ -233,9 +221,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const baseYear = getSchoolYearBase();
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
 
-  const currentTemplate = templateVersions.find(v => v.id === activeTemplateId) || templateVersions[0] || {
-    id: 1, nom: 'Semaine Type par défaut', dateDebut: `${baseYear}-09-01`, statut: 'brouillon', events: [], besoins: []
-  }; 
+  const currentTemplate = templateVersions.find(v => v.id === activeTemplateId) || templateVersions[0] || { id: 1, nom: 'Chargement...', dateDebut: `${baseYear}-09-01`, statut: 'brouillon', events: [], besoins: [] }; 
 
   const gabarits = useMemo(() => {
     const g = {};
@@ -372,7 +358,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     }); 
   };
 
-  const targetMonday = currentViewMonday || getMondayStr(currentTemplate?.dateDebut || new Date()); 
+  // FIX : La date cible dépend de la vue. 
+  // En Semaine Type, on fixe sur la date du modèle. En Réel, sur la semaine consultée.
+  const targetMonday = (vueActive === 'template') 
+    ? getMondayStr(currentTemplate?.dateDebut || new Date())
+    : (currentViewMonday || getMondayStr(new Date()));
+
   let currentRealEvents = [];
   let currentBesoins = [];
 
@@ -457,7 +448,11 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const alerts = [];
     const nomsJoursAlert = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM']; 
     
-    const targetMon = currentViewMonday || getMondayStr(currentTemplate?.dateDebut || new Date());
+    // FIX des alertes
+    const targetMon = (vueActive === 'template') 
+      ? getMondayStr(currentTemplate?.dateDebut || new Date())
+      : (currentViewMonday || getMondayStr(new Date()));
+
     const realEvts = customWeeks[targetMon] ? customWeeks[targetMon] : (
       [...templateVersions].sort((a,b)=>b.dateDebut.localeCompare(a.dateDebut)).find(t => t.dateDebut <= targetMon || true)?.events.map(e => shiftEventToWeek(e, targetMon)) || []
     );
@@ -501,7 +496,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     }
 
     return alerts;
-  }, [agents, currentTemplate, currentViewMonday, customWeeks, absences, templateVersions]);
+  }, [agents, currentTemplate, currentViewMonday, customWeeks, absences, templateVersions, vueActive]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -565,7 +560,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     if (isInitialMount.current) {
       isInitialMount.current = false;
     } else {
-      setNeedsBackup(true); 
+      if (isDataLoaded) setNeedsBackup(true); 
     }
   }, [agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation]);
 
@@ -586,16 +581,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     }, 100);
     return () => clearTimeout(timer);
   }, []);
-
-  useEffect(() => { localStorage.setItem('edt-agents', JSON.stringify(agents)); }, [agents]);
-  useEffect(() => { localStorage.setItem('edt-postes', JSON.stringify(postes)); }, [postes]);
-  useEffect(() => { localStorage.setItem('edt-periodes', JSON.stringify(periodesFeriees)); }, [periodesFeriees]);
-  useEffect(() => { localStorage.setItem('edt-template-versions', JSON.stringify(templateVersions)); }, [templateVersions]);
-  useEffect(() => { localStorage.setItem('edt-custom-weeks', JSON.stringify(customWeeks)); }, [customWeeks]);
-  useEffect(() => { localStorage.setItem('edt-exceptions', JSON.stringify(exceptions)); }, [exceptions]);
-  useEffect(() => { localStorage.setItem('edt-absences-retards', JSON.stringify(absences)); }, [absences]);
-  useEffect(() => { localStorage.setItem('edt-dotation', dotation.toString()); }, [dotation]);
-  useEffect(() => { localStorage.setItem('edt-amplitude', JSON.stringify(amplitude)); }, [amplitude]);
   
   useEffect(() => { 
     if (vueActive === 'planning') setModeEdition('agents');
@@ -606,7 +591,80 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     });
   }, [vueActive]);
 
-  const handleExport = () => { exporterDonnees(); setNeedsBackup(false); };
+  // =========================================================================
+  // EXPORT / IMPORT SÉCURISÉS (Compatibles Anciennes et Nouvelles Sauvegardes)
+  // =========================================================================
+  const handleExport = () => { 
+    const dataToExport = {
+      agents, postes, periodesFeriees, templateVersions, customWeeks, 
+      exceptions, absences, dotation, amplitude, sonneries
+    };
+    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `planning_cpe_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setNeedsBackup(false); 
+  };
+
+  const handleImport = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        let parsed = JSON.parse(e.target.result);
+        if (parsed) {
+          
+          // Helper pour récupérer et nettoyer d'éventuelles "doubles stringifications" du passé
+          const extractData = (newKey, oldKey) => {
+            let val = parsed[newKey] !== undefined ? parsed[newKey] : parsed[oldKey];
+            if (typeof val === 'string') {
+              try { val = JSON.parse(val); } catch(err) {}
+            }
+            if (typeof val === 'string') {
+              try { val = JSON.parse(val); } catch(err) {}
+            }
+            return val;
+          };
+
+          const importedData = {
+            agents: extractData('agents', 'edt-agents') || [],
+            postes: extractData('postes', 'edt-postes') || [],
+            periodesFeriees: extractData('periodesFeriees', 'edt-periodes') || [],
+            templateVersions: extractData('templateVersions', 'edt-template-versions') || [],
+            customWeeks: extractData('customWeeks', 'edt-custom-weeks') || {},
+            exceptions: extractData('exceptions', 'edt-exceptions') || {},
+            absences: extractData('absences', 'edt-absences-retards') || [],
+            amplitude: extractData('amplitude', 'edt-amplitude') || { start: '07:30', end: '18:00' },
+            sonneries: extractData('sonneries', 'edt-sonneries') || ['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40'],
+            dotation: parseFloat(extractData('dotation', 'edt-dotation')) || 0
+          };
+
+          // On écrase la nouvelle base IndexedDB de force
+          await saveAppData(importedData);
+          alert("Sauvegarde importée avec succès ! L'application va redémarrer.");
+          window.location.reload(); 
+        }
+      } catch (err) {
+        alert("Erreur lors de l'importation. Le fichier est invalide.");
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
+
+  const handleResetAll = async () => {
+    if (window.confirm("⚠️ ATTENTION ⚠️\n\nVoulez-vous vraiment TOUT effacer ? (Planning, Agents, Modèles, etc.)\n\nCette action est IRRÉVERSIBLE !")) {
+      await clearAppData();
+      window.location.reload();
+    }
+  };
 
   const handleSonneriesBlur = () => {
     const arr = sonneriesText.split(',')
@@ -616,7 +674,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       .sort();
     if(arr.length === 0) arr.push('08:00');
     setSonneries(arr); setSonneriesText(arr.join(', '));
-    localStorage.setItem('edt-sonneries', JSON.stringify(arr));
   };
 
   const limitesHeures = (() => {
@@ -648,6 +705,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setIsPrinting(true); 
     setTimeout(() => { window.print(); setIsPrinting(false); }, 800);
   };
+
   const updateCurrentTemplate = (newEvents, newBesoins) => {
     const newVersions = templateVersions.map(tv => 
       String(tv.id) === String(activeTemplateId) ? { 
@@ -964,6 +1022,18 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const pad = n => String(n).padStart(2, '0');
     setJourConsulte(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`);
   };
+
+  // --- Écran de chargement avant le montage (INDEXED DB) ---
+  if (!isDataLoaded) {
+    return (
+      <div className={`flex h-screen w-screen items-center justify-center ${t.bgMain} ${t.headerText}`}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="font-bold text-lg">Chargement de votre planning...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
@@ -1496,7 +1566,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
             </div>
           
             <div className="flex items-center justify-between bg-black/10 p-1.5 rounded-lg gap-1">
-              <input type="file" id="import-file" accept=".json" onChange={importerDonnees} className="hidden" />
+              <input type="file" id="import-file" accept=".json" onChange={handleImport} className="hidden" />
               <button onClick={() => document.getElementById('import-file').click()} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Restaurer une sauvegarde">⬆️</button>
               <button onClick={handleExport} className={`relative p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500 text-white' : t.sidebarIconBtn}`} title="Sauvegarder les données (Fichier JSON)">
                 ⬇️{needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
@@ -1540,7 +1610,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
               <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Paramètres">⚙️</button>
               <button onClick={declencherImpression} className={`${t.sidebarIconBtn} p-2 rounded text-xs font-bold border transition-colors flex-1 flex justify-center`} title="Imprimer">🖨️</button>
-              <button onClick={resetAllData} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
+              <button onClick={handleResetAll} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
             </div>
 
             <div className="flex flex-col bg-black/10 rounded p-2 shadow-inner gap-1 mt-2">
@@ -1646,7 +1716,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
         {/* 1. VUE QUOTIDIENNE */}
         {vueActive === 'journee' && (() => {
-const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);          return (
+          const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
+          return (
             <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
               <div className="p-4 pb-2 no-print shrink-0">
                 <div className="flex justify-between items-center mb-2">
@@ -1684,19 +1755,18 @@ const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, so
 
                     <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
                       <div className="min-w-[800px] flex-1 flex flex-col relative">
-<div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
-  {/* Les graduations 10 min */}
-  {gridTicks?.map(tick => (
-    <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/20 dark:bg-white/20" style={{ left: `${tick.topPercent}%` }}></div>
-  ))}
-  
-  {/* Les textes (00 et 30) */}
-  {gridLabelsDaily.map(lbl => (
-    <div key={lbl.timeStr} className={`absolute text-[10px] font-black ${t.header} top-1/2 -translate-y-1/2`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
-      {lbl.timeStr}
-    </div>
-  ))}
-</div>                        
+                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
+                          {gridTicks?.map(tick => (
+                            <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/20 dark:bg-white/20" style={{ left: `${tick.topPercent}%` }}></div>
+                          ))}
+                          
+                          {gridLabelsDaily.map(lbl => (
+                            <div key={lbl.timeStr} className={`absolute text-[10px] font-black ${t.header} top-1/2 -translate-y-1/2`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
+                              {lbl.timeStr}
+                            </div>
+                          ))}
+                        </div>
+                        
                         <div className="flex-1 relative z-10 flex flex-col">
                           <div className="absolute inset-0 left-32 pointer-events-none z-0">
                             {gridLines.map(line => (
@@ -1838,18 +1908,15 @@ const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, so
                     <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
                       <div className="min-w-[800px] flex-1 flex flex-col relative">
                       <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
-  {/* Les graduations 10 min */}
-  {gridTicks?.map(tick => (
-    <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/20 dark:bg-white/20" style={{ left: `${tick.topPercent}%` }}></div>
-  ))}
-  
-  {/* Les textes (00 et 30) */}
-  {gridLabelsDaily.map(lbl => (
-    <div key={lbl.timeStr} className={`absolute text-[10px] font-black ${t.header} top-1/2 -translate-y-1/2`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
-      {lbl.timeStr}
-    </div>
-  ))}
-</div>
+                        {gridTicks?.map(tick => (
+                          <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/20 dark:bg-white/20" style={{ left: `${tick.topPercent}%` }}></div>
+                        ))}
+                        {gridLabelsDaily.map(lbl => (
+                          <div key={lbl.timeStr} className={`absolute text-[10px] font-black ${t.header} top-1/2 -translate-y-1/2`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
+                            {lbl.timeStr}
+                          </div>
+                        ))}
+                      </div>
                         
                         <div className="flex-1 relative z-10 flex flex-col">
                           <div className="absolute inset-0 left-32 pointer-events-none z-0">
@@ -2019,24 +2086,21 @@ const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, so
                     sonneries={sonneries} 
                   />
                   ) : (
-                    // ... le reste de l'affichage normal à l'écran
-
                   <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
                     <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
                       <div className="min-w-[900px] flex-1 flex flex-col relative">
-<div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
-  {/* Les graduations 10 min */}
-  {gridTicks?.map(tick => (
-    <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/20 dark:bg-white/20" style={{ left: `${tick.topPercent}%` }}></div>
-  ))}
-  
-  {/* Les textes (00 et 30) */}
-  {gridLabelsDaily.map(lbl => (
-    <div key={lbl.timeStr} className={`absolute text-[10px] font-black ${t.header} top-1/2 -translate-y-1/2`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
-      {lbl.timeStr}
-    </div>
-  ))}
-</div>                        
+                        <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
+                          {gridTicks?.map(tick => (
+                            <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/20 dark:bg-white/20" style={{ left: `${tick.topPercent}%` }}></div>
+                          ))}
+                          
+                          {gridLabelsDaily.map(lbl => (
+                            <div key={lbl.timeStr} className={`absolute text-[10px] font-black ${t.header} top-1/2 -translate-y-1/2`} style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
+                              {lbl.timeStr}
+                            </div>
+                          ))}
+                        </div>
+                        
                         <div className="flex-1 flex flex-col relative">
                           <div className="absolute inset-0 left-32 pointer-events-none z-0">
                             {gridLines.map(line => (<div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>))}
@@ -2280,7 +2344,7 @@ const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, so
                             <td className="p-3 font-bold text-xs"><span className={`px-2 py-1 rounded bg-black/5`}>{a.impact === 'global' ? '🌍 Global' : a.impact === 'local' ? '📍 Local' : '⚪ Neutre'}</span></td>
                             <td className="p-3 text-gray-500 italic">{a.motif || ''}</td>
                             <td className="p-3 text-center"><button onClick={() => supprimerAbsence(a.id)} className="text-gray-500 hover:text-red-500 px-2 py-1 rounded text-xs font-bold transition">✖</button></td>
-                          </tr>                       
+                          </tr>                        
                         );
                       })}
                       {absences.length === 0 && ( <tr><td colSpan="7" className="p-6 text-center text-gray-500 italic">Aucune absence ou retard enregistré.</td></tr> )}

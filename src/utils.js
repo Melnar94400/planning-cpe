@@ -331,21 +331,21 @@ export const layoutDayEventsByAgent = (dayEvents, agents, dayIndex) => {
 export const generateGrid = (limitesHeures, sonneries = [], amplitude = {}) => {
   const gridLines = [];
   const gridLabelsDaily = [];
-  const gridTicks = []; // <-- Nouveau tableau pour les graduations de 10 minutes
+  const gridTicks = [];
 
   const startTime = limitesHeures.baseMins;
   const spanTime = limitesHeures.span;
   const endTime = startTime + spanTime;
 
-  // 1. Générer les graduations (10min) et les textes (30min) absolus
+  // Génération des graduations (toutes les 10 min) et textes (toutes les 30 min)
   let m = Math.ceil(startTime / 10) * 10;
   while (m <= endTime) {
     const topPercent = ((m - startTime) / spanTime) * 100;
     
-    // Tick toutes les 10 min
+    // Ajout d'une graduation (petit trait)
     gridTicks.push({ m, topPercent });
 
-    // Textes et lignes pleines toutes les 30 min (00 et 30)
+    // Ajout du texte et de la ligne pleine toutes les 30 min
     if (m % 30 === 0) {
       const h = Math.floor(m / 60);
       const min = m % 60;
@@ -362,7 +362,7 @@ export const generateGrid = (limitesHeures, sonneries = [], amplitude = {}) => {
     m += 10;
   }
 
-  // 2. Ajouter les sonneries en fond (lignes pointillées pour le repérage visuel)
+  // Ajout des lignes de sonneries (si elles ne tombent pas déjà sur une heure/demie)
   sonneries.forEach(s => {
     const [h, min] = s.split(':').map(Number);
     const mins = h * 60 + min;
@@ -378,7 +378,6 @@ export const generateGrid = (limitesHeures, sonneries = [], amplitude = {}) => {
 
   return { gridLines, gridLabelsDaily, gridTicks, gridLabelsWeekly: [] };
 };
-
 export const detecterChevauchements = (events) => {
   const conflits = new Set();
   const affectations = events.filter(e => !e.extendedProps?.isBesoin && !e.extendedProps?.isAbsence);
