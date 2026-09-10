@@ -178,6 +178,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [formNote, setFormNote] = useState('');
 
   const [modalNewVersion, setModalNewVersion] = useState({ isOpen: false, dateDebut: '', nom: 'Évolution' });
+  const [modalPrintTemplate, setModalPrintTemplate] = useState({ isOpen: false, jours: [1, 2, 3, 4, 5] }); // LIGNE A AJOUTER
+
   const [modalException, setModalException] = useState({ isOpen: false, agentId: null, dateStr: null, h: '0h00', note: '' });
 
   const [formAbsence, setFormAbsence] = useState({
@@ -623,16 +625,20 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     { m: 6, y: baseYear+1, nom: 'JUILLET' }, { m: 7, y: baseYear+1, nom: 'AOÛT' } 
   ];
 
-  const declencherImpression = (e) => {
+const declencherImpression = (e) => {
     if (e) e.preventDefault();
+    
+    // Intercepter l'impression si on est sur la semaine type (template)
+    if (vueActive === 'template') {
+      setModalPrintTemplate({ isOpen: true, jours: [1, 2, 3, 4, 5] });
+      return;
+    }
+    
     setPrintFilter({ type: 'all', id: null }); 
     setIsPrinting(true); 
-    setTimeout(() => { 
-      window.print(); 
-      setIsPrinting(false); 
-    }, 800);
+    setTimeout(() => { window.print(); setIsPrinting(false); }, 800);
   };
-  
+    
   const updateCurrentTemplate = (newEvents, newBesoins) => {
     const newVersions = templateVersions.map(tv => 
       String(tv.id) === String(activeTemplateId) ? { 
