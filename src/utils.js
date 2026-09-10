@@ -140,13 +140,11 @@ export const parseHeureSaisie = (chaine) => {
   if (!chaine) return 0;
   const str = String(chaine).toLowerCase().trim();
   
-  // NOUVEAU : Cas spécifique "30min" ou "45 min" (sans 'h')
   if (str.includes('min') && !str.includes('h') && !str.includes(':')) {
     const m = parseFloat(str.replace(/[^0-9.,]/g, '').replace(',', '.'));
     return (m || 0) / 60;
   }
 
-  // Cas classique "1h30" ou "1.5"
   const clean = str.replace('min', '').replace('h', ':').replace(',', '.').trim();
   if (clean.includes(':')) {
     const parts = clean.split(':');
@@ -214,32 +212,6 @@ export const exporterDonnees = () => {
   dlAnchorElem.click();
 };
 
-export const importerDonnees = (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    try {
-      const data = JSON.parse(event.target.result);
-      if (data.agents) localStorage.setItem('edt-agents', JSON.stringify(data.agents));
-      if (data.postes) localStorage.setItem('edt-postes', JSON.stringify(data.postes));
-      if (data.periodes) localStorage.setItem('edt-periodes', JSON.stringify(data.periodes));
-      if (data.templateVersions) localStorage.setItem('edt-template-versions', JSON.stringify(data.templateVersions));
-      if (data.customWeeks) localStorage.setItem('edt-custom-weeks', JSON.stringify(data.customWeeks));
-      if (data.exceptions) localStorage.setItem('edt-exceptions', JSON.stringify(data.exceptions));
-      if (data.absences) localStorage.setItem('edt-absences-retards', JSON.stringify(data.absences));
-      if (data.dotation) localStorage.setItem('edt-dotation', data.dotation);
-      if (data.amplitude) localStorage.setItem('edt-amplitude', JSON.stringify(data.amplitude));
-      if (data.sonneries) localStorage.setItem('edt-sonneries', JSON.stringify(data.sonneries));
-      alert("Sauvegarde restaurée avec succès ! La page va se recharger.");
-      window.location.reload();
-    } catch (err) {
-      alert("Erreur lors de la lecture du fichier JSON.");
-    }
-  };
-  reader.readAsText(file);
-};
-
 export const getActiveContract = (agent, dateStr) => {
   if (!agent.avenants || agent.avenants.length === 0) return agent;
   const sortedAvenants = [...agent.avenants].sort((a, b) => b.date.localeCompare(a.date));
@@ -277,7 +249,6 @@ export const calculerContratProratise = (agent, baseYear, fnCalculBase) => {
 };
 
 export const getJoursFerie = (year) => {
-  // Calcul de la date de Pâques (Algorithme de Butcher-Meeus)
   const paques = (y) => {
     const a = y % 19;
     const b = Math.floor(y / 100);
@@ -323,25 +294,9 @@ export const getJoursFerie = (year) => {
   ].sort((a, b) => a.date.localeCompare(b.date));
 };
 
-export const executeImport = (data) => {
-  if (data.agents) localStorage.setItem('edt-agents', JSON.stringify(data.agents));
-  if (data.postes) localStorage.setItem('edt-postes', JSON.stringify(data.postes));
-  if (data.periodes) localStorage.setItem('edt-periodes', JSON.stringify(data.periodes));
-  if (data.templateVersions) localStorage.setItem('edt-template-versions', JSON.stringify(data.templateVersions));
-  if (data.customWeeks) localStorage.setItem('edt-custom-weeks', JSON.stringify(data.customWeeks));
-  if (data.exceptions) localStorage.setItem('edt-exceptions', JSON.stringify(data.exceptions));
-  if (data.absences) localStorage.setItem('edt-absences-retards', JSON.stringify(data.absences));
-  if (data.dotation !== undefined) localStorage.setItem('edt-dotation', data.dotation.toString());
-  if (data.amplitude) localStorage.setItem('edt-amplitude', JSON.stringify(data.amplitude));
-  if (data.sonneries) localStorage.setItem('edt-sonneries', JSON.stringify(data.sonneries));
-};
-
-// --- FONCTIONS POUR LE CALCUL DES GRILLES ET CONFLITS ---
-
 export const layoutDayEventsByAgent = (dayEvents, agents, dayIndex) => {
   const workingAgentIds = [...new Set(dayEvents.map(e => e.extendedProps?.agentId))].filter(Boolean);
   
-  // Trier les agents présents dans l'ordre de la liste principale
   workingAgentIds.sort((a, b) => {
     const idxA = agents.findIndex(ag => ag.id === a);
     const idxB = agents.findIndex(ag => ag.id === b);
@@ -413,7 +368,6 @@ export const detecterChevauchements = (events) => {
         const s2 = new Date(e2.start).getTime();
         const end2 = new Date(e2.end).getTime();
         
-        // S'il y a intersection dans le temps
         if (s1 < end2 && s2 < end1) {
           conflits.add(String(e1.id).split('_')[0]);
           conflits.add(String(e2.id).split('_')[0]);
@@ -422,4 +376,50 @@ export const detecterChevauchements = (events) => {
     }
   }
   return conflits;
+};
+
+// --- IMPORTATION SÉCURISÉE ---
+export const executeImport = (data) => {
+  const parseIfString = (val) => {
+    if (typeof val === 'string') {
+      try { return JSON.parse(val); } catch(e) { return val; }
+    }
+    return val;
+  };
+
+  const safeStringify = (val) => JSON.stringify(parseIfString(val));
+
+  if (data.agents) localStorage.setItem('edt-agents', safeStringify(data.agents));
+  if (data.postes) localStorage.setItem('edt-postes', safeStringify(data.postes));
+  if (data.periodes) localStorage.setItem('edt-periodes', safeStringify(data.periodes));
+  if (data.templateVersions) localStorage.setItem('edt-template-versions', safeStringify(data.templateVersions));
+  if (data.customWeeks) localStorage.setItem('edt-custom-weeks', safeStringify(data.customWeeks));
+  if (data.exceptions) localStorage.setItem('edt-exceptions', safeStringify(data.exceptions));
+  
+  const absData = data.absences || data.absencesRetards;
+  if (absData) localStorage.setItem('edt-absences-retards', safeStringify(absData));
+  
+  if (data.dotation !== undefined) localStorage.setItem('edt-dotation', data.dotation.toString());
+  if (data.amplitude) localStorage.setItem('edt-amplitude', safeStringify(data.amplitude));
+  if (data.sonneries) localStorage.setItem('edt-sonneries', safeStringify(data.sonneries));
+  
+  // Indique à l'application que la configuration est terminée
+  localStorage.setItem('edt-setup-done', 'true');
+};
+
+export const importerDonnees = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const data = JSON.parse(event.target.result);
+      executeImport(data);
+      alert("Sauvegarde restaurée avec succès !");
+      window.location.reload();
+    } catch (err) {
+      alert("Erreur lors de la lecture du fichier JSON.");
+    }
+  };
+  reader.readAsText(file);
 };

@@ -132,6 +132,25 @@ export const SetupWizard = ({ onComplete, t }) => {
     onComplete();
   };
 
+  // NOUVELLE FONCTION POUR L'IMPORT DEPUIS LE WIZARD
+  const handleWizardImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        executeImport(data);
+        alert("Sauvegarde restaurée avec succès !");
+        // On signale directement à React que c'est fini sans avoir besoin de recharger la page
+        onComplete();
+      } catch (err) {
+        alert("Erreur lors de la lecture du fichier JSON.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className={`min-h-screen ${t.bgMain} flex flex-col items-center py-12 px-4 transition-colors`}>
       <div className={`w-full max-w-2xl ${t.cardBg} rounded-xl shadow-xl overflow-hidden border border-black/5`}>
@@ -145,7 +164,7 @@ export const SetupWizard = ({ onComplete, t }) => {
               <p className="text-gray-500">Souhaitez-vous importer une sauvegarde existante ou paramétrer une nouvelle année scolaire ?</p>
               <div className="grid grid-cols-2 gap-4 mt-8">
                 <button onClick={() => document.getElementById('import-init').click()} className="p-6 border-2 border-dashed border-emerald-500 rounded-xl hover:bg-emerald-500/10 transition group"><div className="text-4xl mb-2 group-hover:scale-110 transition">⬆️</div><div className="font-bold text-emerald-600">Importer JSON</div></button>
-                <input type="file" id="import-init" accept=".json" onChange={(e) => { if(e.target.files[0]) executeImport(e.target.files[0]); }} className="hidden" />
+                <input type="file" id="import-init" accept=".json" onChange={handleWizardImport} className="hidden" />
                 <button onClick={() => setStep(2)} className={`p-6 border-2 border-transparent ${t.bgLight} transition group hover:brightness-95 rounded-xl`}><div className="text-4xl mb-2 group-hover:scale-110 transition">✨</div><div className={`font-bold ${t.header}`}>Nouvelle Année</div></button>
               </div>
             </div>

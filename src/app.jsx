@@ -13,6 +13,17 @@ import { PrintTimeGridView, PrintDailyView, PrintAgentYearlyView } from './Print
 import { TimelineTrack, TimelineEvent } from './TimelineComponents.jsx';
 import { useHistory } from './useHistory.js';
 
+// --- FONCTION DE SÉCURITÉ ANTI-CRASH ---
+const loadSafeArray = (key) => {
+  try {
+    let val = localStorage.getItem(key);
+    if (!val) return [];
+    let parsed = JSON.parse(val);
+    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch(e) { return []; }
+};
+
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
   const [vueActive, setVueActive] = useState('template'); 
   const [agentConsulte, setAgentConsulte] = useState(null); 
@@ -22,21 +33,18 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   });
   
-  const [agents, setAgents] = useState(() => JSON.parse(localStorage.getItem('edt-agents') || '[]'));
-  const [postes, setPostes] = useState(() => JSON.parse(localStorage.getItem('edt-postes') || '[]'));
+  const [agents, setAgents] = useState(() => loadSafeArray('edt-agents'));
+  const [postes, setPostes] = useState(() => loadSafeArray('edt-postes'));
   const [jourTemplate, setJourTemplate] = useState(1); 
   
   const [periodesFeriees, setPeriodesFeriees] = useState(() => {
-    const s = localStorage.getItem('edt-periodes');
-    if (!s) return [];
-    return JSON.parse(s).map(p => ({
+    return loadSafeArray('edt-periodes').map(p => ({
       ...p,
-      type: p.type || (p.nom.toLowerCase().includes('vacance') ? 'vacances' : 'ferie')
+      type: p.type || (p.nom?.toLowerCase().includes('vacance') ? 'vacances' : 'ferie')
     }));
   });
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-
   const [modalPoste, setModalPoste] = useState({ isOpen: false, id: null, nom: '', couleur: '#8B5CF6', qte: 1, slots: [] });
 
   const ouvrirCreationPoste = () => {
@@ -103,16 +111,21 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [dotation, setDotation] = useState(() => parseFloat(localStorage.getItem('edt-dotation')) || 0);
 
   const [templateVersions, setTemplateVersions] = useState(() => {
-    const s = localStorage.getItem('edt-template-versions');
-    return s ? JSON.parse(s).map(p => ({ ...p, statut: p.statut || 'valide' })) : [];
+    const arr = loadSafeArray('edt-template-versions');
+    if (arr.length > 0) return arr.map(p => ({ ...p, statut: p.statut || 'valide' }));
+    
+    const now = new Date();
+    const baseY = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+    return [{ id: 1, nom: 'Semaine Type par défaut', dateDebut: `${baseY}-09-01`, statut: 'brouillon', events: [], besoins: [] }];
   });
   window.__templateVersions__ = templateVersions;
 
   const [activeTemplateId, setActiveTemplateId] = useState(() => {
-    const s = localStorage.getItem('edt-template-versions');
-    return s ? JSON.parse(s)[0].id : 1;
+    const arr = loadSafeArray('edt-template-versions');
+    return arr.length > 0 ? arr[0].id : 1;
   });
 
+  
   const [customWeeks, setCustomWeeks] = useState(() => JSON.parse(localStorage.getItem('edt-custom-weeks') || '{}'));
   const [exceptions, setExceptions] = useState(() => JSON.parse(localStorage.getItem('edt-exceptions') || '{}'));
 
