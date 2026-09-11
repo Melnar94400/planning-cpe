@@ -22,7 +22,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const pad = n => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   });
-  
+  // --- HORLOGE TEMPS RÉEL (Pour la ligne de l'heure actuelle) ---
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000); // S'actualise toutes les 60 secondes
+    return () => clearInterval(timer);
+  }, []);
   // -- ÉTATS VIDES AU DÉMARRAGE (Remontés par IndexedDB) --
   const [agents, setAgents] = useState([]);
   const [postes, setPostes] = useState([]);
@@ -37,7 +42,47 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [sonneries, setSonneries] = useState(['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40']);
   const [sonneriesText, setSonneriesText] = useState('');
   const [absences, setAbsences] = useState([]);
+// --- NOUVEAU COMPOSANT : MENU DÉROULANT AVEC COULEUR ---
+  const DropdownAvecCouleur = ({ options, value, onChange, placeholder }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
 
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsOpen(false);
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const selectedOpt = options.find(o => String(o.id) === String(value));
+
+    return (
+      <div className="relative w-full" ref={dropdownRef}>
+        <button type="button" onClick={() => setIsOpen(!isOpen)} className={`w-full flex items-center justify-between border ${t.borderLight} rounded p-2 text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm`}>
+          <div className="flex items-center gap-2 truncate">
+            {selectedOpt ? (
+              <>
+                {selectedOpt.couleur && <span className="w-3.5 h-3.5 rounded-full shadow-sm shrink-0 border border-black/10" style={{ backgroundColor: selectedOpt.couleur }}></span>}
+                <span className="truncate font-bold">{selectedOpt.nom}</span>
+              </>
+            ) : <span className="text-gray-500">{placeholder}</span>}
+          </div>
+          <span className="text-xs opacity-50 ml-2">{isOpen ? '▲' : '▼'}</span>
+        </button>
+        {isOpen && (
+          <div className={`absolute z-[99999] w-full mt-1 ${t.cardBg} border ${t.borderLight} rounded-md shadow-2xl max-h-52 overflow-y-auto`}>
+            {options.map(opt => (
+              <button key={opt.id} type="button" onClick={() => { onChange(opt.id); setIsOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-black/10 dark:hover:bg-white/10 text-left transition-colors`}>
+                {opt.couleur && <span className="w-3.5 h-3.5 rounded-full shadow-sm shrink-0 border border-black/10" style={{ backgroundColor: opt.couleur }}></span>}
+                <span className="truncate font-bold">{opt.nom}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
   // =========================================================================
   // CHARGEMENT INITIAL (INDEXED DB)
   // =========================================================================
@@ -1326,10 +1371,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         </div>
       )}
 
-      {modalCreation.isOpen && (
+{modalCreation.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">{modalCreation.eventId ? 'Modifier l\'affectation' : 'Nouvelle affectation'}</h3></div>
+          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-visible animate-in zoom-in duration-200 border ${t.borderLight}`}>
+            <div className={`${t.headerBg} ${t.headerText} p-4 rounded-t-xl`}><h3 className="font-bold text-lg">{modalCreation.eventId ? 'Modifier l\'affectation' : 'Nouvelle affectation'}</h3></div>
             <form onSubmit={validerCreationModal}>
               <div className="p-5 space-y-4">
                 {(vueActive === 'planning' || vueActive === 'journee') && !modalCreation.eventId && (
@@ -1342,7 +1387,15 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   </div>
                 )}
 
-                <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>👤 Agent</label><select value={formAgent} onChange={e => setFormAgent(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`}><option value="" disabled>-- Sélectionner --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></div>
+                <div>
+                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>👤 Agent</label>
+                  <DropdownAvecCouleur 
+                    options={agents.map(a => ({ id: a.id, nom: a.nom, couleur: a.couleurFond }))}
+                    value={formAgent}
+                    onChange={setFormAgent}
+                    placeholder="-- Sélectionner un agent --"
+                  />
+                </div>
                 
                 {formTypeEvent === 'absence' ? (
                   <>
@@ -1364,7 +1417,15 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                     </div>
                   </>
                 ) : (
-                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>📍 Poste</label><select value={formPoste} onChange={e => setFormPoste(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`}><option value="" disabled>-- Sélectionner --</option>{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select></div>
+                  <div>
+                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>📍 Poste</label>
+                    <DropdownAvecCouleur 
+                      options={postes.map(p => ({ id: p.id, nom: p.nom, couleur: p.couleur }))}
+                      value={formPoste}
+                      onChange={setFormPoste}
+                      placeholder="-- Sélectionner un poste --"
+                    />
+                  </div>
                 )}
 
                 <div className="flex gap-4">
@@ -1374,7 +1435,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                 <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>📝 {formTypeEvent === 'absence' ? 'Motif' : 'Note'}</label><input type="text" value={formNote} onChange={e => setFormNote(e.target.value)} placeholder={formTypeEvent === 'absence' ? "Ex: Maladie..." : "Ex: Réunion..."} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} autoFocus={!!modalCreation.eventId} /></div>
               </div>
               
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center`}>
+              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center rounded-b-xl`}>
                 <div>
                   {modalCreation.eventId && (
                     <button type="button" onClick={() => {
@@ -1404,14 +1465,22 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         </div>
       )}
 
-      {modalBesoinMulti.isOpen && (
+{modalBesoinMulti.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
             <div className="bg-red-700 text-white p-4 shrink-0"><h3 className="font-bold text-lg">🎯 Saisie d'une grille de besoins</h3></div>
             <form onSubmit={validerBesoinMultiModal} className="flex flex-col overflow-hidden">
               <div className="p-5 space-y-4 overflow-y-auto">
                 <div className="flex gap-4">
-                  <div className="flex-[2]"><label className="block text-sm font-semibold mb-1 text-red-600">Poste requis</label><select required value={modalBesoinMulti.posteId} onChange={e => setModalBesoinMulti({...modalBesoinMulti, posteId: e.target.value})} className="w-full border border-red-500/50 rounded p-2 bg-transparent"><option value="" disabled>-- Sélectionner --</option>{postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}</select></div>
+                  <div className="flex-[2]">
+                    <label className="block text-sm font-semibold mb-1 text-red-600">Poste requis</label>
+                    <DropdownAvecCouleur 
+                      options={postes.map(p => ({ id: p.id, nom: p.nom, couleur: p.couleur }))}
+                      value={modalBesoinMulti.posteId}
+                      onChange={val => setModalBesoinMulti({...modalBesoinMulti, posteId: val})}
+                      placeholder="-- Sélectionner le poste --"
+                    />
+                  </div>
                   <div className="flex-1"><label className="block text-sm font-semibold mb-1 text-red-600">Effectif</label><input type="number" min="1" required value={modalBesoinMulti.qte} onChange={e => setModalBesoinMulti({...modalBesoinMulti, qte: e.target.value})} className="w-full border border-red-500/50 rounded p-2 text-center font-bold bg-transparent" /></div>
                 </div>
                 
@@ -1717,15 +1786,29 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         {/* 1. VUE QUOTIDIENNE */}
         {vueActive === 'journee' && (() => {
           const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
+          // CALCUL DE LA LIGNE DE L'HEURE ACTUELLE
+          const pad = n => String(n).padStart(2, '0');
+          const todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+          const isToday = jourConsulte === todayStr;
+          const currentMins = now.getHours() * 60 + now.getMinutes();
+          const showCurrentTimeLine = isToday && currentMins >= limitesHeures.baseMins && currentMins <= (limitesHeures.baseMins + limitesHeures.span);
+          const currentTimePercent = ((currentMins - limitesHeures.baseMins) / limitesHeures.span) * 100;
           return (
             <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
               <div className="p-4 pb-2 no-print shrink-0">
                 <div className="flex justify-between items-center mb-2">
                   <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>⏱️ Vue Quotidienne</h2>
                   <div className="flex items-center gap-3">
-                    <button onClick={() => changeJourQuotidien(-1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>◀ Jour Précédent</button>
-                    <input type="date" value={jourConsulte} onChange={(e) => setJourConsulte(e.target.value)} className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold ${t.cardBg} ${t.header} outline-none shadow-sm`} />
-                    <button onClick={() => changeJourQuotidien(1)} className={`px-3 py-1 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:opacity-75 shadow-sm transition-colors`}>Jour Suivant ▶</button>
+                    <button onClick={() => {
+                      const d = new Date();
+                      const pad = n => String(n).padStart(2, '0');
+                      setJourConsulte(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`);
+                    }} className={`px-3 py-1.5 rounded text-xs uppercase tracking-wider font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:bg-black/5 dark:hover:bg-white/5 shadow-sm transition-colors`} title="Revenir à aujourd'hui">
+                      Aujourd'hui
+                    </button>
+                    <button onClick={() => changeJourQuotidien(-1)} className={`px-3 py-1.5 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:bg-black/5 dark:hover:bg-white/5 shadow-sm transition-colors`} title="Jour précédent">◀</button>
+                    <input type="date" value={jourConsulte} onChange={(e) => setJourConsulte(e.target.value)} className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold ${t.cardBg} ${t.header} outline-none shadow-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors`} />
+                    <button onClick={() => changeJourQuotidien(1)} className={`px-3 py-1.5 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:bg-black/5 dark:hover:bg-white/5 shadow-sm transition-colors`} title="Jour suivant">▶</button>
                   </div>
                 </div>
               </div>
@@ -1773,7 +1856,20 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                               <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie || line.isStartDay ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
                             ))}
                           </div>
-
+                          {/* ----- NOUVEAU : LIGNE DU TEMPS EN PREMIER PLAN ----- */}
+                          {showCurrentTimeLine && !isPrinting && (
+                            <div className="absolute inset-0 left-32 pointer-events-none z-[60]">
+                              <div 
+                                className="absolute top-0 bottom-0 w-[2px] bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.8)]" 
+                                style={{ left: `${currentTimePercent}%` }}
+                              >
+                                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-sm">
+                                  {pad(now.getHours())}:{pad(now.getMinutes())}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {/* -------------------------------------------------- */}
                           {agents.length === 0 && (
                             <div className="flex items-center justify-center h-32 text-gray-400 italic font-medium ml-32">
                               Aucun agent configuré. Ajoutez un agent dans le menu de gauche.

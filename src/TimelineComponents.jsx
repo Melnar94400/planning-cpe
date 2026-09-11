@@ -51,6 +51,7 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
           return null;
         });
       } else {
+        // Clic simple : crée un créneau précis de 5 minutes
         onAddLasso(startMins, Math.min(startMins + 5, limitesHeures.baseMins + limitesHeures.span));
       }
     };
@@ -66,7 +67,6 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
     const w = Math.min(100 - l, ((lasso.max - lasso.min) / limitesHeures.span) * 100);
     lassoStyle = { left: `${l}%`, width: `${w}%` };
     
-    // Correction : Arrondi strict appliqué au lasso de création
     const formatTime = (m) => {
       const rounded = Math.round(m / 5) * 5;
       const h = Math.floor(rounded / 60);
@@ -96,6 +96,7 @@ export const TimelineEvent = ({
   title, subtitle, extInfo, conflit, snapPoints, onUpdate, onClick, onCopy
 }) => {
   const [dragState, setDragState] = useState(null); 
+  const [tooltipPos, setTooltipPos] = useState({ y: 'bottom', x: 'center' }); // Gestion intelligente de la bulle
 
   const activeStart = dragState ? dragState.min : startMins;
   const activeEnd = dragState ? dragState.max : endMins;
@@ -109,6 +110,20 @@ export const TimelineEvent = ({
 
   const left = Math.max(0, ((activeStart - limitesHeures.baseMins) / limitesHeures.span) * 100);
   const width = Math.min(100 - left, ((activeEnd - activeStart) / limitesHeures.span) * 100);
+
+  const handleMouseEnter = (e) => {
+    // Calcul de l'espace disponible à l'écran pour afficher le tooltip au bon endroit
+    const rect = e.currentTarget.getBoundingClientRect();
+    let y = 'bottom';
+    let x = 'center';
+    
+    if (window.innerHeight - rect.bottom < 120) y = 'top'; // Trop bas, on l'affiche au-dessus
+    
+    if (rect.left < 80) x = 'right'; // Trop à gauche, on le décale à droite
+    else if (window.innerWidth - rect.right < 80) x = 'left'; // Trop à droite, on le décale à gauche
+    
+    setTooltipPos({ y, x });
+  };
 
   const handleMouseDown = (e, actionType) => {
     if (e.button !== 0 || isLocked) return;
@@ -181,7 +196,6 @@ export const TimelineEvent = ({
     window.addEventListener('mouseup', onMouseUp);
   };
 
-  // Formatage propre qui masque les décimales générées par le suivi fluide
   const formatTime = (m) => {
     const rounded = Math.round(m / 5) * 5;
     const h = Math.floor(rounded / 60);
@@ -194,6 +208,7 @@ export const TimelineEvent = ({
       className={`event-item absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-0.5 border group/item ${dragState ? 'transition-none z-[99999] opacity-90 scale-[1.02]' : 'transition-all z-10 hover:z-50 hover:ring-2'} ${conflit ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
       style={{ left: `${left}%`, width: `${width}%`, backgroundColor: bgColor, borderColor: borderColor, color: textColor, cursor: dragState ? 'grabbing' : 'pointer' }}
       onMouseDown={(e) => handleMouseDown(e, 'move')}
+      onMouseEnter={handleMouseEnter}
     >
       <div className="w-full h-full flex pointer-events-none overflow-hidden flex-col items-center justify-center relative">
         {isMicro || isShort ? (
@@ -221,13 +236,21 @@ export const TimelineEvent = ({
       {!isLocked && <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100" onMouseDown={(e) => handleMouseDown(e, 'resizeStart')}></div>}
       {!isLocked && <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100" onMouseDown={(e) => handleMouseDown(e, 'resizeEnd')}></div>}
       
+      {/* Tooltip Intelligent */}
       {!dragState && (
-        <div className="absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[99999] pointer-events-none top-full left-1/2 -translate-x-1/2 mt-1.5 w-max min-w-[130px] text-center border border-gray-700">
+        <div className={`absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[99999] pointer-events-none w-max min-w-[130px] text-center border border-gray-700 
+          ${tooltipPos.y === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} 
+          ${tooltipPos.x === 'right' ? 'left-0' : tooltipPos.x === 'left' ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}
+        >
           <span className="font-black text-sm text-blue-300 leading-tight mb-1">{title}</span>
           {subtitle && <span className="font-semibold text-xs leading-none">{subtitle}</span>}
           <span className="text-gray-400 font-mono text-[10px] mt-1">{formatTime(activeStart)} - {formatTime(activeEnd)}</span>
           {extInfo && <span className="text-gray-300 text-[10px] italic mt-1">{extInfo}</span>}
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900"></div>
+          
+          <div className={`absolute border-4 border-transparent 
+            ${tooltipPos.y === 'top' ? 'top-full border-t-gray-900' : 'bottom-full border-b-gray-900'} 
+            ${tooltipPos.x === 'right' ? 'left-4' : tooltipPos.x === 'left' ? 'right-4' : 'left-1/2 -translate-x-1/2'}`}>
+          </div>
         </div>
       )}
     </div>
