@@ -51,7 +51,7 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
           return null;
         });
       } else {
-        onAddLasso(startMins, Math.min(startMins + 60, limitesHeures.baseMins + limitesHeures.span));
+        onAddLasso(startMins, Math.min(startMins + 5, limitesHeures.baseMins + limitesHeures.span));
       }
     };
 

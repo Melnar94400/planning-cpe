@@ -1651,7 +1651,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                         const weekEvents = vueActive === 'template' ? (currentTemplate?.events || []) : getEventsForWeek(targetMonday);
                         const agentWeekMins = weekEvents.filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                         const agentWeekHours = agentWeekMins / 60;
-                        const objectifHebdoAgent = agent.hContrat / 36;
+                        const objectifHebdoAgent = agent.hContrat / 39;
                         const diffAgentHebdo = agentWeekHours - objectifHebdoAgent;
 
                         return (
