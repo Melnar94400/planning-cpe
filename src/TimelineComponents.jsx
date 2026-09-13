@@ -202,9 +202,8 @@ export const TimelineEvent = ({
         )}
       </div>
 
-      {!isLocked && <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100" onMouseDown={(e) => handleMouseDown(e, 'resizeStart')}></div>}
-      {!isLocked && <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100" onMouseDown={(e) => handleMouseDown(e, 'resizeEnd')}></div>}
-      
+{!isLocked && <div className={`absolute left-0 inset-y-0 cursor-w-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100 ${isMicro ? 'w-[30%]' : 'w-2'}`} onMouseDown={(e) => handleMouseDown(e, 'resizeStart')}></div>}
+      {!isLocked && <div className={`absolute right-0 inset-y-0 cursor-e-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100 ${isMicro ? 'w-[30%]' : 'w-2'}`} onMouseDown={(e) => handleMouseDown(e, 'resizeEnd')}></div>}      
       {!dragState && (
         <div className={`absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[99999] pointer-events-none w-max min-w-[130px] text-center border border-gray-700 
           ${tooltipPos.y === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} 
