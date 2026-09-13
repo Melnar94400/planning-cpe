@@ -117,23 +117,30 @@ export const THEMES = {
 
 export const formatHeureMinutes = (decimal) => {
   if (decimal === undefined || decimal === null || Number.isNaN(Number(decimal))) return "";
-  const arrondi = Math.round(Number(decimal) * 60) / 60; 
-  const absVal = Math.abs(arrondi);
-  let h = Math.floor(absVal);
-  let m = Math.round((absVal - h) * 60);
-  if (m === 60) { h += 1; m = 0; }
-  return `${arrondi < 0 ? "-" : ""}${h}h${m.toString().padStart(2, '0')}min`;
+  
+  const absVal = Math.abs(Number(decimal));
+  // Troncature stricte vers le bas avec correction du bug de virgule flottante JS
+  const totalMinutes = Math.trunc(absVal * 60 + 1e-9); 
+  
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  
+  return `${Number(decimal) < 0 ? "-" : ""}${h}h${m.toString().padStart(2, '0')}min`;
 };
 
 export const formatHeureTableau = (decimal, showZero = false) => {
-  if (decimal === undefined || decimal === null || Number.isNaN(decimal)) return "";
-  const arrondi = Math.round(decimal * 60) / 60; 
-  if (arrondi === 0) return showZero ? "0h00" : "";
-  const absVal = Math.abs(arrondi);
-  let h = Math.floor(absVal);
-  let m = Math.round((absVal - h) * 60);
-  if (m === 60) { h += 1; m = 0; }
-  return `${arrondi < 0 ? "-" : ""}${h}h${m.toString().padStart(2, '0')}`;
+  if (decimal === undefined || decimal === null || Number.isNaN(Number(decimal))) return "";
+  
+  const absVal = Math.abs(Number(decimal));
+  // Troncature stricte vers le bas avec correction du bug de virgule flottante JS
+  const totalMinutes = Math.trunc(absVal * 60 + 1e-9); 
+  
+  if (totalMinutes === 0) return showZero ? "0h00" : "";
+  
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  
+  return `${Number(decimal) < 0 ? "-" : ""}${h}h${m.toString().padStart(2, '0')}`;
 };
 
 export const parseHeureSaisie = (chaine) => {

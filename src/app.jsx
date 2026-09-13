@@ -14,6 +14,12 @@ import { useHistory } from './useHistory.js';
 
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [vueActive, setVueActive] = useState('template'); 
   const [agentConsulte, setAgentConsulte] = useState(null); 
@@ -22,12 +28,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const pad = n => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   });
-  // --- HORLOGE TEMPS RÉEL (Pour la ligne de l'heure actuelle) ---
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60000); // S'actualise toutes les 60 secondes
-    return () => clearInterval(timer);
-  }, []);
+  
   // -- ÉTATS VIDES AU DÉMARRAGE (Remontés par IndexedDB) --
   const [agents, setAgents] = useState([]);
   const [postes, setPostes] = useState([]);
@@ -42,7 +43,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [sonneries, setSonneries] = useState(['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40']);
   const [sonneriesText, setSonneriesText] = useState('');
   const [absences, setAbsences] = useState([]);
-// --- NOUVEAU COMPOSANT : MENU DÉROULANT AVEC COULEUR ---
+
+  // --- COMPOSANT MENU DÉROULANT AVEC COULEUR ---
   const DropdownAvecCouleur = ({ options, value, onChange, placeholder }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
@@ -83,6 +85,23 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       </div>
     );
   };
+
+  // --- HELPER AMPLITUDE HORAIRE ---
+  const getAmplitudeStr = (eventsList) => {
+    const spanEvents = eventsList.filter(e => !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin);
+    if (spanEvents.length === 0) return "";
+    let min = Infinity, max = -Infinity;
+    spanEvents.forEach(e => {
+      const d1 = new Date(e.start), d2 = new Date(e.end);
+      const startM = d1.getHours() * 60 + d1.getMinutes();
+      const endM = d2.getHours() * 60 + d2.getMinutes();
+      if (startM < min) min = startM;
+      if (endM > max) max = endM;
+    });
+    const fmt = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+    return `${fmt(min)}-${fmt(max)}`;
+  };
+
   // =========================================================================
   // CHARGEMENT INITIAL (INDEXED DB)
   // =========================================================================
@@ -106,13 +125,13 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
           setTemplateVersions(data.templateVersions.map(p => ({ ...p, statut: p.statut || 'valide' })));
           setActiveTemplateId(data.templateVersions[0].id);
         } else {
-          const now = new Date();
-          const baseY = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+          const nowD = new Date();
+          const baseY = nowD.getMonth() >= 6 ? nowD.getFullYear() : nowD.getFullYear() - 1;
           setTemplateVersions([{ id: 1, nom: 'Semaine Type par défaut', dateDebut: `${baseY}-09-01`, statut: 'brouillon', events: [], besoins: [] }]);
         }
       } else {
-        const now = new Date();
-        const baseY = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+        const nowD = new Date();
+        const baseY = nowD.getMonth() >= 6 ? nowD.getFullYear() : nowD.getFullYear() - 1;
         setTemplateVersions([{ id: 1, nom: 'Semaine Type par défaut', dateDebut: `${baseY}-09-01`, statut: 'brouillon', events: [], besoins: [] }]);
         setSonneriesText(sonneries.join(', '));
       }
@@ -131,8 +150,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     }, 1500); 
     return () => clearTimeout(timer);
   }, [agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, amplitude, sonneries, isDataLoaded]);
-
-  // --- FIN GESTION BASE DE DONNÉES ---
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [modalPoste, setModalPoste] = useState({ isOpen: false, id: null, nom: '', couleur: '#8B5CF6', qte: 1, slots: [] });
@@ -261,7 +278,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         const d = new Date(templateVersions[0].dateDebut);
         return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1;
      }
-     const now = new Date(); return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+     const nowD = new Date(); return nowD.getMonth() >= 6 ? nowD.getFullYear() : nowD.getFullYear() - 1;
   };
   const baseYear = getSchoolYearBase();
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
@@ -287,22 +304,29 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   }, [templateVersions, agents]);
 
   const getInfosPeriode = (date) => {
-    const pad = n => String(n).padStart(2, '0');
-    const str = `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
-    let vacs = null;
-    let ferie = null;
+      const pad = n => String(n).padStart(2, '0');
+      const str = `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+      let vacs = null;
+      let ferie = null;
 
-    for (const v of periodesFeriees) {
-      if (str >= v.debut && str <= v.fin) {
-        if (v.type === 'vacances') vacs = v;
-        else if (v.type === 'ferie') ferie = v;
+      for (const v of periodesFeriees) {
+        if (str >= v.debut && str <= v.fin) {
+          if (v.type === 'vacances') vacs = v;
+          else if (v.type === 'ferie') ferie = v;
+        }
       }
-    }
-    if (vacs) return { type: 'vacances', nom: ferie ? `${vacs.nom} (${ferie.nom})` : vacs.nom };
-    if (ferie) return { type: 'ferie', nom: ferie.nom };
-    return null;
-  };
 
+      // Filtre pour nettoyer "Début des vacances d'été" en "Vacances d'été"
+      const cleanName = (name) => {
+        if (!name) return name;
+        if (name.toLowerCase().includes("vacances d'été") || name.toLowerCase().includes("vacances d'ete")) return "Vacances d'été";
+        return name;
+      };
+
+      if (vacs) return { type: 'vacances', nom: ferie ? `${cleanName(vacs.nom)} (${ferie.nom})` : cleanName(vacs.nom) };
+      if (ferie) return { type: 'ferie', nom: ferie.nom };
+      return null;
+    };
   const getHeuresTheoriquesJour = (agentId, dateStr) => {
     const dateObj = new Date(dateStr);
     const mondayStr = getMondayStr(dateObj);
@@ -363,7 +387,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         }
       }
       
-      const soldeGlobal = Math.round((agent.hContrat - heuresConsommees) * 60) / 60;
+      const soldeGlobal = Math.trunc((agent.hContrat - heuresConsommees) * 60) / 60;      
       const applicableTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0];
       const hHebdoType = gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0;
 
@@ -403,8 +427,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     }); 
   };
 
-  // FIX : La date cible dépend de la vue. 
-  // En Semaine Type, on fixe sur la date du modèle. En Réel, sur la semaine consultée.
   const targetMonday = (vueActive === 'template') 
     ? getMondayStr(currentTemplate?.dateDebut || new Date())
     : (currentViewMonday || getMondayStr(new Date()));
@@ -493,7 +515,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const alerts = [];
     const nomsJoursAlert = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM']; 
     
-    // FIX des alertes
     const targetMon = (vueActive === 'template') 
       ? getMondayStr(currentTemplate?.dateDebut || new Date())
       : (currentViewMonday || getMondayStr(new Date()));
@@ -636,9 +657,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     });
   }, [vueActive]);
 
-  // =========================================================================
-  // EXPORT / IMPORT SÉCURISÉS (Compatibles Anciennes et Nouvelles Sauvegardes)
-  // =========================================================================
   const handleExport = () => { 
     const dataToExport = {
       agents, postes, periodesFeriees, templateVersions, customWeeks, 
@@ -664,8 +682,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       try {
         let parsed = JSON.parse(e.target.result);
         if (parsed) {
-          
-          // Helper pour récupérer et nettoyer d'éventuelles "doubles stringifications" du passé
           const extractData = (newKey, oldKey) => {
             let val = parsed[newKey] !== undefined ? parsed[newKey] : parsed[oldKey];
             if (typeof val === 'string') {
@@ -690,7 +706,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
             dotation: parseFloat(extractData('dotation', 'edt-dotation')) || 0
           };
 
-          // On écrase la nouvelle base IndexedDB de force
           await saveAppData(importedData);
           alert("Sauvegarde importée avec succès ! L'application va redémarrer.");
           window.location.reload(); 
@@ -1068,7 +1083,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setJourConsulte(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`);
   };
 
-  // --- Écran de chargement avant le montage (INDEXED DB) ---
+  // --- Écran de chargement avant le montage ---
   if (!isDataLoaded) {
     return (
       <div className={`flex h-screen w-screen items-center justify-center ${t.bgMain} ${t.headerText}`}>
@@ -1371,7 +1386,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         </div>
       )}
 
-{modalCreation.isOpen && (
+      {modalCreation.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-visible animate-in zoom-in duration-200 border ${t.borderLight}`}>
             <div className={`${t.headerBg} ${t.headerText} p-4 rounded-t-xl`}><h3 className="font-bold text-lg">{modalCreation.eventId ? 'Modifier l\'affectation' : 'Nouvelle affectation'}</h3></div>
@@ -1465,10 +1480,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         </div>
       )}
 
-{modalBesoinMulti.isOpen && (
+      {modalBesoinMulti.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
-            <div className="bg-red-700 text-white p-4 shrink-0"><h3 className="font-bold text-lg">🎯 Saisie d'une grille de besoins</h3></div>
+          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-visible animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
+            <div className="bg-red-700 text-white p-4 shrink-0 rounded-t-xl"><h3 className="font-bold text-lg">🎯 Saisie d'une grille de besoins</h3></div>
             <form onSubmit={validerBesoinMultiModal} className="flex flex-col overflow-hidden">
               <div className="p-5 space-y-4 overflow-y-auto">
                 <div className="flex gap-4">
@@ -1521,7 +1536,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   </div>
                 </div>
               </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} shrink-0 flex justify-end gap-3`}><button type="button" onClick={() => setModalBesoinMulti({ isOpen: false, posteId: '', qte: 1, slots: [] })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button><button type="submit" className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium shadow">Générer la grille</button></div>
+              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} shrink-0 flex justify-end gap-3 rounded-b-xl`}><button type="button" onClick={() => setModalBesoinMulti({ isOpen: false, posteId: '', qte: 1, slots: [] })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button><button type="submit" className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium shadow">Générer la grille</button></div>
             </form>
           </div>
         </div>
@@ -1533,10 +1548,39 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
             <div className="bg-red-700 text-white p-4"><h3 className="font-bold text-lg">Modifier le besoin</h3></div>
             <form onSubmit={validerEditBesoin}>
               <div className="p-5 space-y-4">
-                <div><label className="block text-sm font-semibold mb-1 text-red-600">Effectif attendu (Tapez 0 pour supprimer)</label><input type="number" min="0" required value={modalEditBesoin.qte} onChange={e => setModalEditBesoin({...modalEditBesoin, qte: e.target.value})} className="w-full border border-red-500/50 rounded p-2 text-center font-bold text-lg bg-transparent" autoFocus /></div>
-                <div className="flex gap-4"><div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Début</label><input type="time" required value={modalEditBesoin.start} onChange={e => setModalEditBesoin({...modalEditBesoin, start: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div><div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin</label><input type="time" required value={modalEditBesoin.end} onChange={e => setModalEditBesoin({...modalEditBesoin, end: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div></div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1 text-red-600">Effectif attendu</label>
+                  <input type="number" min="1" required value={modalEditBesoin.qte} onChange={e => setModalEditBesoin({...modalEditBesoin, qte: e.target.value})} className="w-full border border-red-500/50 rounded p-2 text-center font-bold text-lg bg-transparent" autoFocus />
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Début</label>
+                    <input type="time" required value={modalEditBesoin.start} onChange={e => setModalEditBesoin({...modalEditBesoin, start: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} />
+                  </div>
+                  <div className="flex-1">
+                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin</label>
+                    <input type="time" required value={modalEditBesoin.end} onChange={e => setModalEditBesoin({...modalEditBesoin, end: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} />
+                  </div>
+                </div>
               </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}><button type="button" onClick={() => setModalEditBesoin({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button><button type="submit" className="px-5 py-2 bg-red-600 text-white rounded font-medium">Mettre à jour</button></div>
+              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center`}>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    if(window.confirm('Voulez-vous vraiment supprimer ce besoin ?')) {
+                      updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id).split('_')[0] !== modalEditBesoin.id));
+                      setModalEditBesoin({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' });
+                    }
+                  }} 
+                  className="px-3 py-2 bg-red-500/10 text-red-600 hover:bg-red-500/20 rounded font-bold transition-colors text-sm shadow-sm flex items-center gap-1"
+                >
+                  🗑️ Supprimer
+                </button>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setModalEditBesoin({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
+                  <button type="submit" className="px-5 py-2 bg-red-600 text-white rounded font-medium">Mettre à jour</button>
+                </div>
+              </div>
             </form>
           </div>
         </div>
@@ -1720,7 +1764,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                         const weekEvents = vueActive === 'template' ? (currentTemplate?.events || []) : getEventsForWeek(targetMonday);
                         const agentWeekMins = weekEvents.filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                         const agentWeekHours = agentWeekMins / 60;
-                        const objectifHebdoAgent = agent.hContrat / 39;
+                        const objectifHebdoAgent = Math.trunc((agent.hContrat / 39) * 60) / 60;
                         const diffAgentHebdo = agentWeekHours - objectifHebdoAgent;
 
                         return (
@@ -1786,6 +1830,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         {/* 1. VUE QUOTIDIENNE */}
         {vueActive === 'journee' && (() => {
           const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
+          
           // CALCUL DE LA LIGNE DE L'HEURE ACTUELLE
           const pad = n => String(n).padStart(2, '0');
           const todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
@@ -1793,6 +1838,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
           const currentMins = now.getHours() * 60 + now.getMinutes();
           const showCurrentTimeLine = isToday && currentMins >= limitesHeures.baseMins && currentMins <= (limitesHeures.baseMins + limitesHeures.span);
           const currentTimePercent = ((currentMins - limitesHeures.baseMins) / limitesHeures.span) * 100;
+
           return (
             <div className={`flex-1 flex flex-col ${t.bgMain} h-full overflow-hidden`}>
               <div className="p-4 pb-2 no-print shrink-0">
@@ -1801,8 +1847,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   <div className="flex items-center gap-3">
                     <button onClick={() => {
                       const d = new Date();
-                      const pad = n => String(n).padStart(2, '0');
-                      setJourConsulte(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`);
+                      const p = n => String(n).padStart(2, '0');
+                      setJourConsulte(`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`);
                     }} className={`px-3 py-1.5 rounded text-xs uppercase tracking-wider font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:bg-black/5 dark:hover:bg-white/5 shadow-sm transition-colors`} title="Revenir à aujourd'hui">
                       Aujourd'hui
                     </button>
@@ -1856,7 +1902,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                               <div key={line.timeStr} className={`absolute top-0 bottom-0 ${t.borderLight} opacity-50`} style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie || line.isStartDay ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
                             ))}
                           </div>
-                          {/* ----- NOUVEAU : LIGNE DU TEMPS EN PREMIER PLAN ----- */}
+
                           {showCurrentTimeLine && !isPrinting && (
                             <div className="absolute inset-0 left-32 pointer-events-none z-[60]">
                               <div 
@@ -1869,7 +1915,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                               </div>
                             </div>
                           )}
-                          {/* -------------------------------------------------- */}
+
                           {agents.length === 0 && (
                             <div className="flex items-center justify-center h-32 text-gray-400 italic font-medium ml-32">
                               Aucun agent configuré. Ajoutez un agent dans le menu de gauche.
@@ -1881,10 +1927,11 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                             const allEvents = getEventsForWeek(mondayStr);
                             const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
 
-                            const totalMinsJour = eventsDuJour.reduce((acc, evt) => {
+                            const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => {
                               return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
                             }, 0);
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
+                            const amplitudeStr = getAmplitudeStr(eventsDuJour);
 
                             const allLineSnapPoints = [...sonneriesMins, ...eventsDuJour.flatMap(e => {
                                 const s = new Date(e.start), ed = new Date(e.end);
@@ -1893,9 +1940,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
                             return (
                               <div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
-                                <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
-                                  <span className="text-sm font-black text-right leading-tight">{agent.nom}</span>
-                                  <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
+                                <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)] sticky left-0`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
+                                  <span className="text-sm font-black text-right leading-tight truncate w-full">{agent.nom}</span>
+                                  <div className="flex items-center gap-1.5 mt-0.5 justify-end w-full">
+                                    {amplitudeStr && <span className="text-[9px] font-bold opacity-75">{amplitudeStr}</span>}
+                                    <span className="text-[10px] font-mono font-bold bg-black/15 px-1.5 py-0.5 rounded shadow-inner leading-none">{heuresJourStr}</span>
+                                  </div>
                                 </div>
                                 
                                 <TimelineTrack 
@@ -2034,8 +2084,9 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                             });
 
                             const rowBgColor = isBesoinsMode ? item.couleur : item.couleurFond;
-                            const totalMinsJour = eventsDeLaLigne.reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                            const totalMinsJour = eventsDeLaLigne.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
+                            const amplitudeStr = getAmplitudeStr(eventsDeLaLigne);
 
                             const allLineSnapPoints = [...sonneriesMins, ...eventsDeLaLigne.flatMap(e => {
                                 const s = new Date(e.start), ed = new Date(e.end);
@@ -2044,9 +2095,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
                             return (
                               <div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
-                                <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]`} style={{ backgroundColor: rowBgColor, color: getContrastYIQ(rowBgColor) }}>
-                                  <span className="text-sm font-black text-right leading-tight">{item.nom}</span>
-                                  <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
+                                <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)] sticky left-0`} style={{ backgroundColor: rowBgColor, color: getContrastYIQ(rowBgColor) }}>
+                                  <span className="text-sm font-black text-right leading-tight truncate w-full">{item.nom}</span>
+                                  <div className="flex items-center gap-1.5 mt-0.5 justify-end w-full">
+                                    {amplitudeStr && <span className="text-[9px] font-bold opacity-75">{amplitudeStr}</span>}
+                                    <span className="text-[10px] font-mono font-bold bg-black/15 px-1.5 py-0.5 rounded shadow-inner leading-none">{heuresJourStr}</span>
+                                  </div>
                                 </div>
                                 
                                 <TimelineTrack 
@@ -2160,7 +2214,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                       <button onClick={() => { const d = new Date(activeMonday); d.setDate(d.getDate() - 7); setCurrentViewMonday(getMondayStr(d)); }} className={`px-3 py-1.5 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:bg-black/5 dark:hover:bg-white/5 shadow-sm transition-colors`} title="Semaine précédente">◀</button>
                       <span className={`font-bold ${t.headerText} text-sm min-w-[160px] text-center`}>Semaine du {activeMonday}</span>
                       <button onClick={() => { const d = new Date(activeMonday); d.setDate(d.getDate() + 7); setCurrentViewMonday(getMondayStr(d)); }} className={`px-3 py-1.5 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:bg-black/5 dark:hover:bg-white/5 shadow-sm transition-colors`} title="Semaine suivante">▶</button>
-                    </div>                    <select onChange={(e) => { if(e.target.value) importerModele(e.target.value); e.target.value=''; }} className={`${t.cardBg} ${t.textAccent} px-2 py-1 rounded text-xs font-bold border ${t.borderLight} shadow-sm outline-none cursor-pointer hover:opacity-75`}>
+                    </div>
+                    <select onChange={(e) => { if(e.target.value) importerModele(e.target.value); e.target.value=''; }} className={`${t.cardBg} ${t.textAccent} px-2 py-1 rounded text-xs font-bold border ${t.borderLight} shadow-sm outline-none cursor-pointer hover:opacity-75`}>
                       <option value="">📥 Appliquer un modèle...</option>
                       {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.nom}</option>)}
                     </select>
@@ -2225,6 +2280,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                   const eventsDeLaLigne = displayEvents.filter(e => e.start.startsWith(dateStr) && e.extendedProps?.agentId === agent.id);
                                   const totalMinsJour = eventsDeLaLigne.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                                   const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
+                                  const amplitudeStr = getAmplitudeStr(eventsDeLaLigne);
 
                                   const allLineSnapPoints = [...sonneriesMins, ...eventsDeLaLigne.flatMap(e => {
                                       const s = new Date(e.start), ed = new Date(e.end);
@@ -2235,7 +2291,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                     <div key={`${dateStr}-${agent.id}`} className={`flex border-b ${t.borderLight} h-14 relative group hover:bg-black/5 hover:z-50 transition-colors`}>
                                       <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-20 shadow-[2px_0_5px_rgba(0,0,0,0.05)] sticky left-0`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
                                         <span className="text-sm font-black text-right leading-tight truncate w-full">{agent.nom}</span>
-                                        <span className="text-[10px] font-mono font-bold opacity-80">{heuresJourStr}</span>
+                                        <div className="flex items-center gap-1.5 mt-0.5 justify-end w-full">
+                                          {amplitudeStr && <span className="text-[9px] font-bold opacity-75">{amplitudeStr}</span>}
+                                          <span className="text-[10px] font-mono font-bold bg-black/15 px-1.5 py-0.5 rounded shadow-inner leading-none">{heuresJourStr}</span>
+                                        </div>
                                       </div>
                                       
                                       <TimelineTrack 
@@ -2459,7 +2518,17 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
           <div className={`flex-1 flex flex-col h-full ${t.bgMain} print:h-auto print:bg-white`}>
             <div className={`flex justify-between items-center p-3 ${t.headerBg} border-b ${t.borderLight} no-print shrink-0`}>
               <div className="flex gap-4 items-center">
-                <select value={agentConsulte} onChange={(e) => setAgentConsulte(Number(e.target.value))} className={`bg-transparent ${t.headerText} border ${t.borderLight} font-bold p-2 rounded outline-none`}>{agents.map(a => <option key={a.id} value={a.id}>{a.nom} ({a.quotite}%)</option>)}</select>
+                <select value={agentConsulte} onChange={(e) => setAgentConsulte(Number(e.target.value))} className={`bg-transparent ${t.headerText} border ${t.borderLight} font-bold p-2 rounded outline-none cursor-pointer`}>
+  {agents.map(a => (
+    <option 
+      key={a.id} 
+      value={a.id} 
+      className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800"
+    >
+      {a.nom} ({a.quotite}%)
+    </option>
+  ))}
+</select>
                 <span className={`text-sm font-medium ${t.textMenuMuted}`}>Année Scolaire {baseYear}-{baseYear+1}</span>
               </div>
               <div className={`hidden print:block text-xl font-bold ${t.headerText}`}>Bilan Annuel : {agents.find(a=>a.id===agentConsulte)?.nom} ({baseYear}-{baseYear+1})</div>
@@ -2501,6 +2570,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                         hFinal = Math.max(0, hFinal - hDeduct);
 
                         let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : '');
+                        
+                        // Si des heures sont travaillées pendant les vacances, on masque le texte "Vacances..."
+                        if (hFinal > 0 && infoPeriode && infoPeriode.type === 'vacances') {
+                          noteAffichage = exc ? exc.note : '';
+                        }
+
                         if (absDuJour.length > 0) {
                           const txtAbs = absDuJour.map(a => `${a.type.toUpperCase()}${a.deduire?' (-h)':''}`).join(', ');
                           noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs;
