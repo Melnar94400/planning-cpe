@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 
-export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoints, onAddCopy, onAddLasso, children }) => {
+export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvents, snapPoints, onAddCopy, onAddLasso, children }) => {
   const [lasso, setLasso] = useState(null);
   const trackRef = useRef(null);
 
@@ -15,7 +15,8 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
     const startMinsRaw = limitesHeures.baseMins + (startPercent * limitesHeures.span);
     const startMins = Math.round(startMinsRaw / 5) * 5;
 
-    if (copiedEvent) {
+    // Si on a des créneaux dans le presse-papier, le clic sert à coller
+    if (copiedEvents && copiedEvents.length > 0) {
       onAddCopy(startMins);
       return;
     }
@@ -28,10 +29,7 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
       const currentMinsRaw = limitesHeures.baseMins + (movePercent * limitesHeures.span);
 
       if (hasMoved) {
-        setLasso({
-          min: Math.min(startMinsRaw, currentMinsRaw),
-          max: Math.max(startMinsRaw, currentMinsRaw)
-        });
+        setLasso({ min: Math.min(startMinsRaw, currentMinsRaw), max: Math.max(startMinsRaw, currentMinsRaw) });
       }
     };
 
@@ -44,14 +42,11 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
           if (currentLasso) {
             const finalMin = Math.round(currentLasso.min / 5) * 5;
             const finalMax = Math.round(currentLasso.max / 5) * 5;
-            if (finalMax - finalMin >= 5) {
-              onAddLasso(finalMin, finalMax);
-            }
+            if (finalMax - finalMin >= 5) onAddLasso(finalMin, finalMax);
           }
           return null;
         });
       } else {
-        // Clic simple : crée un créneau précis de 5 minutes
         onAddLasso(startMins, Math.min(startMins + 5, limitesHeures.baseMins + limitesHeures.span));
       }
     };
@@ -77,7 +72,7 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
   }
 
   return (
-    <div ref={trackRef} className="timeline-track flex-1 h-full relative cursor-crosshair group/timeline select-none" onMouseDown={handleMouseDown}>
+    <div ref={trackRef} className={`timeline-track flex-1 h-full relative group/timeline select-none ${copiedEvents && copiedEvents.length > 0 ? 'cursor-alias' : 'cursor-crosshair'}`} onMouseDown={handleMouseDown}>
       {children}
       {lasso && (
         <div 
@@ -93,14 +88,13 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvent, snapPoint
 
 export const TimelineEvent = ({
   startMins, endMins, limitesHeures, isLocked, bgColor, borderColor, textColor,
-  title, subtitle, extInfo, conflit, snapPoints, onUpdate, onClick, onCopy
+  title, subtitle, extInfo, conflit, isCopied, snapPoints, onUpdate, onClick, onCopy
 }) => {
   const [dragState, setDragState] = useState(null); 
-  const [tooltipPos, setTooltipPos] = useState({ y: 'bottom', x: 'center' }); // Gestion intelligente de la bulle
+  const [tooltipPos, setTooltipPos] = useState({ y: 'bottom', x: 'center' });
 
   const activeStart = dragState ? dragState.min : startMins;
   const activeEnd = dragState ? dragState.max : endMins;
-
   const durationMins = endMins - startMins; 
   const currentDuration = activeEnd - activeStart;
   
@@ -112,16 +106,11 @@ export const TimelineEvent = ({
   const width = Math.min(100 - left, ((activeEnd - activeStart) / limitesHeures.span) * 100);
 
   const handleMouseEnter = (e) => {
-    // Calcul de l'espace disponible à l'écran pour afficher le tooltip au bon endroit
     const rect = e.currentTarget.getBoundingClientRect();
-    let y = 'bottom';
-    let x = 'center';
-    
-    if (window.innerHeight - rect.bottom < 120) y = 'top'; // Trop bas, on l'affiche au-dessus
-    
-    if (rect.left < 80) x = 'right'; // Trop à gauche, on le décale à droite
-    else if (window.innerWidth - rect.right < 80) x = 'left'; // Trop à droite, on le décale à gauche
-    
+    let y = 'bottom', x = 'center';
+    if (window.innerHeight - rect.bottom < 120) y = 'top'; 
+    if (rect.left < 80) x = 'right'; 
+    else if (window.innerWidth - rect.right < 80) x = 'left'; 
     setTooltipPos({ y, x });
   };
 
@@ -130,8 +119,9 @@ export const TimelineEvent = ({
     e.stopPropagation();
     e.preventDefault();
 
+    // Gestion du Ctrl+Clic pour la sélection multiple
     if (actionType === 'move' && (e.ctrlKey || e.metaKey)) {
-      onCopy(durationMins);
+      onCopy(durationMins, startMins);
       return;
     }
 
@@ -162,7 +152,6 @@ export const TimelineEvent = ({
       else if (actionType === 'move') {
         let newStart = startMins + deltaMins;
         const maxStart = limitesHeures.baseMins + limitesHeures.span - durationMins;
-        
         newStart = Math.max(limitesHeures.baseMins, Math.min(newStart, maxStart));
         setDragState({ type: actionType, min: newStart, max: newStart + durationMins });
       }
@@ -176,15 +165,11 @@ export const TimelineEvent = ({
         if (currentDrag) {
           let finalStart = Math.round(currentDrag.min / 5) * 5;
           let finalEnd = Math.round(currentDrag.max / 5) * 5;
-
           if (finalEnd - finalStart < 5) {
             if (actionType === 'resizeStart') finalStart = finalEnd - 5;
             else finalEnd = finalStart + 5;
           }
-
-          if (finalStart !== startMins || finalEnd !== endMins) {
-            onUpdate(finalStart, finalEnd);
-          }
+          if (finalStart !== startMins || finalEnd !== endMins) onUpdate(finalStart, finalEnd);
         } else if (actionType === 'move') {
           onClick();
         }
@@ -196,34 +181,18 @@ export const TimelineEvent = ({
     window.addEventListener('mouseup', onMouseUp);
   };
 
-  const formatTime = (m) => {
-    const rounded = Math.round(m / 5) * 5;
-    const h = Math.floor(rounded / 60);
-    const min = Math.floor(rounded % 60);
-    return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
-  };
+  const formatTime = (m) => `${String(Math.floor(Math.round(m / 5) * 5 / 60)).padStart(2,'0')}:${String(Math.round(m / 5) * 5 % 60).padStart(2,'0')}`;
 
   return (
     <div 
-      className={`event-item absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-0.5 border group/item ${dragState ? 'transition-none z-[99999] opacity-90 scale-[1.02]' : 'transition-all z-10 hover:z-50 hover:ring-2'} ${conflit ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
+      className={`event-item absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-0.5 border group/item ${dragState ? 'transition-none z-[99999] opacity-90 scale-[1.02]' : 'transition-all z-10 hover:z-50'} ${conflit ? 'ring-2 ring-red-500 animate-pulse' : ''} ${isCopied ? 'ring-4 ring-blue-500 shadow-xl brightness-110 z-[60]' : 'hover:ring-2'}`}
       style={{ left: `${left}%`, width: `${width}%`, backgroundColor: bgColor, borderColor: borderColor, color: textColor, cursor: dragState ? 'grabbing' : 'pointer' }}
       onMouseDown={(e) => handleMouseDown(e, 'move')}
       onMouseEnter={handleMouseEnter}
     >
       <div className="w-full h-full flex pointer-events-none overflow-hidden flex-col items-center justify-center relative">
         {isMicro || isShort ? (
-          <span 
-            className="font-bold uppercase text-center absolute" 
-            style={{ 
-              writingMode: 'vertical-rl', 
-              transform: 'rotate(180deg)', 
-              fontSize: isMicro ? '8px' : '9px',
-              letterSpacing: isMicro ? 'normal' : '0.05em',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {title}
-          </span>
+          <span className="font-bold uppercase text-center absolute" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: isMicro ? '8px' : '9px', letterSpacing: isMicro ? 'normal' : '0.05em', whiteSpace: 'nowrap' }}>{title}</span>
         ) : (
           <>
             <span className={`font-bold truncate leading-none w-full text-center ${isLong ? 'text-sm' : 'text-[10px]'}`}>{title}</span>
@@ -236,7 +205,6 @@ export const TimelineEvent = ({
       {!isLocked && <div className="absolute left-0 inset-y-0 w-2 cursor-w-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100" onMouseDown={(e) => handleMouseDown(e, 'resizeStart')}></div>}
       {!isLocked && <div className="absolute right-0 inset-y-0 w-2 cursor-e-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100" onMouseDown={(e) => handleMouseDown(e, 'resizeEnd')}></div>}
       
-      {/* Tooltip Intelligent */}
       {!dragState && (
         <div className={`absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[99999] pointer-events-none w-max min-w-[130px] text-center border border-gray-700 
           ${tooltipPos.y === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} 
@@ -246,11 +214,7 @@ export const TimelineEvent = ({
           {subtitle && <span className="font-semibold text-xs leading-none">{subtitle}</span>}
           <span className="text-gray-400 font-mono text-[10px] mt-1">{formatTime(activeStart)} - {formatTime(activeEnd)}</span>
           {extInfo && <span className="text-gray-300 text-[10px] italic mt-1">{extInfo}</span>}
-          
-          <div className={`absolute border-4 border-transparent 
-            ${tooltipPos.y === 'top' ? 'top-full border-t-gray-900' : 'bottom-full border-b-gray-900'} 
-            ${tooltipPos.x === 'right' ? 'left-4' : tooltipPos.x === 'left' ? 'right-4' : 'left-1/2 -translate-x-1/2'}`}>
-          </div>
+          <div className={`absolute border-4 border-transparent ${tooltipPos.y === 'top' ? 'top-full border-t-gray-900' : 'bottom-full border-b-gray-900'} ${tooltipPos.x === 'right' ? 'left-4' : tooltipPos.x === 'left' ? 'right-4' : 'left-1/2 -translate-x-1/2'}`}></div>
         </div>
       )}
     </div>

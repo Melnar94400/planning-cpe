@@ -138,7 +138,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       setIsDataLoaded(true); 
     };
     initData();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // =========================================================================
   // SAUVEGARDE SILENCIEUSE (DEBOUNCED)
@@ -271,7 +271,9 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const isInitialMount = useRef(true);
   const [needsBackup, setNeedsBackup] = useState(false);
-  const [copiedEvent, setCopiedEvent] = useState(null);
+  
+  // -- NOUVEL ETAT : PRESSE-PAPIER MULTIPLE --
+  const [copiedEvents, setCopiedEvents] = useState([]);
 
   const getSchoolYearBase = () => {
      if (templateVersions.length > 0 && templateVersions[0].dateDebut) {
@@ -304,29 +306,29 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   }, [templateVersions, agents]);
 
   const getInfosPeriode = (date) => {
-      const pad = n => String(n).padStart(2, '0');
-      const str = `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
-      let vacs = null;
-      let ferie = null;
+    const pad = n => String(n).padStart(2, '0');
+    const str = `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+    let vacs = null;
+    let ferie = null;
 
-      for (const v of periodesFeriees) {
-        if (str >= v.debut && str <= v.fin) {
-          if (v.type === 'vacances') vacs = v;
-          else if (v.type === 'ferie') ferie = v;
-        }
+    for (const v of periodesFeriees) {
+      if (str >= v.debut && str <= v.fin) {
+        if (v.type === 'vacances') vacs = v;
+        else if (v.type === 'ferie') ferie = v;
       }
+    }
 
-      // Filtre pour nettoyer "Début des vacances d'été" en "Vacances d'été"
-      const cleanName = (name) => {
-        if (!name) return name;
-        if (name.toLowerCase().includes("vacances d'été") || name.toLowerCase().includes("vacances d'ete")) return "Vacances d'été";
-        return name;
-      };
-
-      if (vacs) return { type: 'vacances', nom: ferie ? `${cleanName(vacs.nom)} (${ferie.nom})` : cleanName(vacs.nom) };
-      if (ferie) return { type: 'ferie', nom: ferie.nom };
-      return null;
+    const cleanName = (name) => {
+      if (!name) return name;
+      if (name.toLowerCase().includes("vacances d'été") || name.toLowerCase().includes("vacances d'ete")) return "Vacances d'été";
+      return name;
     };
+
+    if (vacs) return { type: 'vacances', nom: ferie ? `${cleanName(vacs.nom)} (${ferie.nom})` : cleanName(vacs.nom) };
+    if (ferie) return { type: 'ferie', nom: ferie.nom };
+    return null;
+  };
+
   const getHeuresTheoriquesJour = (agentId, dateStr) => {
     const dateObj = new Date(dateStr);
     const mondayStr = getMondayStr(dateObj);
@@ -387,7 +389,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         }
       }
       
-      const soldeGlobal = Math.trunc((agent.hContrat - heuresConsommees) * 60) / 60;      
+      const soldeGlobal = Math.trunc((agent.hContrat - heuresConsommees) * 60 + 1e-9) / 60;
       const applicableTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0];
       const hHebdoType = gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0;
 
@@ -566,8 +568,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && copiedEvent) {
-        setCopiedEvent(null);
+      if (e.key === 'Escape' && copiedEvents.length > 0) {
+        setCopiedEvents([]);
       }
       if (e.ctrlKey || e.metaKey) {
         const key = e.key.toLowerCase();
@@ -587,7 +589,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [copiedEvent, templateVersions, customWeeks, absences]);
+  }, [copiedEvents, templateVersions, customWeeks, absences]);
 
   useEffect(() => {
     let isModified = false;
@@ -1764,7 +1766,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                         const weekEvents = vueActive === 'template' ? (currentTemplate?.events || []) : getEventsForWeek(targetMonday);
                         const agentWeekMins = weekEvents.filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                         const agentWeekHours = agentWeekMins / 60;
-                        const objectifHebdoAgent = Math.trunc((agent.hContrat / 39) * 60) / 60;
+                        const objectifHebdoAgent = Math.trunc((agent.hContrat / 39) * 60 + 1e-9) / 60;
                         const diffAgentHebdo = agentWeekHours - objectifHebdoAgent;
 
                         return (
@@ -1949,19 +1951,30 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                 </div>
                                 
                                 <TimelineTrack 
-                                  limitesHeures={limitesHeures} isBesoins={false} copiedEvent={copiedEvent} snapPoints={allLineSnapPoints}
+                                  limitesHeures={limitesHeures} isBesoins={false} copiedEvents={copiedEvents} snapPoints={allLineSnapPoints}
                                   onAddCopy={(startMins) => {
-                                    const duration = copiedEvent.durationMins || 60;
-                                    const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
-                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                    if (copiedEvents.length === 0) return;
                                     sauvegarderEtatPrecedent();
-                                    applyAction('add', { 
-                                      id: String(Date.now() + Math.random()), start: `${jourConsulte}T${formatTime(startMins)}:00`, end: `${jourConsulte}T${formatTime(endMins)}:00`,
-                                      title: `${copiedEvent.extendedProps?.posteNom} - ${agent.nom}`,
-                                      backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
-                                      extendedProps: { ...copiedEvent.extendedProps, agentId: agent.id, agentNom: agent.nom }
+                                    const earliestMin = Math.min(...copiedEvents.map(e => e.startMins));
+                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                    
+                                    const newEvents = copiedEvents.map(copyEvt => {
+                                      const offset = copyEvt.startMins - earliestMin;
+                                      const endMins = Math.min(startMins + offset + copyEvt.durationMins, limitesHeures.baseMins + limitesHeures.span);
+                                      return {
+                                        id: String(Date.now() + Math.random()), 
+                                        start: `${jourConsulte}T${formatTime(startMins + offset)}:00`, 
+                                        end: `${jourConsulte}T${formatTime(endMins)}:00`,
+                                        title: `${copyEvt.extendedProps?.posteNom} - ${agent.nom}`,
+                                        backgroundColor: copyEvt.backgroundColor, borderColor: copyEvt.borderColor,
+                                        extendedProps: { ...copyEvt.extendedProps, agentId: agent.id, agentNom: agent.nom }
+                                      };
                                     });
-                                    setCopiedEvent(null);
+
+                                    const monStr = getMondayStr(jourConsulte);
+                                    const currentWeek = customWeeks[monStr] ? [...customWeeks[monStr]] : getEventsForWeek(monStr);
+                                    setCustomWeeks({ ...customWeeks, [monStr]: [...currentWeek, ...newEvents] });
+                                    setCopiedEvents([]);
                                   }}
                                   onAddLasso={(startMins, endMins) => {
                                     const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
@@ -1979,13 +1992,19 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                         key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={false} 
                                         bgColor={posteCouleur} borderColor='rgba(0,0,0,0.2)' textColor={getContrastYIQ(posteCouleur)} 
                                         title={evt.extendedProps?.posteNom || 'Poste'} subtitle={agent.nom} extInfo={null} conflit={false} snapPoints={allLineSnapPoints}
+                                        isCopied={copiedEvents.some(c => c.id === evt.id)}
                                         onUpdate={(min, max) => {
                                           const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
                                           sauvegarderEtatPrecedent();
                                           applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(min)}:00`, end: `${jourConsulte}T${formatTime(max)}:00` });
                                         }}
                                         onClick={() => ouvrirEdition(evt)}
-                                        onCopy={(dur) => setCopiedEvent({ title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: dur })}
+                                        onCopy={(dur, startM) => {
+                                          setCopiedEvents(prev => {
+                                            if (prev.some(p => p.id === evt.id)) return prev.filter(p => p.id !== evt.id);
+                                            return [...prev, { id: evt.id, title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: dur, startMins: startM }];
+                                          });
+                                        }}
                                       />
                                     );
                                   })}
@@ -2104,29 +2123,35 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                 </div>
                                 
                                 <TimelineTrack 
-                                  limitesHeures={limitesHeures} isBesoins={isBesoinsMode} copiedEvent={copiedEvent} snapPoints={allLineSnapPoints}
+                                  limitesHeures={limitesHeures} isBesoins={isBesoinsMode} copiedEvents={copiedEvents} snapPoints={allLineSnapPoints}
                                   onAddCopy={(startMins) => {
-                                    if (currentTemplate?.statut === 'valide') return;
-                                    const duration = copiedEvent.durationMins || 60;
-                                    const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
-                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                    if (currentTemplate?.statut === 'valide' || copiedEvents.length === 0) return;
                                     sauvegarderEtatPrecedent();
-                                    const newStartISO = `${currentTemplateDateStr}T${formatTime(startMins)}:00`;
-                                    const newEndISO = `${currentTemplateDateStr}T${formatTime(endMins)}:00`;
+                                    const earliestMin = Math.min(...copiedEvents.map(e => e.startMins));
+                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                    
+                                    const newItems = copiedEvents.map(copyEvt => {
+                                      const offset = copyEvt.startMins - earliestMin;
+                                      const endMins = Math.min(startMins + offset + copyEvt.durationMins, limitesHeures.baseMins + limitesHeures.span);
+                                      const newStartISO = `${currentTemplateDateStr}T${formatTime(startMins + offset)}:00`;
+                                      const newEndISO = `${currentTemplateDateStr}T${formatTime(endMins)}:00`;
 
-                                    if (isBesoinsMode && copiedEvent.extendedProps?.isBesoin) {
-                                      updateCurrentTemplate(null, [...currentTemplate.besoins, { 
-                                        id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO, extendedProps: { ...copiedEvent.extendedProps, posteId: item.id, posteNom: item.nom } 
-                                      }]);
-                                    } else if (!isBesoinsMode && !copiedEvent.extendedProps?.isBesoin) {
-                                      applyAction('add', { 
-                                        id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO,
-                                        title: `${copiedEvent.extendedProps?.posteNom} - ${item.nom}`,
-                                        backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
-                                        extendedProps: { ...copiedEvent.extendedProps, agentId: item.id, agentNom: item.nom }
-                                      });
-                                    }
-                                    setCopiedEvent(null);
+                                      if (isBesoinsMode && copyEvt.extendedProps?.isBesoin) {
+                                        return { id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO, extendedProps: { ...copyEvt.extendedProps, posteId: item.id, posteNom: item.nom } };
+                                      } else if (!isBesoinsMode && !copyEvt.extendedProps?.isBesoin) {
+                                        return { 
+                                          id: String(Date.now() + Math.random()), start: newStartISO, end: newEndISO,
+                                          title: `${copyEvt.extendedProps?.posteNom} - ${item.nom}`, backgroundColor: copyEvt.backgroundColor, borderColor: copyEvt.borderColor,
+                                          extendedProps: { ...copyEvt.extendedProps, agentId: item.id, agentNom: item.nom }
+                                        };
+                                      }
+                                      return null;
+                                    }).filter(Boolean);
+
+                                    if (isBesoinsMode) updateCurrentTemplate(null, [...currentTemplate.besoins, ...newItems]);
+                                    else updateCurrentTemplate([...currentTemplate.events, ...newItems], null);
+                                    
+                                    setCopiedEvents([]);
                                   }}
                                   onAddLasso={(startMins, endMins) => {
                                     if (currentTemplate?.statut === 'valide') return;
@@ -2166,6 +2191,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                         key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={isLocked} 
                                         bgColor={evtBgColor} borderColor={evtBorderColor} textColor={evtTextColor} 
                                         title={evtTitle} subtitle={!isBesoinsMode ? item.nom : null} extInfo={extInfo} conflit={!isBesoinsMode && conflitsIds.has(String(evt.id).split('_')[0])} snapPoints={allLineSnapPoints}
+                                        isCopied={copiedEvents.some(c => c.id === evt.id)}
                                         onUpdate={(min, max) => {
                                           const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
                                           sauvegarderEtatPrecedent();
@@ -2178,7 +2204,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                           }
                                         }}
                                         onClick={() => { if (!isLocked) { if (evt.extendedProps?.isBesoin) ouvrirEditionBesoin(evt); else ouvrirEdition(evt); } }}
-                                        onCopy={(dur) => setCopiedEvent({ title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: dur })}
+                                        onCopy={(dur, startM) => {
+                                          setCopiedEvents(prev => {
+                                            if (prev.some(p => p.id === evt.id)) return prev.filter(p => p.id !== evt.id);
+                                            return [...prev, { id: evt.id, title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: dur, startMins: startM }];
+                                          });
+                                        }}
                                       />
                                     );
                                   })}
@@ -2298,19 +2329,30 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                       </div>
                                       
                                       <TimelineTrack 
-                                        limitesHeures={limitesHeures} isBesoins={false} copiedEvent={copiedEvent} snapPoints={allLineSnapPoints}
+                                        limitesHeures={limitesHeures} isBesoins={false} copiedEvents={copiedEvents} snapPoints={allLineSnapPoints}
                                         onAddCopy={(startMins) => {
-                                          const duration = copiedEvent.durationMins || 60;
-                                          const endMins = Math.min(startMins + duration, limitesHeures.baseMins + limitesHeures.span);
-                                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                          if (copiedEvents.length === 0) return;
                                           sauvegarderEtatPrecedent();
-                                          applyAction('add', { 
-                                            id: String(Date.now() + Math.random()), start: `${dateStr}T${formatTime(startMins)}:00`, end: `${dateStr}T${formatTime(endMins)}:00`,
-                                            title: `${copiedEvent.extendedProps?.posteNom} - ${agent.nom}`,
-                                            backgroundColor: copiedEvent.backgroundColor, borderColor: copiedEvent.borderColor,
-                                            extendedProps: { ...copiedEvent.extendedProps, agentId: agent.id, agentNom: agent.nom }
+                                          const earliestMin = Math.min(...copiedEvents.map(e => e.startMins));
+                                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                          
+                                          const newEvents = copiedEvents.map(copyEvt => {
+                                            const offset = copyEvt.startMins - earliestMin;
+                                            const endMins = Math.min(startMins + offset + copyEvt.durationMins, limitesHeures.baseMins + limitesHeures.span);
+                                            return {
+                                              id: String(Date.now() + Math.random()), 
+                                              start: `${dateStr}T${formatTime(startMins + offset)}:00`, 
+                                              end: `${dateStr}T${formatTime(endMins)}:00`,
+                                              title: `${copyEvt.extendedProps?.posteNom} - ${agent.nom}`,
+                                              backgroundColor: copyEvt.backgroundColor, borderColor: copyEvt.borderColor,
+                                              extendedProps: { ...copyEvt.extendedProps, agentId: agent.id, agentNom: agent.nom }
+                                            };
                                           });
-                                          setCopiedEvent(null);
+
+                                          const monStr = getMondayStr(dateStr);
+                                          const currentWeek = customWeeks[monStr] ? [...customWeeks[monStr]] : getEventsForWeek(monStr);
+                                          setCustomWeeks({ ...customWeeks, [monStr]: [...currentWeek, ...newEvents] });
+                                          setCopiedEvents([]);
                                         }}
                                         onAddLasso={(startMins, endMins) => {
                                           const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
@@ -2343,6 +2385,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                               key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={false} 
                                               bgColor={evtBgColor} borderColor={evtBorderColor} textColor={evtTextColor} 
                                               title={evtTitle} subtitle={agent?.nom || evt.extendedProps?.agentNom || 'Agent'} extInfo={extInfo} conflit={!evt.extendedProps?.isAbsence && conflitsIds.has(String(evt.id).split('_')[0])} snapPoints={allLineSnapPoints}
+                                              isCopied={copiedEvents.some(c => c.id === evt.id)}
                                               onUpdate={(min, max) => {
                                                 const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
                                                 sauvegarderEtatPrecedent();
@@ -2354,7 +2397,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                                 }
                                               }}
                                               onClick={() => ouvrirEdition(evt)}
-                                              onCopy={(dur) => setCopiedEvent({ title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: dur })}
+                                              onCopy={(dur, startM) => {
+                                                setCopiedEvents(prev => {
+                                                  if (prev.some(p => p.id === evt.id)) return prev.filter(p => p.id !== evt.id);
+                                                  return [...prev, { id: evt.id, title: evt.title || evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: dur, startMins: startM }];
+                                                });
+                                              }}
                                             />
                                           );
                                         })}
@@ -2519,16 +2567,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
             <div className={`flex justify-between items-center p-3 ${t.headerBg} border-b ${t.borderLight} no-print shrink-0`}>
               <div className="flex gap-4 items-center">
                 <select value={agentConsulte} onChange={(e) => setAgentConsulte(Number(e.target.value))} className={`bg-transparent ${t.headerText} border ${t.borderLight} font-bold p-2 rounded outline-none cursor-pointer`}>
-  {agents.map(a => (
-    <option 
-      key={a.id} 
-      value={a.id} 
-      className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800"
-    >
-      {a.nom} ({a.quotite}%)
-    </option>
-  ))}
-</select>
+                  {agents.map(a => (
+                    <option key={a.id} value={a.id} className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800">
+                      {a.nom} ({a.quotite}%)
+                    </option>
+                  ))}
+                </select>
                 <span className={`text-sm font-medium ${t.textMenuMuted}`}>Année Scolaire {baseYear}-{baseYear+1}</span>
               </div>
               <div className={`hidden print:block text-xl font-bold ${t.headerText}`}>Bilan Annuel : {agents.find(a=>a.id===agentConsulte)?.nom} ({baseYear}-{baseYear+1})</div>
@@ -2638,13 +2682,13 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
           <div className="text-sm font-bold">Action rétablie (Ctrl+Y)</div>
         </div>
       )}
-      {copiedEvent && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 border border-gray-700 animate-in slide-in-from-bottom duration-150 no-print">
+      {copiedEvents.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 border border-gray-700 animate-in slide-in-from-bottom duration-150 no-print cursor-pointer" onClick={() => setCopiedEvents([])}>
           <span className="text-base">📋</span>
           <div className="text-xs">
-            <strong>Créneau copié :</strong> {copiedEvent.extendedProps?.posteNom || 'Créneau'} ({copiedEvent.extendedProps?.agentNom}, {Math.floor(copiedEvent.durationMins/60)}h{String(copiedEvent.durationMins%60).padStart(2,'0')}) — <em>Cliquez sur le planning pour coller</em>
+            <strong>{copiedEvents.length} créneau(x) en mémoire</strong> — <em>Cliquez sur le planning pour coller l'ensemble</em>
           </div>
-          <button onClick={() => setCopiedEvent(null)} className="ml-2 text-xs bg-white/20 hover:bg-white/30 rounded-full px-2 py-0.5 font-bold cursor-pointer" title="Annuler le copier-coller">Échap ✖</button>
+          <button onClick={(e) => { e.stopPropagation(); setCopiedEvents([]); }} className="ml-2 text-xs bg-white/20 hover:bg-white/30 rounded-full px-2 py-0.5 font-bold cursor-pointer" title="Vider le presse-papier">Échap ✖</button>
         </div>
       )}
     </div>
