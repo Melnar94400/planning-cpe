@@ -1736,6 +1736,18 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-base font-medium py-2 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>👤 Calendriers Individuels</button>
               <button onClick={() => setVueActive('absences')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📋 Absences & Retards</button>
             </div>
+            {/* ENCART TUTORIEL COPIER-COLLER */}
+            {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
+              <div className={`mt-3 p-3 rounded-xl border ${t.borderLight} bg-blue-500/10 text-blue-900 dark:text-blue-200 text-xs shadow-sm`}>
+                <p className="font-black mb-1.5 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">💡 Raccourcis Clavier</p>
+                <ul className="space-y-1.5 opacity-90 leading-tight">
+                  <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Ctrl</kbd> + <strong>Clic</strong> : Sélectionner 1 créneau</li>
+                  <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Ctrl</kbd> + <strong>Glisser</strong> : Lasso multiple</li>
+                  <li className="pt-1 mt-1 border-t border-blue-500/20"><strong>Clic</strong> (sur la grille) : Coller la sélection</li>
+                  <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Échap</kbd> : Vider la sélection</li>
+                </ul>
+              </div>
+            )}
           </div>
 
           {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
