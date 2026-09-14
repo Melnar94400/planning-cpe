@@ -119,7 +119,6 @@ export const formatHeureMinutes = (decimal) => {
   if (decimal === undefined || decimal === null || Number.isNaN(Number(decimal))) return "";
   
   const absVal = Math.abs(Number(decimal));
-  // Troncature stricte vers le bas avec correction du bug de virgule flottante JS
   const totalMinutes = Math.trunc(absVal * 60 + 1e-9); 
   
   const h = Math.floor(totalMinutes / 60);
@@ -132,7 +131,6 @@ export const formatHeureTableau = (decimal, showZero = false) => {
   if (decimal === undefined || decimal === null || Number.isNaN(Number(decimal))) return "";
   
   const absVal = Math.abs(Number(decimal));
-  // Troncature stricte vers le bas avec correction du bug de virgule flottante JS
   const totalMinutes = Math.trunc(absVal * 60 + 1e-9); 
   
   if (totalMinutes === 0) return showZero ? "0h00" : "";
@@ -220,39 +218,54 @@ export const exporterDonnees = () => {
 };
 
 export const getActiveContract = (agent, dateStr) => {
-  if (!agent.avenants || agent.avenants.length === 0) return agent;
-  const sortedAvenants = [...agent.avenants].sort((a, b) => b.date.localeCompare(a.date));
-  const activeAvenant = sortedAvenants.find(av => av.date <= dateStr);
-  
-  if (activeAvenant) {
-    return { ...agent, quotite: activeAvenant.quotite, estEtudiant: activeAvenant.estEtudiant };
-  }
-  return agent; 
+  if (!agent.avenants || agent.avenants.length === 0) return { quotite: agent.quotite, estEtudiant: agent.estEtudiant };
+  // Cherche le contrat en vigueur à une date précise
+  const pastAvenants = agent.avenants.filter(av => av.date && av.date <= dateStr).sort((a, b) => b.date.localeCompare(a.date));
+  if (pastAvenants.length > 0) return { quotite: pastAvenants[0].quotite, estEtudiant: pastAvenants[0].estEtudiant };
+  return { quotite: agent.quotite, estEtudiant: agent.estEtudiant };
 };
 
-export const calculerContratProratise = (agent, baseYear, fnCalculBase) => {
+export const calculerContratProratise = (agent, baseYear, fonctionCalculBase) => {
   if (!agent.avenants || agent.avenants.length === 0) {
-    return fnCalculBase(agent.quotite, agent.estEtudiant);
+    return fonctionCalculBase(agent.quotite, agent.estEtudiant);
   }
   
-  const start = new Date(baseYear, 8, 1); 
-  const end = new Date(baseYear + 1, 7, 31); 
-  const msPerDay = 1000 * 60 * 60 * 24;
-  const totalDays = Math.round((end - start) / msPerDay) + 1;
+  // L'année scolaire stricte
+  const startYear = new Date(`${baseYear}-09-01T00:00:00`);
+  const endYear = new Date(`${baseYear + 1}-08-31T23:59:59`);
   
-  let totalHours = 0;
+  let periods = [];
+  let currentDate = startYear;
+  let currentQ = agent.quotite;
+  let currentE = agent.estEtudiant;
   
-  for (let i = 0; i < totalDays; i++) {
-    const d = new Date(start.getTime() + i * msPerDay);
-    const pad = n => String(n).padStart(2, '0');
-    const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-    
-    const active = getActiveContract(agent, dateStr);
-    const heuresAnnuellesType = fnCalculBase(active.quotite, active.estEtudiant);
-    totalHours += (heuresAnnuellesType / totalDays);
+  const sortedAv = [...agent.avenants].filter(a => a.date).sort((a,b) => a.date.localeCompare(b.date));
+  
+  sortedAv.forEach(av => {
+    const avDate = new Date(`${av.date}T00:00:00`);
+    if (avDate > currentDate && avDate <= endYear) {
+      const days = Math.round((avDate - currentDate) / (1000 * 60 * 60 * 24));
+      periods.push({ q: currentQ, e: currentE, days });
+      currentDate = avDate;
+    }
+    if (avDate <= endYear) {
+      currentQ = av.quotite;
+      currentE = av.estEtudiant;
+    }
+  });
+  
+  if (currentDate <= endYear) {
+    const days = Math.round((endYear - currentDate + (1000*60*60*24)) / (1000 * 60 * 60 * 24));
+    periods.push({ q: currentQ, e: currentE, days });
   }
-  
-  return Math.round(totalHours * 100) / 100;
+
+  let totalMins = 0;
+  periods.forEach(p => {
+    const baseH = fonctionCalculBase(p.q, p.e);
+    totalMins += (p.days / 365) * baseH * 60; // Calcul au prorata exact des jours
+  });
+
+  return Math.trunc(totalMins + 1e-9) / 60;
 };
 
 export const getJoursFerie = (year) => {
