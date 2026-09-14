@@ -520,24 +520,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       if (printFilter.type === 'agent') return e.extendedProps?.agentId === printFilter.id;
       if (printFilter.type === 'poste') return e.extendedProps?.posteId === printFilter.id || e.extendedProps?.isBesoin;
       return true;
-    }),
-    // FIX : On n'injecte les événements "réels" (absences/retards) QUE si on n'est PAS dans la vue Modèle
-    ...(vueActive === 'template' ? [] : absences.map(a => ({
-      id: `abs_${a.id}`,
-      start: a.start,
-      end: a.end,
-      title: `${a.type === 'absence' ? '🚫 ABS' : a.type === 'retard' ? '⏰ RET' : a.type === 'recup' ? '🔵 RECUP' : '🟢 SUPP'} - ${agents.find(ag=>ag.id===a.agentId)?.nom}`,
-      backgroundColor: a.type === 'absence' ? '#EF4444' : a.type === 'retard' ? '#F59E0B' : a.type === 'recup' ? '#3B82F6' : '#10B981',
-      borderColor: a.type === 'absence' ? '#DC2626' : a.type === 'retard' ? '#D97706' : a.type === 'recup' ? '#2563EB' : '#059669',
-      extendedProps: {
-        isAbsence: true, agentId: a.agentId, typeAbsence: a.type, motif: a.motif, deduire: a.deduire, rattrape: a.rattrape
-      }
-    })).filter(e => {
-      if (printFilter.type === 'agent' && e.extendedProps.agentId !== printFilter.id) return false;
-      return true;
-    }))
+    })
   ];
-
   const activeAlerts = useMemo(() => {
     const alerts = [];
     const nomsJoursAlert = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM']; 
