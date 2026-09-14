@@ -566,20 +566,55 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return alerts;
   }, [agents, currentTemplate, currentViewMonday, customWeeks, absences, templateVersions, vueActive]);
 
-  useEffect(() => {
+useEffect(() => {
     const handleKeyDown = (e) => {
+      // 1. Vider le presse-papier avec Échap
       if (e.key === 'Escape' && copiedEvents.length > 0) {
         setCopiedEvents([]);
       }
+      
+      // 2. Supprimer les créneaux sélectionnés avec Suppr ou Retour Arrière
+      if ((e.key === 'Delete' || e.key === 'Backspace') && copiedEvents.length > 0) {
+        e.preventDefault();
+        if (window.confirm(`Voulez-vous vraiment supprimer ces ${copiedEvents.length} créneau(x) ?`)) {
+          sauvegarderEtatPrecedent();
+          
+          const idsAbsToDelete = copiedEvents.filter(ev => ev.extendedProps?.isAbsence).map(ev => String(ev.id).replace('abs_', '').split('_')[0]);
+          const idsEvtToDelete = copiedEvents.filter(ev => !ev.extendedProps?.isAbsence).map(ev => String(ev.id).split('_')[0]);
+
+          if (idsAbsToDelete.length > 0) {
+            setAbsences(prev => prev.filter(a => !idsAbsToDelete.includes(String(a.id))));
+          }
+
+          if (idsEvtToDelete.length > 0) {
+            if (vueActive === 'template') {
+              const isBesoinsMode = modeEdition === 'besoins';
+              const currentT = templateVersions.find(v => v.id === activeTemplateId) || templateVersions[0];
+              if (isBesoinsMode) {
+                const newBesoins = currentT.besoins.filter(b => !idsEvtToDelete.includes(String(b.id).split('_')[0]));
+                setTemplateVersions(templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, besoins: newBesoins } : tv));
+              } else {
+                const newEvents = currentT.events.filter(ev => !idsEvtToDelete.includes(String(ev.id).split('_')[0]));
+                setTemplateVersions(templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, events: newEvents } : tv));
+              }
+            } else if (vueActive === 'planning' || vueActive === 'journee') {
+              const monStr = vueActive === 'journee' ? getMondayStr(jourConsulte) : (currentViewMonday || getMondayStr(new Date()));
+              const currentWeek = customWeeks[monStr] ? [...customWeeks[monStr]] : getEventsForWeek(monStr);
+              const mod = currentWeek.filter(ev => !idsEvtToDelete.includes(String(ev.id).split('_')[0]));
+              setCustomWeeks({ ...customWeeks, [monStr]: mod });
+            }
+          }
+          setCopiedEvents([]);
+        }
+      }
+
+      // 3. Ctrl+Z / Ctrl+Y (Annuler/Refaire)
       if (e.ctrlKey || e.metaKey) {
         const key = e.key.toLowerCase();
         if (key === 'z') {
           e.preventDefault();
-          if (e.shiftKey) {
-            refaireAction();
-          } else {
-            annulerAction();
-          }
+          if (e.shiftKey) refaireAction();
+          else annulerAction();
         } else if (key === 'y') {
           e.preventDefault();
           refaireAction();
@@ -589,7 +624,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [copiedEvents, templateVersions, customWeeks, absences]);
+  }, [copiedEvents, templateVersions, customWeeks, absences, vueActive, modeEdition, jourConsulte, currentViewMonday, activeTemplateId]);
 
   useEffect(() => {
     let isModified = false;
@@ -1736,7 +1771,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-base font-medium py-2 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>👤 Calendriers Individuels</button>
               <button onClick={() => setVueActive('absences')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📋 Absences & Retards</button>
             </div>
-            {/* ENCART TUTORIEL COPIER-COLLER */}
+            {/* ENCART TUTORIEL COPIER-COLLER & SUPPRESSION */}
             {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
               <div className={`mt-3 p-3 rounded-xl border ${t.borderLight} bg-blue-500/10 text-blue-900 dark:text-blue-200 text-xs shadow-sm`}>
                 <p className="font-black mb-1.5 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">💡 Raccourcis Clavier</p>
@@ -1744,11 +1779,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Ctrl</kbd> + <strong>Clic</strong> : Sélectionner 1 créneau</li>
                   <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Ctrl</kbd> + <strong>Glisser</strong> : Lasso multiple</li>
                   <li className="pt-1 mt-1 border-t border-blue-500/20"><strong>Clic</strong> (sur la grille) : Coller la sélection</li>
-                  <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Échap</kbd> : Vider la sélection</li>
+                  <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Suppr</kbd> : <strong>Supprimer</strong> la sélection</li>
+                  <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Échap</kbd> : Vider la sélection (Annuler)</li>
                 </ul>
               </div>
-            )}
-          </div>
+            )}          
+            </div>
 
           {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
             <div className={`p-4 flex-1 overflow-y-auto space-y-4 ${t.bgMain}`}>
