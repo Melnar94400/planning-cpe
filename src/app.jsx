@@ -2715,20 +2715,34 @@ useEffect(() => {
                     </option>
                   ))}
                 </select>
-                <span className={`text-sm font-medium ${t.textMenuMuted}`}>Année Scolaire {baseYear}-{baseYear+1}</span>
+<span className={`text-sm font-medium ${t.textMenuMuted}`}>Année Scolaire {baseYear}-{baseYear+1}</span>
               </div>
               <div className={`hidden print:block text-xl font-bold ${t.headerText}`}>Bilan Annuel : {agents.find(a=>a.id===agentConsulte)?.nom} ({baseYear}-{baseYear+1})</div>
               <div className={`flex gap-6 ${t.bgLight} p-2 rounded border ${t.borderLight} print:border-none`}>
-              <div className="flex flex-col items-center"><span className={`text-xs ${t.textMenuMuted} print:text-black`}>H. Contrat</span><span className={`font-mono font-bold ${t.headerText}`}>{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.hContratProratise, true)}</span></div>                <div className="flex flex-col items-center"><span className={`text-xs ${t.textMenuMuted} print:text-black`}>H. Consommées</span><span className={`font-mono font-bold opacity-80 ${t.headerText} print:text-black`}>{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.heuresConsommees, true)}</span></div>
+                
+                <div className="flex flex-col items-center">
+                  <span className={`text-xs ${t.textMenuMuted} print:text-black`}>H. Contrat</span>
+                  <span className={`font-mono font-bold ${t.header}`}>
+                    {formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.hContratProratise ?? statsAgents.find(a=>a.id===agentConsulte)?.hContrat, true)}
+                  </span>
+                </div>
+                
+                <div className="flex flex-col items-center">
+                  <span className={`text-xs ${t.textMenuMuted} print:text-black`}>H. Consommées</span>
+                  <span className={`font-mono font-bold opacity-80 ${t.header} print:text-black`}>
+                    {formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.heuresConsommees, true)}
+                  </span>
+                </div>
+                
                 <div className="flex flex-col items-center">
                   <span className={`text-xs ${t.textMenuMuted} print:text-black`}>Solde Actuel</span>
                   <span className={`font-mono font-bold px-2 rounded print:border print:border-black ${statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal > 0 ? 'bg-green-500/20 text-green-600 print:text-green-800 print:bg-green-100' : (statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal < 0 ? 'bg-red-500/20 text-red-500 print:text-red-800 print:bg-red-100' : 'bg-emerald-500/20 text-emerald-500 print:text-emerald-800 print:bg-emerald-100')}`}>
                     {statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal, true)}
                   </span>
                 </div>
+              
               </div>
             </div>
-
             <div className={`flex-1 overflow-auto p-4 ${t.bgMain} print:bg-white print:hidden`}>
               <table className="w-full text-center border-collapse text-xs table-fixed min-w-[1200px] shadow-sm">
                 <thead><tr>{anneeScolaire.map((mois, i) => (<th key={i} className={`border ${t.borderLight} ${t.headerBg} ${t.headerText} py-1.5 uppercase tracking-wider`}>{mois.nom}</th>))}</tr></thead>
