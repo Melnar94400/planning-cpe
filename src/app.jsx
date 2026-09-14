@@ -312,12 +312,25 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     let ferie = null;
 
     for (const v of periodesFeriees) {
-      if (str >= v.debut && str <= v.fin) {
+      let effectiveStart = v.debut;
+      
+      // FIX AUTO : L'Éducation Nationale fait commencer les vacances le vendredi soir.
+      // Si une période de vacances commence un vendredi, on décale le début effectif (0h) au samedi.
+      if (v.type === 'vacances') {
+        const dDebut = new Date(v.debut);
+        if (dDebut.getDay() === 5) { // 5 correspond au Vendredi
+          dDebut.setDate(dDebut.getDate() + 1); // On décale au samedi
+          effectiveStart = `${dDebut.getFullYear()}-${pad(dDebut.getMonth()+1)}-${pad(dDebut.getDate())}`;
+        }
+      }
+
+      if (str >= effectiveStart && str <= v.fin) {
         if (v.type === 'vacances') vacs = v;
         else if (v.type === 'ferie') ferie = v;
       }
     }
 
+    // Filtre pour nettoyer "Début des vacances d'été" en "Vacances d'été"
     const cleanName = (name) => {
       if (!name) return name;
       if (name.toLowerCase().includes("vacances d'été") || name.toLowerCase().includes("vacances d'ete")) return "Vacances d'été";
@@ -328,7 +341,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     if (ferie) return { type: 'ferie', nom: ferie.nom };
     return null;
   };
-
   const getHeuresTheoriquesJour = (agentId, dateStr) => {
     const dateObj = new Date(dateStr);
     const mondayStr = getMondayStr(dateObj);
