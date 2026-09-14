@@ -1,7 +1,7 @@
 import React from 'react';
 import { generateGrid, getContrastYIQ } from './utils';
 
-// Force l'impression des couleurs et la gestion propre des hauteurs de pages
+// Force l'impression des couleurs et ajuste les contrastes
 const printExact = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' };
 
 // --- HELPERS COMMUNS POUR L'IMPRESSION ---
@@ -96,34 +96,36 @@ export const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absence
   const allEvents = getEventsForWeek(getMondayStr(jourConsulte));
 
   return (
-    // FIX : La page s'étire à 100vh (hauteur complète d'une feuille A4)
-    <div className="w-full bg-white flex flex-col print:overflow-hidden print:mb-0 mb-8" style={{ ...printExact, height: '99vh', minHeight: '100vh' }}>
-      <div className="text-center font-bold text-xl mb-4 py-2 border-b-2 border-black">Planning Quotidien - {jourConsulte}</div>
-      <div className="flex-1 flex flex-col relative border border-black/20">
-        {renderPrintGrid(gridLines, gridLabelsDaily, gridTicks)}
-        <div className="flex-1 relative z-10 flex flex-col mt-6">
-          {agents.map(agent => {
-            const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
-            const totalMins = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
-            const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-            const heuresJourStr = formatTime(totalMins);
-            const amplitudeStr = getAmplitudeStr(eventsDuJour);
+    // FIX : Le Wrapper block sécurise l'impression de la page unique
+    <div className="print:block w-full">
+      <div className="w-full bg-white flex flex-col mb-8 print:mb-0 print:overflow-hidden" style={{ ...printExact, height: '97vh' }}>
+        <div className="text-center font-bold text-xl mb-4 py-2 border-b-2 border-black">Planning Quotidien - {jourConsulte}</div>
+        <div className="flex-1 flex flex-col relative border border-black/20">
+          {renderPrintGrid(gridLines, gridLabelsDaily, gridTicks)}
+          <div className="flex-1 relative z-10 flex flex-col mt-6">
+            {agents.map(agent => {
+              const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
+              const totalMins = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+              const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+              const heuresJourStr = formatTime(totalMins);
+              const amplitudeStr = getAmplitudeStr(eventsDuJour);
 
-            return (
-              <div key={agent.id} className="flex border-b border-black/20 flex-1 relative min-h-[40px] items-center">
-                <div className="w-24 shrink-0 flex flex-col items-end justify-center p-1 border-r border-black/20 z-10 h-full" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond), ...printExact }}>
-                  <span className="text-[10px] font-black text-right leading-tight truncate w-full">{agent.nom}</span>
-                  <div className="flex flex-col items-end gap-0.5 mt-0.5">
-                    {amplitudeStr && <span className="text-[7px] font-bold opacity-80 leading-none">{amplitudeStr}</span>}
-                    <span className="text-[8px] font-mono font-bold bg-black/20 px-1.5 py-0.5 rounded leading-none">{heuresJourStr}</span>
+              return (
+                <div key={agent.id} className="flex border-b border-black/20 flex-1 relative min-h-[40px] items-center">
+                  <div className="w-24 shrink-0 flex flex-col items-end justify-center p-1 border-r border-black/20 z-10 h-full" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond), ...printExact }}>
+                    <span className="text-[10px] font-black text-right leading-tight truncate w-full">{agent.nom}</span>
+                    <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                      {amplitudeStr && <span className="text-[7px] font-bold opacity-80 leading-none">{amplitudeStr}</span>}
+                      <span className="text-[8px] font-mono font-bold bg-black/20 px-1.5 py-0.5 rounded leading-none">{heuresJourStr}</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 relative h-full">
+                    {eventsDuJour.map(evt => renderPrintEvent(evt, limitesHeures, false))}
                   </div>
                 </div>
-                <div className="flex-1 relative h-full">
-                  {eventsDuJour.map(evt => renderPrintEvent(evt, limitesHeures, false))}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
@@ -156,42 +158,43 @@ export const PrintTimeGridView = ({ events, agents, limitesHeures, amplitude, ti
           return !isNaN(d.getTime()) && d.getDay() === targetDayOfWeek;
         });
 
-        // FIX : Calcule si on est sur la dernière page pour ne pas faire de saut de page final inutile
         const isLastPage = idx === joursAImprimer.length - 1;
 
         return (
-          // FIX : pageBreakAfter garantit que la prochaine feuille commencera sur une page vierge. Height 99vh étire le tableau.
-          <div key={dayIndex} className="w-full bg-white flex flex-col mb-8 print:mb-0 print:overflow-hidden" 
-               style={{ ...printExact, height: '99vh', minHeight: '100vh', pageBreakAfter: isLastPage ? 'auto' : 'always' }}>
-            <div className="text-center font-bold text-lg mb-2 py-1 border-b-2 border-black flex justify-between items-end">
-              <span>{titre}</span>
-              <span className="text-xl uppercase">{nomsJours[dayIndex-1]} {dateLabel}</span>
-            </div>
-            <div className="flex-1 flex flex-col relative border border-black/20">
-              {renderPrintGrid(gridLines, gridLabelsDaily, gridTicks)}
-              <div className="flex-1 relative z-10 flex flex-col mt-6">
-                {agents.map(agent => {
-                  const agentEvents = eventsDuJour.filter(e => e.extendedProps?.agentId === agent.id);
-                  const totalMins = agentEvents.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
-                  const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                  const heuresJourStr = formatTime(totalMins);
-                  const amplitudeStr = getAmplitudeStr(agentEvents);
+          // FIX MAJEUR : Ce "Wrapper" garantit le saut de page strict pour Chrome/Safari
+          <div key={dayIndex} className="print:block w-full" style={{ breakAfter: isLastPage ? 'auto' : 'page', pageBreakAfter: isLastPage ? 'auto' : 'always' }}>
+            {/* L'intérieur s'étire parfaitement grâce à height: 97vh */}
+            <div className="w-full bg-white flex flex-col mb-8 print:mb-0 print:overflow-hidden" style={{ ...printExact, height: '97vh' }}>
+              <div className="text-center font-bold text-lg mb-2 py-1 border-b-2 border-black flex justify-between items-end">
+                <span>{titre}</span>
+                <span className="text-xl uppercase">{nomsJours[dayIndex-1]} {dateLabel}</span>
+              </div>
+              <div className="flex-1 flex flex-col relative border border-black/20">
+                {renderPrintGrid(gridLines, gridLabelsDaily, gridTicks)}
+                <div className="flex-1 relative z-10 flex flex-col mt-6">
+                  {agents.map(agent => {
+                    const agentEvents = eventsDuJour.filter(e => e.extendedProps?.agentId === agent.id);
+                    const totalMins = agentEvents.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                    const heuresJourStr = formatTime(totalMins);
+                    const amplitudeStr = getAmplitudeStr(agentEvents);
 
-                  return (
-                    <div key={agent.id} className="flex border-b border-black/20 flex-1 relative min-h-[40px] items-center">
-                      <div className="w-24 shrink-0 flex flex-col items-end justify-center p-1 border-r border-black/20 z-10 h-full" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond), ...printExact }}>
-                        <span className="text-[10px] font-black text-right leading-tight truncate w-full">{agent.nom}</span>
-                        <div className="flex flex-col items-end gap-0.5 mt-0.5">
-                          {amplitudeStr && <span className="text-[7px] font-bold opacity-80 leading-none">{amplitudeStr}</span>}
-                          <span className="text-[8px] font-mono font-bold bg-black/20 px-1.5 py-0.5 rounded leading-none">{heuresJourStr}</span>
+                    return (
+                      <div key={agent.id} className="flex border-b border-black/20 flex-1 relative min-h-[40px] items-center">
+                        <div className="w-24 shrink-0 flex flex-col items-end justify-center p-1 border-r border-black/20 z-10 h-full" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond), ...printExact }}>
+                          <span className="text-[10px] font-black text-right leading-tight truncate w-full">{agent.nom}</span>
+                          <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                            {amplitudeStr && <span className="text-[7px] font-bold opacity-80 leading-none">{amplitudeStr}</span>}
+                            <span className="text-[8px] font-mono font-bold bg-black/20 px-1.5 py-0.5 rounded leading-none">{heuresJourStr}</span>
+                          </div>
+                        </div>
+                        <div className="flex-1 relative h-full">
+                          {agentEvents.map(evt => renderPrintEvent(evt, limitesHeures, false))}
                         </div>
                       </div>
-                      <div className="flex-1 relative h-full">
-                        {agentEvents.map(evt => renderPrintEvent(evt, limitesHeures, false))}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -217,38 +220,39 @@ export const PrintTemplateView = ({ template, joursAImprimer, format, agents, li
         const isLastPage = idx === joursAImprimer.length - 1;
 
         return (
-          // FIX : Saut de page forcé + étirement à 100% de la page
-          <div key={dayIndex} className="w-full bg-white flex flex-col mb-8 print:mb-0 print:overflow-hidden" 
-               style={{ ...printExact, height: '99vh', minHeight: '100vh', pageBreakAfter: isLastPage ? 'auto' : 'always' }}>
-            <div className="text-center font-bold text-lg mb-2 py-1 border-b-2 border-black flex justify-between items-end">
-              <span>Modèle : {template.nom}</span>
-              <span className="text-xl uppercase">{nomsJours[dayIndex-1]}</span>
-            </div>
-            <div className="flex-1 flex flex-col relative border border-black/20">
-              {renderPrintGrid(gridLines, gridLabelsDaily, gridTicks)}
-              <div className="flex-1 relative z-10 flex flex-col mt-6">
-                {agents.map(agent => {
-                  const agentEvents = eventsDuJour.filter(e => e.extendedProps?.agentId === agent.id);
-                  const totalMins = agentEvents.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
-                  const fmtTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                  const heuresJourStr = fmtTime(totalMins);
-                  const amplitudeStr = getAmplitudeStr(agentEvents);
+          // FIX : Même protection du saut de page pour le Modèle
+          <div key={dayIndex} className="print:block w-full" style={{ breakAfter: isLastPage ? 'auto' : 'page', pageBreakAfter: isLastPage ? 'auto' : 'always' }}>
+            <div className="w-full bg-white flex flex-col mb-8 print:mb-0 print:overflow-hidden" style={{ ...printExact, height: '97vh' }}>
+              <div className="text-center font-bold text-lg mb-2 py-1 border-b-2 border-black flex justify-between items-end">
+                <span>Modèle : {template.nom}</span>
+                <span className="text-xl uppercase">{nomsJours[dayIndex-1]}</span>
+              </div>
+              <div className="flex-1 flex flex-col relative border border-black/20">
+                {renderPrintGrid(gridLines, gridLabelsDaily, gridTicks)}
+                <div className="flex-1 relative z-10 flex flex-col mt-6">
+                  {agents.map(agent => {
+                    const agentEvents = eventsDuJour.filter(e => e.extendedProps?.agentId === agent.id);
+                    const totalMins = agentEvents.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                    const fmtTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                    const heuresJourStr = fmtTime(totalMins);
+                    const amplitudeStr = getAmplitudeStr(agentEvents);
 
-                  return (
-                    <div key={agent.id} className="flex border-b border-black/20 flex-1 relative min-h-[40px] items-center">
-                      <div className="w-24 shrink-0 flex flex-col items-end justify-center p-1 border-r border-black/20 z-10 h-full" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond), ...printExact }}>
-                        <span className="text-[10px] font-black text-right leading-tight truncate w-full">{agent.nom}</span>
-                        <div className="flex flex-col items-end gap-0.5 mt-0.5">
-                          {amplitudeStr && <span className="text-[7px] font-bold opacity-80 leading-none">{amplitudeStr}</span>}
-                          <span className="text-[8px] font-mono font-bold bg-black/20 px-1.5 py-0.5 rounded leading-none">{heuresJourStr}</span>
+                    return (
+                      <div key={agent.id} className="flex border-b border-black/20 flex-1 relative min-h-[40px] items-center">
+                        <div className="w-24 shrink-0 flex flex-col items-end justify-center p-1 border-r border-black/20 z-10 h-full" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond), ...printExact }}>
+                          <span className="text-[10px] font-black text-right leading-tight truncate w-full">{agent.nom}</span>
+                          <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                            {amplitudeStr && <span className="text-[7px] font-bold opacity-80 leading-none">{amplitudeStr}</span>}
+                            <span className="text-[8px] font-mono font-bold bg-black/20 px-1.5 py-0.5 rounded leading-none">{heuresJourStr}</span>
+                          </div>
+                        </div>
+                        <div className="flex-1 relative h-full">
+                          {agentEvents.map(evt => renderPrintEvent(evt, limitesHeures, false))}
                         </div>
                       </div>
-                      <div className="flex-1 relative h-full">
-                        {agentEvents.map(evt => renderPrintEvent(evt, limitesHeures, false))}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
