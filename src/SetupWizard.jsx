@@ -58,8 +58,8 @@ export const SetupWizard = ({ onComplete, t }) => {
            const startD = new Date(r.start_date);
            // FIX : L'Éducation Nationale fixe le début au vendredi soir après les cours.
            // On décale le début officiel au samedi pour ne pas amputer les heures du vendredi !
-           if (startD.getDay() === 5) { // 5 = Vendredi
-             startD.setDate(startD.getDate() + 1); // Décale au Samedi
+           if (startD.getDay() === 5) {
+             startD.setDate(startD.getDate() + 1);
            }
            
            const endD = new Date(r.end_date); 
@@ -135,7 +135,7 @@ export const SetupWizard = ({ onComplete, t }) => {
 
     const templateVersions = [{ id: 1, nom: "Modèle Initial", dateDebut: startStr, events: [], besoins: initialBesoins, statut: 'brouillon' }];
 
-    // --- FIX : ENREGISTREMENT SÉCURISÉ DANS INDEXEDDB ---
+    // Sauvegarde officielle dans IndexedDB
     await saveAppData({
       agents,
       postes,
@@ -153,7 +153,6 @@ export const SetupWizard = ({ onComplete, t }) => {
     onComplete();
   };
 
-  // --- FIX : NOUVELLE FONCTION POUR L'IMPORT DEPUIS LE WIZARD VIA INDEXEDDB ---
   const handleWizardImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -186,10 +185,11 @@ export const SetupWizard = ({ onComplete, t }) => {
             dotation: parseFloat(extractData('dotation', 'edt-dotation')) || 0
           };
 
+          // On pousse les données dans IndexedDB !
           await saveAppData(importedData);
           localStorage.setItem('edt-setup-done', 'true');
           alert("Sauvegarde restaurée avec succès !");
-          onComplete(); // Relance l'App principale
+          onComplete();
         }
       } catch (err) {
         alert("Erreur lors de la lecture du fichier JSON.");
@@ -197,7 +197,7 @@ export const SetupWizard = ({ onComplete, t }) => {
       }
     };
     reader.readAsText(file);
-    e.target.value = ''; // Reset l'input pour permettre le re-clic sur le même fichier
+    e.target.value = '';
   };
 
   return (
@@ -234,7 +234,7 @@ export const SetupWizard = ({ onComplete, t }) => {
                 {periodes.length === 0 && <p className="text-xs text-gray-500 italic text-center py-4">Aucune date configurée.</p>}
                 {periodes.map(p => ( 
                   <li key={p.id} className={`flex justify-between items-center ${t.bgLight} p-2 rounded shadow-sm text-sm border ${t.borderLight}`}>
-                    <span className="font-bold text-gray-700">{p.nom} 
+                    <span className={`font-bold ${t.header}`}>{p.nom} 
                       <span className={`ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-white ${p.type === 'ferie' ? 'bg-green-600' : 'bg-blue-600'}`}>
                         {p.type === 'ferie' ? 'Férié (Payé)' : 'Vacances (0h)'}
                       </span>

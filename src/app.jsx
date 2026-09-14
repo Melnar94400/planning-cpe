@@ -15,12 +15,17 @@ import { useHistory } from './useHistory.js';
 // --- IMPORT DES MODALES ---
 import { 
   ModalPrint, ModalNewVersion, ModalPoste, ModalException, 
-  ModalParametres, ModalCreation, ModalBesoinMulti, ModalEditBesoin, ModalAgent 
+  ModalParametres, ModalCreation, ModalBesoinMulti, ModalEditBesoin, ModalAgent,
+  ModalConfirm // <-- Ne l'oublie pas dans l'import en haut !
 } from './Modals.jsx';
 
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [now, setNow] = useState(new Date());
+  // --- GESTIONNAIRE DE CONFIRMATION ---
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isDanger: true, confirmText: 'Confirmer' });
+  const requestConfirm = (options) => setConfirmDialog({ isOpen: true, isDanger: true, confirmText: 'Confirmer', ...options });
+  const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, isOpen: false }));
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
@@ -179,7 +184,15 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setModalPoste({ isOpen: false, id: null, nom: '', couleur: '#8B5CF6', qte: 1, slots: [] });
   };
 
-  const supprimerPoste = (id, e) => { e.stopPropagation(); setPostes(postes.filter(p => p.id !== id)); };
+  const supprimerPoste = (id, nom, e) => { 
+    if (e) e.stopPropagation(); 
+    requestConfirm({
+      title: 'Supprimer un poste',
+      message: `Voulez-vous vraiment supprimer le poste "${nom}" ?\nLes agents affectés dessus perdront leur étiquette.`,
+      confirmText: 'Supprimer',
+      onConfirm: () => setPostes(postes.filter(p => p.id !== id))
+    });
+  };
 
   const sonneriesMins = useMemo(() => sonneries.map(s => {
     const [h, m] = s.split(':').map(Number);
@@ -725,11 +738,17 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     event.target.value = '';
   };
 
-  const handleResetAll = async () => {
-    if (window.confirm("⚠️ ATTENTION ⚠️\n\nVoulez-vous vraiment TOUT effacer ? (Planning, Agents, Modèles, etc.)\n\nCette action est IRRÉVERSIBLE !")) {
-      await clearAppData();
-      window.location.reload();
-    }
+  const handleResetAll = () => {
+    requestConfirm({
+      title: '⚠️ Remise à zéro totale',
+      message: 'Voulez-vous vraiment TOUT effacer ? (Planning, Agents, Modèles, Périodes)\n\nCette action est IRRÉVERSIBLE !',
+      confirmText: 'Tout effacer',
+      isDanger: true,
+      onConfirm: async () => {
+        await clearAppData();
+        window.location.reload();
+      }
+    });
   };
 
   const handleSonneriesBlur = () => {
@@ -904,10 +923,15 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   };
   
   const supprimerAbsence = (id) => {
-    if (confirm("Supprimer cet enregistrement et restituer le planning de l'agent ?")) {
-      sauvegarderEtatPrecedent();
-      setAbsences(absences.filter(a => String(a.id) !== String(id).replace('abs_','')));
-    }
+    requestConfirm({
+      title: 'Supprimer cet événement',
+      message: "Voulez-vous annuler cet enregistrement et restituer les heures à l'agent ?",
+      confirmText: 'Supprimer',
+      onConfirm: () => {
+        sauvegarderEtatPrecedent();
+        setAbsences(absences.filter(a => String(a.id) !== String(id).replace('abs_','')));
+      }
+    });
   };
 
   const bilanAbsences = agents.map(ag => {
@@ -1047,7 +1071,19 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setModalAgent({ ...modalAgent, isOpen: false });
   };
 
-  const supprimerAgent = (id, n, e) => { e.stopPropagation(); if(confirm(`Supprimer l'agent ${n} ?`)) { setAgents(agents.filter(a => a.id !== id)); updateCurrentTemplate(currentTemplate.events.filter(e => e.extendedProps?.agentId !== id), null); if (agentActif === id) setAgentActif(null); } };
+  const supprimerAgent = (id, n, e) => { 
+    e.stopPropagation(); 
+    requestConfirm({
+      title: 'Supprimer un agent',
+      message: `Voulez-vous vraiment supprimer l'agent ${n} ?\nSes heures et affectations seront perdues.`,
+      confirmText: 'Supprimer',
+      onConfirm: () => {
+        setAgents(agents.filter(a => a.id !== id)); 
+        updateCurrentTemplate(currentTemplate.events.filter(evt => evt.extendedProps?.agentId !== id), null); 
+        if (agentActif === id) setAgentActif(null); 
+      }
+    });
+  };
 
   const gererClicJourAgent = (agentId, dateStr, hActuel, noteActuelle) => {
     setModalException({ isOpen: true, agentId, dateStr, h: formatHeureTableau(hActuel, true) || '0h00', note: noteActuelle || '' });
@@ -1109,6 +1145,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   return (
     <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
       {/* -------------------- MODALES -------------------- */}
+      <ModalConfirm dialog={confirmDialog} closeDialog={closeConfirm} t={t} />
+
       <ModalPrint modalPrint={modalPrint} setModalPrint={setModalPrint} modeImpression={modeImpression} setModeImpression={setModeImpression} setIsPrinting={setIsPrinting} t={t} />
       
       <ModalNewVersion modalNewVersion={modalNewVersion} setModalNewVersion={setModalNewVersion} validerCreationVersionModal={validerCreationVersionModal} t={t} />
@@ -1117,7 +1155,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       
       <ModalException modalException={modalException} setModalException={setModalException} validerExceptionJourModal={validerExceptionJourModal} supprimerExceptionJour={supprimerExceptionJour} t={t} />
       
-    <ModalParametres 
+      <ModalParametres 
         modalParametres={modalParametres} 
         setModalParametres={setModalParametres} 
         amplitude={amplitude} 
@@ -1142,7 +1180,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         baseYear={baseYear}
         t={t} 
       />
-      
+
       <ModalCreation modalCreation={modalCreation} setModalCreation={setModalCreation} validerCreationModal={validerCreationModal} formTypeEvent={formTypeEvent} setFormTypeEvent={setFormTypeEvent} formTypeAbsence={formTypeAbsence} setFormTypeAbsence={setFormTypeAbsence} formAbsImpact={formAbsImpact} setFormAbsImpact={setFormAbsImpact} formAgent={formAgent} setFormAgent={setFormAgent} formPoste={formPoste} setFormPoste={setFormPoste} formNote={formNote} setFormNote={setFormNote} agents={agents} postes={postes} posteActif={posteActif} t={t} vueActive={vueActive} supprimerAbsence={supprimerAbsence} applyAction={applyAction} />
       
       <ModalBesoinMulti modalBesoinMulti={modalBesoinMulti} setModalBesoinMulti={setModalBesoinMulti} validerBesoinMultiModal={validerBesoinMultiModal} postes={postes} t={t} />

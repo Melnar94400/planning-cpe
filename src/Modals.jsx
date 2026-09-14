@@ -768,3 +768,29 @@ export const ModalAgent = ({ modalAgent, setModalAgent, validerAgentModal, handl
     </div>
   );
 };
+
+// --- MODALE DE CONFIRMATION UNIVERSELLE ---
+export const ModalConfirm = ({ dialog, closeDialog, t }) => {
+  if (!dialog.isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[999999] flex items-center justify-center p-4 no-print animate-in fade-in duration-200">
+      <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 border ${t.borderLight}`}>
+        <div className={`p-5 flex flex-col gap-3`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${dialog.isDanger ? 'bg-red-500/20 text-red-500' : 'bg-blue-500/20 text-blue-500'}`}>
+              {dialog.isDanger ? '⚠️' : '❓'}
+            </div>
+            <h3 className={`font-bold text-lg ${t.header}`}>{dialog.title}</h3>
+          </div>
+          <p className={`text-sm ${t.textMenuMuted} whitespace-pre-line ml-13 leading-relaxed`}>{dialog.message}</p>
+        </div>
+        <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
+          <button onClick={closeDialog} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium text-sm transition-opacity">Annuler</button>
+          <button onClick={() => { dialog.onConfirm(); closeDialog(); }} className={`px-5 py-2 rounded font-bold text-sm shadow text-white transition-colors ${dialog.isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+            {dialog.confirmText || 'Confirmer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
