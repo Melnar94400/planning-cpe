@@ -8,9 +8,11 @@ import {
   detecterChevauchements, getActiveContract, calculerContratProratise
 } from './utils.js';
 import { SetupWizard } from './SetupWizard.jsx';
-import { PrintTimeGridView, PrintDailyView, PrintAgentYearlyView, PrintTemplateView } from './PrintViews.jsx';
+import { PrintDailyView, PrintTimeGridView, PrintTemplateView, PrintAgentYearlyView, PrintIndividualWeeklyView } from './PrintViews';
 import { TimelineTrack, TimelineEvent } from './TimelineComponents.jsx';
 import { useHistory } from './useHistory.js';
+
+
 
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
@@ -270,7 +272,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const [printFilter, setPrintFilter] = useState({ type: 'all', id: null });
   const [isPrinting, setIsPrinting] = useState(false);
-
+  const [modeImpression, setModeImpression] = useState('global');
+  
   const [modeEdition, setModeEdition] = useState('agents'); 
   const [formBesoinQte, setFormBesoinQte] = useState(1);
   const [agentActif, setAgentActif] = useState(null);
@@ -1160,11 +1163,22 @@ useEffect(() => {
   return (
     <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
       {/* -------------------- MODALES -------------------- */}
-      {modalPrint.isOpen && (
+{modalPrint.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
           <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
             <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">🖨️ Paramètres d'impression</h3></div>
             <div className="p-5 space-y-4">
+              
+              {(modalPrint.type === 'planning' || modalPrint.type === 'template') && (
+                <div>
+                  <p className="text-sm font-bold mb-2">Que voulez-vous imprimer ?</p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setModeImpression('global')} className={`flex-1 p-2 border rounded-lg text-xs font-bold transition-all ${modeImpression === 'global' ? 'bg-blue-500 border-blue-600 text-white shadow-sm' : 'bg-transparent border-black/20 text-gray-500 hover:bg-black/5 dark:hover:bg-white/5'}`}>🌍 Équipe complète</button>
+                    <button type="button" onClick={() => setModeImpression('individuel')} className={`flex-1 p-2 border rounded-lg text-xs font-bold transition-all ${modeImpression === 'individuel' ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-transparent border-black/20 text-gray-500 hover:bg-black/5 dark:hover:bg-white/5'}`}>👤 Fiches Individuelles</button>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p className="text-sm font-bold mb-2">Format de la page :</p>
                 <select value={modalPrint.format} onChange={e => setModalPrint({...modalPrint, format: e.target.value})} className="w-full border border-black/10 dark:border-white/10 rounded p-2 text-sm bg-transparent">
@@ -1784,9 +1798,8 @@ useEffect(() => {
 
               <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
               <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Paramètres">⚙️</button>
-              <button onClick={declencherImpression} className={`${t.sidebarIconBtn} p-2 rounded text-xs font-bold border transition-colors flex-1 flex justify-center`} title="Imprimer">🖨️</button>
-              <button onClick={handleResetAll} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm" title="Tout réinitialiser">🗑️</button>
-            </div>
+              <button onClick={() => setModalPrint({ isOpen: true, type: vueActive, jours: [1, 2, 3, 4, 5], format: 'A4' })} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Imprimer le planning">🖨️</button>
+              <button onClick={handleResetAll} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm hover:scale-105 transition-transform" title="Tout réinitialiser">🗑️</button>            </div>
 
             <div className="flex flex-col bg-black/10 rounded p-2 shadow-inner gap-1 mt-2">
               <button onClick={() => setVueActive('template')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
@@ -2126,10 +2139,20 @@ useEffect(() => {
           );
         })()}
 
-        {/* 2. VUE MODELE (SEMAINE TYPE) */}
+      {/* 2. VUE MODELE (SEMAINE TYPE) */}
         {vueActive === 'template' && (() => {
           if (isPrinting) {
-            return (
+            return modeImpression === 'individuel' ? (
+              <PrintIndividualWeeklyView 
+                events={currentTemplate?.events || []} 
+                agents={agents} 
+                limitesHeures={limitesHeures} 
+                amplitude={amplitude} 
+                titre={`Modèle : ${currentTemplate?.nom}`} 
+                joursAImprimer={modalPrint.jours} 
+                sonneries={sonneries} 
+              />
+            ) : (
               <PrintTemplateView 
                 template={currentTemplate} 
                 joursAImprimer={modalPrint.jours} 
@@ -2141,8 +2164,7 @@ useEffect(() => {
                 formatHeureTableau={formatHeureTableau} 
               />
             );
-          }
-          const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
+          }          const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
           const templateDateObj = new Date(currentTemplate?.dateDebut || baseYear + '-09-01');
           templateDateObj.setDate(templateDateObj.getDate() + (jourTemplate - 1));
           const pad = n => String(n).padStart(2, '0');
@@ -2389,21 +2411,32 @@ useEffect(() => {
                 </div>
               </div>
               
-              <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
+<div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
                 {isPrinting ? (
-                  <PrintTimeGridView 
-                    events={displayEvents} 
-                    agents={agents} 
-                    limitesHeures={limitesHeures} 
-                    amplitude={amplitude} 
-                    titre={`Planning Hebdo du ${activeMonday}`} 
-                    joursAImprimer={modalPrint.jours} 
-                    format={modalPrint.format} 
-                    sonneries={sonneries} 
-                  />
+                  modeImpression === 'individuel' ? (
+                    <PrintIndividualWeeklyView 
+                      events={displayEvents} 
+                      agents={agents} 
+                      limitesHeures={limitesHeures} 
+                      amplitude={amplitude} 
+                      titre={`Semaine du ${activeMonday}`} 
+                      joursAImprimer={modalPrint.jours} 
+                      sonneries={sonneries} 
+                    />
                   ) : (
-                  <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
-                    <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
+                    <PrintTimeGridView 
+                      events={displayEvents} 
+                      agents={agents} 
+                      limitesHeures={limitesHeures} 
+                      amplitude={amplitude} 
+                      titre={`Planning Hebdo du ${activeMonday}`} 
+                      joursAImprimer={modalPrint.jours} 
+                      format={modalPrint.format} 
+                      sonneries={sonneries} 
+                    />
+                  )
+                ) : (
+                  <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>                    <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
                       <div className="min-w-[900px] flex-1 flex flex-col relative">
                         <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
                           {gridTicks?.map(tick => (
