@@ -16,10 +16,13 @@ import { useHistory } from './useHistory.js';
 import { 
   ModalPrint, ModalNewVersion, ModalPoste, ModalException, 
   ModalParametres, ModalCreation, ModalBesoinMulti, ModalEditBesoin, ModalAgent,
-  ModalConfirm // <-- Ne l'oublie pas dans l'import en haut !
+  ModalConfirm, ModalBasculement
 } from './Modals.jsx';
 
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
+  
+  const [modalBasculement, setModalBasculement] = useState(false);
+
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [now, setNow] = useState(new Date());
   // --- GESTIONNAIRE DE CONFIRMATION ---
@@ -425,10 +428,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     }); 
   };
 
-  const targetMonday = (vueActive === 'template') 
-    ? getMondayStr(currentTemplate?.dateDebut || new Date())
+const targetMonday = (vueActive === 'template') 
+    ? (currentTemplate?.dateDebut || getMondayStr(new Date())) 
     : (currentViewMonday || getMondayStr(new Date()));
-
+    
   let currentRealEvents = [];
   let currentBesoins = [];
 
@@ -1179,6 +1182,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       <ModalParametres 
         modalParametres={modalParametres} 
         setModalParametres={setModalParametres} 
+        setModalBasculement={setModalBasculement}
         amplitude={amplitude} 
         setAmplitude={setAmplitude} 
         sonneriesText={sonneriesText} 
@@ -1200,6 +1204,17 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         setPeriodesFeriees={setPeriodesFeriees}
         baseYear={baseYear}
         t={t} 
+      />
+
+      <ModalBasculement 
+        modalBasculement={modalBasculement} 
+        setModalBasculement={setModalBasculement} 
+        baseYear={baseYear} 
+        postes={postes} 
+        agents={agents} 
+        currentTemplate={currentTemplate} // <-- On passe tout le modèle actif (besoins ET affectations)
+        t={t} 
+        onComplete={() => window.location.reload()} 
       />
 
       <ModalCreation modalCreation={modalCreation} setModalCreation={setModalCreation} validerCreationModal={validerCreationModal} formTypeEvent={formTypeEvent} setFormTypeEvent={setFormTypeEvent} formTypeAbsence={formTypeAbsence} setFormTypeAbsence={setFormTypeAbsence} formAbsImpact={formAbsImpact} setFormAbsImpact={setFormAbsImpact} formAgent={formAgent} setFormAgent={setFormAgent} formPoste={formPoste} setFormPoste={setFormPoste} formNote={formNote} setFormNote={setFormNote} agents={agents} postes={postes} posteActif={posteActif} t={t} vueActive={vueActive} supprimerAbsence={supprimerAbsence} applyAction={applyAction} />
@@ -1631,8 +1646,13 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
             );
           }
           const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
-          const templateDateObj = new Date(currentTemplate?.dateDebut || baseYear + '-09-01');
-          templateDateObj.setDate(templateDateObj.getDate() + (jourTemplate - 1));
+          const templateDateObj = (() => {
+            const dStr = currentTemplate?.dateDebut || `${baseYear}-09-01`;
+            const [y, m, d] = dStr.split('T')[0].split('-').map(Number);
+            const dateObj = new Date(y, m - 1, d);
+            dateObj.setDate(dateObj.getDate() + (jourTemplate - 1));
+            return dateObj;
+          })();
           const pad = n => String(n).padStart(2, '0');
           const currentTemplateDateStr = `${templateDateObj.getFullYear()}-${pad(templateDateObj.getMonth()+1)}-${pad(templateDateObj.getDate())}`;
 

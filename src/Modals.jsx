@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
+import { 
   THEMES, getContrastYIQ, extractTimeStr, parseHeureSaisie,
   calculerContratProratise, calculerContratBetty, formatHeureMinutes,
   getJoursFerie
-} from './utils.js';
+} from './utils';
+import { saveAppData } from './storage.js';
 
 const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
 
@@ -238,7 +239,7 @@ export const ModalException = ({ modalException, setModalException, validerExcep
 };
 
 export const ModalParametres = ({
-  modalParametres, setModalParametres, amplitude, setAmplitude, sonneriesText, setSonneriesText,
+  modalParametres, setModalParametres, setModalBasculement, amplitude, setAmplitude, sonneriesText, setSonneriesText,
   handleSonneriesBlur, formPeriode, setFormPeriode, ajouterPeriodeFeriee, periodesFeriees,
   supprimerPeriodeFeriee, isDarkMode, toggleDarkMode, themeId, changeTheme, customColors, updateCustomColor, 
   handleExport, handleImport, setPeriodesFeriees, baseYear, t
@@ -455,6 +456,9 @@ export const ModalParametres = ({
                   <button onClick={() => document.getElementById('import-settings').click()} className={`w-full border ${t.borderLight} hover:${t.bgLight} py-2 rounded text-sm font-bold transition-colors ${t.header} flex items-center justify-center gap-2`}>
                     ⬆️ Restaurer (Importer JSON)
                   </button>
+                  <button onClick={() => setModalBasculement(true)} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 rounded text-sm font-bold shadow flex items-center justify-center gap-2 transition-colors">
+  📁 Préparer la rentrée suivante (Bascule)
+</button>
                 </div>
               </div>
 
@@ -777,6 +781,244 @@ export const ModalConfirm = ({ dialog, closeDialog, t }) => {
           <button onClick={closeDialog} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium text-sm transition-opacity">Annuler</button>
           <button onClick={() => { dialog.onConfirm(); closeDialog(); }} className={`px-5 py-2 rounded font-bold text-sm shadow text-white transition-colors ${dialog.isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
             {dialog.confirmText || 'Confirmer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// --- ASSISTANT DE BASCULE D'ANNÉE ---
+export const ModalBasculement = ({ modalBasculement, setModalBasculement, baseYear, postes, agents, currentTemplate, t, onComplete }) => {
+  const [nouvelleAnnee, setNouvelleAnnee] = useState(baseYear + 1);
+  const [zone, setZone] = useState("Zone C");
+  const [garderPostes, setGarderPostes] = useState(true);
+    const [garderAgents, setGarderAgents] = useState(true); // <-- Correctement activé par défaut pour garder les agents et leurs affectations
+  const [garderTemplateActuel, setGarderTemplateActuel] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  if (!modalBasculement) return null;
+
+  // Helper pour parser une date YYYY-MM-DD sans bug de fuseau horaire UTC
+  const parseLocalDate = (dateStr) => {
+    if (!dateStr) return new Date();
+    const [y, m, d] = dateStr.split('T')[0].split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  const formatDateLocal = (d) => {
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  const getMondayOfDate = (d) => {
+    const day = d.getDay() || 7;
+    const monday = new Date(d);
+    monday.setDate(monday.getDate() - (day - 1));
+    return monday;
+  };
+
+  const executerBasculement = async () => {
+    if (!window.confirm(`Attention : Vous allez basculer vers l'année scolaire ${nouvelleAnnee}-${nouvelleAnnee+1}.\n\nCette action va réinitialiser les plannings et absences tout en conservant vos structures. Pensez à faire un export JSON de sauvegarde avant par sécurité !`)) {
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      let nouvellesPeriodes = [];
+      const year1 = nouvelleAnnee;
+      const year2 = nouvelleAnnee + 1;
+
+      // 1. Fériés de la nouvelle année
+      const feriesY1 = getJoursFerie(year1).filter(f => f.date >= `${year1}-08-15`);
+      const feriesY2 = getJoursFerie(year2).filter(f => f.date <= `${year2}-08-15`);
+      nouvellesPeriodes = [...feriesY1, ...feriesY2].map(f => ({ 
+        id: `ferie_${Date.now()}_${Math.random()}`, nom: f.nom, debut: f.date, fin: f.date, type: 'ferie'
+      }));
+
+      nouvellesPeriodes.push({
+        id: `vac_pre_${Date.now()}`, nom: "Vacances d'Été (Pré-rentrée)", debut: `${year1}-07-01`, fin: `${year1}-08-31`, type: 'vacances'
+      });
+
+      // 2. Appel API Éduc Nat pour les vacances
+      try {
+        const zoneFormattee = zone.replace(' ', '+');
+        const urlApi = `https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-calendrier-scolaire/records?limit=100&refine=zones%3A${zoneFormattee}&refine=annee_scolaire%3A${year1}-${year2}`;
+        const res = await fetch(urlApi);
+        const data = await res.json();
+        
+        let vacs = (data.results || [])
+          .filter(r => !r.population || !r.population.toLowerCase().includes("enseignant"))
+          .filter(r => r.description && r.description.toLowerCase().includes("vacances"))
+          .map(r => {
+             const startD = parseLocalDate(r.start_date);
+             if (startD.getDay() === 5) { startD.setDate(startD.getDate() + 1); }
+             const endD = parseLocalDate(r.end_date); 
+             endD.setDate(endD.getDate() - 1);
+             return { 
+               id: `vac_${Date.now()}_${Math.random()}`, nom: r.description, debut: formatDateLocal(startD), fin: formatDateLocal(endD), type: 'vacances'
+             };
+          });
+        vacs = Array.from(new Map(vacs.map(item => [item.debut, item])).values());
+        nouvellesPeriodes = [...nouvellesPeriodes, ...vacs];
+      } catch (err) {
+        console.error("Erreur API vacances", err);
+      }
+
+      // 3. Calcul du premier lundi de septembre de la nouvelle rentrée en heure locale
+      const newBaseDate = getMondayOfDate(new Date(year1, 8, 1));
+      const startStr = formatDateLocal(newBaseDate);
+
+      const currentPostes = garderPostes ? postes : [];
+
+      // Fonction utilitaire pour reporter proprement les éléments sur la nouvelle semaine de rentrée
+      const shiftItemsToNewWeek = (itemsList) => {
+        if (!itemsList || itemsList.length === 0) return [];
+        return itemsList.map(item => {
+          if (!item.start) return item;
+          const [datePart, timePart] = item.start.split('T');
+          const [endDatePart, endTimePart] = (item.end || '').split('T');
+          
+          if (!datePart) return item;
+
+          const dateObj = parseLocalDate(datePart);
+          const jsDay = dateObj.getDay();
+          const dayIndex = jsDay === 0 ? 6 : jsDay - 1; // 0 = Lundi, 4 = Vendredi
+
+          const newDateForDay = parseLocalDate(startStr);
+          newDateForDay.setDate(newDateForDay.getDate() + dayIndex);
+          const shiftedDatePart = formatDateLocal(newDateForDay);
+
+          let shiftedEndDatePart = shiftedDatePart;
+          if (endDatePart) {
+            const endDateObj = parseLocalDate(endDatePart);
+            const endJsDay = endDateObj.getDay();
+            const endDayIndex = endJsDay === 0 ? 6 : endJsDay - 1;
+            const newEndDateForDay = parseLocalDate(startStr);
+            newEndDateForDay.setDate(newEndDateForDay.getDate() + endDayIndex);
+            shiftedEndDatePart = formatDateLocal(newEndDateForDay);
+          }
+
+          return {
+            ...item,
+            id: String(Date.now() + Math.random()),
+            start: timePart ? `${shiftedDatePart}T${timePart}` : shiftedDatePart,
+            end: endTimePart ? `${shiftedEndDatePart}T${endTimePart}` : (item.end ? `${shiftedEndDatePart}T00:00:00` : undefined)
+          };
+        });
+      };
+
+      let finalBesoins = [];
+      let finalEvents = [];
+
+      if (garderTemplateActuel && currentTemplate) {
+        finalBesoins = shiftItemsToNewWeek(currentTemplate.besoins);
+        finalEvents = shiftItemsToNewWeek(currentTemplate.events);
+      } else {
+        currentPostes.forEach(p => {
+          if (p.slots && p.slots.length > 0) {
+            p.slots.forEach(slot => {
+              if (slot.start && slot.end) {
+                [1, 2, 3, 4, 5].forEach(dayIndex => {
+                  if (slot.days[dayIndex]) {
+                    const d = new Date(newBaseDate);
+                    d.setDate(d.getDate() + dayIndex - 1);
+                    const dateStr = formatDateLocal(d);
+                    finalBesoins.push({
+                      id: String(Date.now() + Math.random()),
+                      start: `${dateStr}T${slot.start}:00`,
+                      end: `${dateStr}T${slot.end}:00`,
+                      extendedProps: { posteId: p.id, posteNom: p.nom, qte: Number(p.qte) || 1 }
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      }
+
+      const templateVersions = [{ 
+        id: 1, 
+        nom: currentTemplate?.nom || "Modèle Rentrée", 
+        dateDebut: startStr, 
+        events: finalEvents, 
+        besoins: finalBesoins, 
+        statut: 'brouillon' 
+      }];
+
+    const retainedAgents = garderAgents ? agents.map(a => ({ ...a })) : [];
+
+      await saveAppData({
+        agents: retainedAgents,
+        postes: currentPostes,
+        periodesFeriees: nouvellesPeriodes.sort((a,b) => a.debut.localeCompare(b.debut)),
+        dotation: 0,
+        templateVersions,
+        customWeeks: {},
+        exceptions: {},
+        absences: [],
+        amplitude: { start: '07:30', end: '18:00' },
+        sonneries: ['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40']
+      });
+
+      alert("Basculement réussi vers la nouvelle année scolaire !");
+      setModalBasculement(false);
+      if (onComplete) onComplete();
+    } catch (e) {
+      alert("Erreur lors du basculement.");
+      console.error(e);
+    }
+    setIsProcessing(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-4 no-print">
+      <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border ${t.borderLight}`}>
+        <div className={`${t.headerBg} ${t.headerText} p-5 flex justify-between items-center`}>
+          <h3 className="font-bold text-xl">📁 Assistant de Bascule d'Année</h3>
+          <button onClick={() => setModalBasculement(false)} className="hover:opacity-50 font-bold text-xl">✖</button>
+        </div>
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-gray-500 leading-relaxed">
+            Cet assistant prépare votre établissement pour la prochaine rentrée scolaire en conservant vos structures et votre semaine type actuelle (avec ses affectations), tout en réinitialisant les plannings de l'année passée.
+          </p>
+
+          <div className={`p-4 rounded-xl border ${t.borderLight} ${t.bgLight} space-y-3`}>
+            <div>
+              <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Année de la nouvelle rentrée (Septembre)</label>
+              <input type="number" value={nouvelleAnnee} onChange={e => setNouvelleAnnee(Number(e.target.value))} className={`w-full border ${t.borderLight} rounded p-2 text-sm font-bold bg-transparent`} />
+            </div>
+            <div>
+              <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Zone Académique</label>
+              <select value={zone} onChange={e => setZone(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 text-sm font-bold bg-transparent`}>
+                <option value="Zone A">Zone A</option><option value="Zone B">Zone B</option><option value="Zone C">Zone C</option><option value="Corse">Corse</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-2.5 pt-2">
+            <label className={`flex items-center gap-2 text-sm font-bold cursor-pointer ${t.header}`}>
+              <input type="checkbox" checked={garderPostes} onChange={e => setGarderPostes(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+              Conserver les postes et leurs grilles ({postes.length} postes)
+            </label>
+            <label className={`flex items-center gap-2 text-sm font-bold cursor-pointer ${t.header}`}>
+              <input type="checkbox" checked={garderTemplateActuel} onChange={e => setGarderTemplateActuel(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+              Conserver et reporter la semaine type actuelle ({currentTemplate?.events?.length || 0} affectations, {currentTemplate?.besoins?.length || 0} besoins)
+            </label>
+            <label className={`flex items-center gap-2 text-sm font-bold cursor-pointer ${t.header}`}>
+              <input type="checkbox" checked={garderAgents} onChange={e => setGarderAgents(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+              Conserver la liste des agents ({agents.length} agents)
+            </label>
+            <p className="text-[11px] text-orange-500 italic mt-1">⚠️ Pensez à faire un export JSON de sauvegarde dans les paramètres avant de lancer cette action !</p>
+          </div>
+        </div>
+
+        <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
+          <button onClick={() => setModalBasculement(false)} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium text-sm">Annuler</button>
+          <button onClick={executerBasculement} disabled={isProcessing} className={`px-5 py-2 ${t.btnPrimary} rounded font-bold text-sm shadow disabled:opacity-50`}>
+            {isProcessing ? 'Préparation...' : 'Lancer la bascule 🚀'}
           </button>
         </div>
       </div>
