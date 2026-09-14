@@ -4,14 +4,12 @@ import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  base: '/planning-cpe/', //
   plugins: [
     react(),
     tailwindcss(),
-    VitePWA({
+VitePWA({
       registerType: 'autoUpdate',
-      devOptions: {
-        enabled: true // <-- C'est cette ligne qu'il faut ajouter
-      },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
         name: 'Planning CPE',
@@ -20,21 +18,21 @@ export default defineConfig({
         theme_color: '#3B82F6',
         background_color: '#0b0f19',
         display: 'standalone',
-        scope: '/',
-        start_url: '/',
+        scope: '/planning-cpe/',
+        start_url: '/planning-cpe/',
         icons: [
           {
-            src: '/pwa-192x192.png',
+            src: 'pwa-192x192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/pwa-512x512.png',
+            src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: '/pwa-512x512.png',
+            src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
