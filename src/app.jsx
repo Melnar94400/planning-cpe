@@ -2753,7 +2753,7 @@ useEffect(() => {
           </div>
           );
         })()}
-        
+
         {/* 6. VUE CALENDRIER ANNUEL AGENT */}
         {vueActive === 'agent' && agentConsulte && (
           <div className={`flex-1 flex flex-col h-full ${t.bgMain} print:h-auto print:bg-white`}>
@@ -2796,8 +2796,38 @@ useEffect(() => {
             </div>
             <div className={`flex-1 overflow-auto p-4 ${t.bgMain} print:bg-white print:hidden`}>
               <table className="w-full text-center border-collapse text-xs table-fixed min-w-[1200px] shadow-sm">
-                <thead><tr>{anneeScolaire.map((mois, i) => (<th key={i} className={`border ${t.borderLight} ${t.headerBg} ${t.headerText} py-1.5 uppercase tracking-wider`}>{mois.nom}</th>))}</tr></thead>
-                <tbody>
+<thead>
+                  <tr>
+                    {anneeScolaire.map((mois, i) => {
+                      // Calcul dynamique du total des heures pour ce mois précis
+                      const daysInMonth = new Date(mois.y, mois.m + 1, 0).getDate();
+                      let totalMensuel = 0;
+                      
+                      for (let jourNum = 1; jourNum <= daysInMonth; jourNum++) {
+                        const dateStr = `${mois.y}-${String(mois.m+1).padStart(2,'0')}-${String(jourNum).padStart(2,'0')}`;
+                        const exc = exceptions[`${agentConsulte}_${dateStr}`];
+                        let hFinal = exc ? exc.h : getHeuresTheoriquesJour(agentConsulte, dateStr);
+                        
+                        const absDuJour = absences.filter(a => a.agentId === agentConsulte && a.start.startsWith(dateStr));
+                        const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + getHeuresAbsence(a), 0);
+                        
+                        totalMensuel += Math.max(0, hFinal - hDeduct);
+                      }
+
+                      return (
+                        <th key={i} className={`border ${t.borderLight} ${t.headerBg} ${t.headerText} py-1.5 uppercase tracking-wider`}>
+                          <div className="flex flex-col items-center justify-center gap-0.5">
+                            <span>{mois.nom}</span>
+                            <span className="text-[10px] font-mono bg-black/10 dark:bg-white/10 px-2 py-0.5 rounded shadow-inner tracking-normal opacity-90">
+                              {formatHeureTableau(totalMensuel, true)}
+                            </span>
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                  <tbody>
                   {Array.from({ length: 31 }, (_, i) => i + 1).map(jourNum => (
                     <tr key={jourNum}>
                       {anneeScolaire.map((mois, idx) => {
