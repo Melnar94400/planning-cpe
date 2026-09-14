@@ -1,249 +1,193 @@
 import React from 'react';
-import { generateGrid, getContrastYIQ } from './utils.js';
+import { generateGrid, getContrastYIQ } from './utils';
 
-export const PrintTimeGridView = ({ events, titre, sonneries = [], limitesHeures = { baseMins: 460, span: 620 }, amplitude = { start: '07:30', end: '18:00' }, agents = [], joursAImprimer = [1, 2, 3, 4, 5], format = 'A4' }) => {
-  const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
-  const nomsJours = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+// Force l'impression des couleurs et la gestion propre des hauteurs de pages
+const printExact = { WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' };
 
+// --- HELPERS COMMUNS POUR L'IMPRESSION ---
+
+const getAmplitudeStr = (eventsList) => {
+  const spanEvents = eventsList.filter(e => !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin);
+  if (spanEvents.length === 0) return "";
+  let min = Infinity, max = -Infinity;
+  spanEvents.forEach(e => {
+    const d1 = new Date(e.start), d2 = new Date(e.end);
+    const startM = d1.getHours() * 60 + d1.getMinutes();
+    const endM = d2.getHours() * 60 + d2.getMinutes();
+    if (startM < min) min = startM;
+    if (endM > max) max = endM;
+  });
+  const fmt = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+  return `${fmt(min)}-${fmt(max)}`;
+};
+
+const renderPrintGrid = (gridLines, gridLabelsDaily, gridTicks) => (
+  <>
+    <div className="flex border-b border-black/20 bg-gray-100 shrink-0 ml-24 relative h-6 items-center" style={printExact}>
+      {gridTicks?.map(tick => (
+        <div key={tick.m} className="absolute bottom-0 w-[1px] h-1.5 bg-black/20" style={{ left: `${tick.topPercent}%` }}></div>
+      ))}
+      {gridLabelsDaily.map(lbl => (
+        <div key={lbl.timeStr} className="absolute text-[8px] font-black text-black top-1/2 -translate-y-1/2" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
+          {lbl.timeStr}
+        </div>
+      ))}
+    </div>
+    <div className="absolute inset-0 left-24 pointer-events-none z-0 mt-6">
+      {gridLines.map(line => (
+        <div key={line.timeStr} className="absolute top-0 bottom-0 border-black/20 opacity-50" style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid currentColor' : '1px dashed currentColor' }}></div>
+      ))}
+    </div>
+  </>
+);
+
+const renderPrintEvent = (evt, limitesHeures, isBesoinsMode) => {
+  const startD = new Date(evt.start); const endD = new Date(evt.end);
+  const startMins = startD.getHours() * 60 + startD.getMinutes();
+  const endMins = endD.getHours() * 60 + endD.getMinutes();
+  const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
+  const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
+  const dur = endMins - startMins;
+
+  let bgColor = evt.extendedProps?.posteCouleur || evt.backgroundColor || '#3b82f6';
+  let title = evt.extendedProps?.posteNom || 'Poste';
+  
+  if (isBesoinsMode) {
+    const isSous = evt.extendedProps?.isSousEffectif;
+    bgColor = isSous ? '#dc2626' : '#16a34a';
+    title = `${evt.extendedProps?.minCount} / ${evt.extendedProps?.qte}`;
+  } else if (evt.extendedProps?.isAbsence) {
+    const typeAbs = evt.extendedProps.typeAbsence;
+    bgColor = typeAbs === 'absence' ? '#ef4444' : typeAbs === 'retard' ? '#f59e0b' : '#10b981';
+    title = typeAbs === 'absence' ? 'ABS' : typeAbs === 'retard' ? 'RET' : 'SUPP';
+  }
+
+  const textColor = getContrastYIQ(bgColor);
+  const isMicro = dur <= 25; 
+  
+  const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+  const timeStr = `${formatTime(startMins)}-${formatTime(endMins)}`;
+  
   return (
-    <div className="w-full bg-white text-black print:bg-white print:text-black">
-      <style>{`
-        @media print {
-          @page { size: ${format} landscape; margin: 4mm; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
-      `}</style>
-      
-      {joursAImprimer.map((jourIndex, idx) => {
-        const isLast = idx === joursAImprimer.length - 1;
-        const dayEvents = events.filter(e => new Date(e.start).getDay() === jourIndex);
-        const dateExample = dayEvents.length > 0 ? new Date(dayEvents[0].start) : null;
-        const dateStr = dateExample ? dateExample.toLocaleDateString('fr-FR') : '';
-
-        return (
-          <div 
-            key={jourIndex} 
-            className="w-full relative bg-white box-border flex flex-col"
-            style={{ 
-              height: format === 'A3' ? '287mm' : '202mm', 
-              maxHeight: format === 'A3' ? '287mm' : '202mm',
-              pageBreakAfter: isLast ? 'auto' : 'always', 
-              breakAfter: isLast ? 'auto' : 'page',
-              overflow: 'hidden'
-            }}
-          >
-            <div className="flex justify-between items-center mb-1.5 pb-1 border-b-2 border-black shrink-0 px-2">
-              <h2 className="text-base font-black uppercase">
-                {nomsJours[jourIndex]} {dateStr}
-              </h2>
-              <div className="text-[11px] font-bold opacity-70">{titre} - Imprimé le {new Date().toLocaleDateString('fr-FR')}</div>
-            </div>
-
-            <div className="flex-1 flex flex-col relative border-2 border-black rounded-lg overflow-hidden bg-white">
-              <div className="flex border-b-2 border-black bg-gray-100 shrink-0 ml-28 relative h-7 items-center">
-                {gridTicks?.map(tick => (
-                  <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/40" style={{ left: `${tick.topPercent}%` }}></div>
-                ))}
-                {gridLabelsDaily.map(lbl => (
-                  <div key={lbl.timeStr} className="absolute text-[8px] font-black text-black top-1/2 -translate-y-1/2" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
-                    {lbl.timeStr}
-                  </div>
-                ))}
-              </div>
-              
-              <div className="flex-1 relative z-10 flex flex-col bg-white overflow-hidden">
-                <div className="absolute inset-0 left-28 pointer-events-none z-0">
-                  {gridLines.map(line => (
-                    <div key={line.timeStr} className="absolute top-0 bottom-0 border-black opacity-20" style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid black' : '1px dashed black' }}></div>
-                  ))}
-                </div>
-
-                {agents.map(agent => {
-                  const agentEvents = dayEvents.filter(e => e.extendedProps?.agentId === agent.id);
-                  
-                  return (
-                    <div key={agent.id} className="flex border-b border-black/20 flex-1 relative min-h-0">
-                      <div className="w-28 shrink-0 flex items-center justify-end p-1.5 border-r-2 border-black z-10 bg-gray-50 overflow-hidden">
-                        <span className="text-xs font-black text-right leading-tight text-black truncate w-full">{agent.nom}</span>
-                      </div>
-                      
-                      <div className="flex-1 relative">
-                        {agentEvents.map(evt => {
-                          const startD = new Date(evt.start); 
-                          const endD = new Date(evt.end);
-                          const startMins = startD.getHours() * 60 + startD.getMinutes(); 
-                          const endMins = endD.getHours() * 60 + endD.getMinutes();
-                          const durationMins = endMins - startMins;
-                          
-                          const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                          const width = Math.min(100 - left, (durationMins / limitesHeures.span) * 100);
-                          
-                          const isMicro = durationMins <= 15;
-                          const isShort = durationMins > 15 && durationMins <= 45;
-                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                          
-                          const isAbs = evt.extendedProps?.isAbsence;
-                          const couleurFond = isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? '#ef4444' : '#f59e0b') : (evt.extendedProps?.posteCouleur || evt.backgroundColor || '#3b82f6');
-                          const couleurTexte = getContrastYIQ(couleurFond);
-                          const texte = isAbs ? (evt.extendedProps?.typeAbsence === 'absence' ? 'ABS' : 'RETARD') : evt.extendedProps?.posteNom;
-
-                          return (
-                            <div 
-                              key={evt.id}
-                              className="absolute top-0.5 bottom-0.5 rounded shadow-xs text-[9px] flex flex-col justify-center px-0.5 border border-black/40 overflow-hidden"
-                              style={{ 
-                                left: `${left}%`, 
-                                width: `${width}%`, 
-                                backgroundColor: couleurFond, 
-                                color: couleurTexte,
-                                WebkitPrintColorAdjust: 'exact', 
-                                printColorAdjust: 'exact' 
-                              }}
-                            >
-                              <div className={`w-full h-full flex overflow-hidden ${isMicro || isShort ? 'items-center justify-center' : 'flex-col items-center justify-center'}`}>
-                                {isMicro || isShort ? (
-                                  <span className="font-bold uppercase text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: isMicro ? '7px' : '8px', whiteSpace: 'nowrap' }}>
-                                    {texte}
-                                  </span>
-                                ) : (
-                                  <>
-                                    <span className="font-bold truncate leading-none text-[9px] w-full text-center">{texte}</span>
-                                    <span className="opacity-90 font-mono truncate mt-0.5 text-[7px] w-full text-center">{formatTime(startMins)}-{formatTime(endMins)}</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+    <div key={evt.id} className="absolute top-[2px] bottom-[2px] rounded shadow-sm flex flex-col justify-center border border-black/30 overflow-hidden"
+         style={{ left: `${left}%`, width: `${width}%`, backgroundColor: bgColor, color: textColor, ...printExact }}>
+      {isMicro ? (
+        <div className="absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden">
+          <div className="flex items-center justify-center gap-1 font-bold text-[6px] uppercase leading-none" 
+               style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', whiteSpace: 'nowrap' }}>
+            <span>{title}</span>
+            <span className="font-mono font-normal opacity-90 text-[5.5px] lowercase">{timeStr}</span>
           </div>
-        );
-      })}
+        </div>
+      ) : (
+        <>
+          <span className="font-bold truncate text-center leading-none text-[8px] w-full px-0.5">{title}</span>
+          <span className="opacity-90 font-mono truncate text-center text-[6px] mt-0.5 w-full px-0.5">{timeStr}</span>
+        </>
+      )}
     </div>
   );
 };
 
-export const PrintTemplateView = ({ template, joursAImprimer = [1, 2, 3, 4, 5], agents, limitesHeures, sonneries, amplitude, formatHeureTableau, format = 'A4' }) => {
+// --- VUES D'IMPRESSION ---
+
+export const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absences, sonneries, limitesHeures, postes, getMondayStr, amplitude }) => {
   const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
-  const nomsJours = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+  const allEvents = getEventsForWeek(getMondayStr(jourConsulte));
 
   return (
-    <div className="w-full bg-white print:bg-white text-black print:text-black">
-      <style>{`
-        @media print {
-          @page { size: ${format} landscape; margin: 4mm; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
-      `}</style>
+    // FIX : La page s'étire à 100vh (hauteur complète d'une feuille A4)
+    <div className="w-full bg-white flex flex-col print:overflow-hidden print:mb-0 mb-8" style={{ ...printExact, height: '99vh', minHeight: '100vh' }}>
+      <div className="text-center font-bold text-xl mb-4 py-2 border-b-2 border-black">Planning Quotidien - {jourConsulte}</div>
+      <div className="flex-1 flex flex-col relative border border-black/20">
+        {renderPrintGrid(gridLines, gridLabelsDaily, gridTicks)}
+        <div className="flex-1 relative z-10 flex flex-col mt-6">
+          {agents.map(agent => {
+            const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
+            const totalMins = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+            const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+            const heuresJourStr = formatTime(totalMins);
+            const amplitudeStr = getAmplitudeStr(eventsDuJour);
 
-      {joursAImprimer.map((jourIndex, idx) => {
-        const isLast = idx === joursAImprimer.length - 1;
-        const d = new Date(template.dateDebut || '2024-09-01');
-        d.setDate(d.getDate() + (jourIndex - 1));
+            return (
+              <div key={agent.id} className="flex border-b border-black/20 flex-1 relative min-h-[40px] items-center">
+                <div className="w-24 shrink-0 flex flex-col items-end justify-center p-1 border-r border-black/20 z-10 h-full" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond), ...printExact }}>
+                  <span className="text-[10px] font-black text-right leading-tight truncate w-full">{agent.nom}</span>
+                  <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                    {amplitudeStr && <span className="text-[7px] font-bold opacity-80 leading-none">{amplitudeStr}</span>}
+                    <span className="text-[8px] font-mono font-bold bg-black/20 px-1.5 py-0.5 rounded leading-none">{heuresJourStr}</span>
+                  </div>
+                </div>
+                <div className="flex-1 relative h-full">
+                  {eventsDuJour.map(evt => renderPrintEvent(evt, limitesHeures, false))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const PrintTimeGridView = ({ events, agents, limitesHeures, amplitude, titre, joursAImprimer, format, sonneries }) => {
+  const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
+  const nomsJours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+
+  let activeMonday = new Date();
+  if (events && events.length > 0) {
+    const d = new Date(events[0].start);
+    if (!isNaN(d.getTime())) activeMonday = d;
+  }
+  const day = activeMonday.getDay() || 7;
+  activeMonday.setDate(activeMonday.getDate() - (day - 1));
+
+  return (
+    <>
+      {joursAImprimer.map((dayIndex, idx) => {
+        const dateDuJour = new Date(activeMonday);
+        dateDuJour.setDate(dateDuJour.getDate() + dayIndex - 1);
         const pad = n => String(n).padStart(2, '0');
-        const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        
+        const dateLabel = !isNaN(dateDuJour.getTime()) ? `${pad(dateDuJour.getDate())}/${pad(dateDuJour.getMonth()+1)}` : '';
+        const targetDayOfWeek = dayIndex === 7 ? 0 : dayIndex; 
+        const eventsDuJour = events.filter(e => {
+          const d = new Date(e.start);
+          return !isNaN(d.getTime()) && d.getDay() === targetDayOfWeek;
+        });
+
+        // FIX : Calcule si on est sur la dernière page pour ne pas faire de saut de page final inutile
+        const isLastPage = idx === joursAImprimer.length - 1;
 
         return (
-          <div 
-            key={jourIndex} 
-            className="w-full relative bg-white box-border flex flex-col"
-            style={{ 
-              height: format === 'A3' ? '287mm' : '202mm', 
-              maxHeight: format === 'A3' ? '287mm' : '202mm',
-              pageBreakAfter: isLast ? 'auto' : 'always', 
-              breakAfter: isLast ? 'auto' : 'page',
-              overflow: 'hidden'
-            }}
-          >
-            <div className="flex justify-between items-center mb-1.5 pb-1 border-b-2 border-black shrink-0 px-2">
-              <h2 className="text-base font-black uppercase">
-                Modèle : {template.nom} - {nomsJours[jourIndex]}
-              </h2>
-              <div className="text-[11px] font-bold opacity-70">Imprimé le {new Date().toLocaleDateString('fr-FR')}</div>
+          // FIX : pageBreakAfter garantit que la prochaine feuille commencera sur une page vierge. Height 99vh étire le tableau.
+          <div key={dayIndex} className="w-full bg-white flex flex-col mb-8 print:mb-0 print:overflow-hidden" 
+               style={{ ...printExact, height: '99vh', minHeight: '100vh', pageBreakAfter: isLastPage ? 'auto' : 'always' }}>
+            <div className="text-center font-bold text-lg mb-2 py-1 border-b-2 border-black flex justify-between items-end">
+              <span>{titre}</span>
+              <span className="text-xl uppercase">{nomsJours[dayIndex-1]} {dateLabel}</span>
             </div>
-
-            <div className="flex-1 flex flex-col relative border-2 border-black rounded-lg overflow-hidden bg-white">
-              <div className="flex border-b-2 border-black bg-gray-100 shrink-0 ml-32 relative h-7 items-center">
-                {gridTicks?.map(tick => (
-                  <div key={tick.m} className="absolute bottom-0 w-[1px] h-2 bg-black/40" style={{ left: `${tick.topPercent}%` }}></div>
-                ))}
-                {gridLabelsDaily.map(lbl => (
-                  <div key={lbl.timeStr} className="absolute text-[8px] font-black text-black top-1/2 -translate-y-1/2" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
-                    {lbl.timeStr}
-                  </div>
-                ))}
-              </div>
-              
-              <div className="flex-1 relative z-10 flex flex-col bg-white overflow-hidden">
-                <div className="absolute inset-0 left-32 pointer-events-none z-0">
-                  {gridLines.map(line => (
-                    <div key={line.timeStr} className="absolute top-0 bottom-0 border-black opacity-20" style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid black' : '1px dashed black' }}></div>
-                  ))}
-                </div>
-
+            <div className="flex-1 flex flex-col relative border border-black/20">
+              {renderPrintGrid(gridLines, gridLabelsDaily, gridTicks)}
+              <div className="flex-1 relative z-10 flex flex-col mt-6">
                 {agents.map(agent => {
-                  const eventsDuJour = (template.events || []).filter(e => e.start.startsWith(dateStr) && e.extendedProps?.agentId === agent.id);
-                  const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
-                  const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
+                  const agentEvents = eventsDuJour.filter(e => e.extendedProps?.agentId === agent.id);
+                  const totalMins = agentEvents.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                  const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                  const heuresJourStr = formatTime(totalMins);
+                  const amplitudeStr = getAmplitudeStr(agentEvents);
 
                   return (
-                    <div key={agent.id} className="flex border-b border-black/20 flex-1 relative min-h-0">
-                      <div className="w-32 shrink-0 flex flex-col items-end justify-center p-1.5 border-r-2 border-black z-10 bg-gray-50 overflow-hidden">
-                        <span className="text-xs font-black text-right leading-tight text-black">{agent.nom}</span>
-                        <span className="text-[9px] font-mono font-bold opacity-80 text-black">{heuresJourStr}</span>
+                    <div key={agent.id} className="flex border-b border-black/20 flex-1 relative min-h-[40px] items-center">
+                      <div className="w-24 shrink-0 flex flex-col items-end justify-center p-1 border-r border-black/20 z-10 h-full" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond), ...printExact }}>
+                        <span className="text-[10px] font-black text-right leading-tight truncate w-full">{agent.nom}</span>
+                        <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                          {amplitudeStr && <span className="text-[7px] font-bold opacity-80 leading-none">{amplitudeStr}</span>}
+                          <span className="text-[8px] font-mono font-bold bg-black/20 px-1.5 py-0.5 rounded leading-none">{heuresJourStr}</span>
+                        </div>
                       </div>
-                      
-                      <div className="flex-1 relative">
-                        {eventsDuJour.map(evt => {
-                          const startD = new Date(evt.start); 
-                          const endD = new Date(evt.end);
-                          const startMins = startD.getHours() * 60 + startD.getMinutes(); 
-                          const endMins = endD.getHours() * 60 + endD.getMinutes();
-                          const durationMins = endMins - startMins;
-                          
-                          const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                          const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
-                          
-                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                          const isMicro = durationMins <= 15;
-                          const isShort = durationMins > 15 && durationMins <= 45;
-                          
-                          const couleurFond = evt.extendedProps?.posteCouleur || evt.backgroundColor || '#3b82f6';
-                          const couleurTexte = getContrastYIQ(couleurFond);
-
-                          return (
-                            <div 
-                              key={evt.id}
-                              className="absolute top-0.5 bottom-0.5 rounded shadow-xs text-[9px] flex flex-col justify-center px-0.5 border border-black/40 overflow-hidden"
-                              style={{ 
-                                left: `${left}%`, 
-                                width: `${width}%`, 
-                                backgroundColor: couleurFond, 
-                                color: couleurTexte,
-                                WebkitPrintColorAdjust: 'exact', 
-                                printColorAdjust: 'exact' 
-                              }}
-                            >
-                              <div className={`w-full h-full flex overflow-hidden ${isMicro || isShort ? 'items-center justify-center' : 'flex-col items-center justify-center'}`}>
-                                {isMicro || isShort ? (
-                                  <span className="font-bold uppercase text-center" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: isMicro ? '7px' : '8px', whiteSpace: 'nowrap' }}>
-                                    {evt.extendedProps?.posteNom}
-                                  </span>
-                                ) : (
-                                  <>
-                                    <span className="font-bold truncate leading-none text-[9px] w-full text-center">{evt.extendedProps?.posteNom}</span>
-                                    <span className="opacity-90 font-mono truncate mt-0.5 text-[7px] w-full text-center">{formatTime(startMins)}-{formatTime(endMins)}</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                      <div className="flex-1 relative h-full">
+                        {agentEvents.map(evt => renderPrintEvent(evt, limitesHeures, false))}
                       </div>
                     </div>
                   );
@@ -253,176 +197,151 @@ export const PrintTemplateView = ({ template, joursAImprimer = [1, 2, 3, 4, 5], 
           </div>
         );
       })}
-    </div>
+    </>
   );
 };
 
-// ------------------------ VUES INCHANGÉES ------------------------
-export const PrintDailyView = ({ agents, jourConsulte, getEventsForWeek, absences, sonneries = [], limitesHeures = { baseMins: 460, span: 620 }, postes, getMondayStr, amplitude = { start: '07:30', end: '18:00' } }) => {
-  const mondayStr = getMondayStr(jourConsulte);
-  const allEvents = getEventsForWeek(mondayStr);
-  const extTime = (iso) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+export const PrintTemplateView = ({ template, joursAImprimer, format, agents, limitesHeures, sonneries, amplitude, formatHeureTableau }) => {
   const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
+  const nomsJours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
 
   return (
-    <div className="print-weekly-page flex flex-col bg-white p-2 h-full">
-      <div className="text-center mb-2 border-b border-black pb-1 shrink-0">
-        <h2 className="text-lg font-black uppercase tracking-wider text-gray-900">
-          Planning Journalier - {new Date(jourConsulte).toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'})}
-        </h2>
-      </div>
+    <>
+      {joursAImprimer.map((dayIndex, idx) => {
+        const templateDateObj = new Date(template.dateDebut);
+        templateDateObj.setDate(templateDateObj.getDate() + (dayIndex - 1));
+        const pad = n => String(n).padStart(2, '0');
+        const dateStr = `${templateDateObj.getFullYear()}-${pad(templateDateObj.getMonth()+1)}-${pad(templateDateObj.getDate())}`;
 
-      <div className="flex flex-wrap gap-2 mb-2 justify-center shrink-0">
-        <span className="text-[9px] font-bold text-gray-500 self-center uppercase mr-1">Légende :</span>
-        {postes.map(p => (<span key={p.id} className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur), border: '1px solid rgba(0,0,0,0.2)' }}>{p.nom}</span>))}
-        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-800 border border-red-300">🚫 ABSENCE</span>
-        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-800 border border-orange-300">⏰ RETARD</span>
-      </div>
+        const eventsDuJour = (template.events || []).filter(e => e.start.startsWith(dateStr));
+        const isLastPage = idx === joursAImprimer.length - 1;
 
-      <div className="flex-1 border border-black relative bg-white flex flex-col overflow-hidden">
-        <div className="flex border-b border-black bg-gray-100 shrink-0 h-6 relative ml-28">
-           {gridTicks?.map(tick => (
-             <div key={tick.m} className="absolute bottom-0 w-[1px] h-1.5 bg-black/40" style={{ left: `${tick.topPercent}%` }}></div>
-           ))}
-           {gridLabelsDaily.map(lbl => (
-              <div key={lbl.timeStr} className="absolute text-[10px] font-black text-black top-1/2 -translate-y-1/2" style={{ left: `${lbl.topPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}>
-                 {lbl.timeStr}
-              </div>
-           ))}
-        </div>
+        return (
+          // FIX : Saut de page forcé + étirement à 100% de la page
+          <div key={dayIndex} className="w-full bg-white flex flex-col mb-8 print:mb-0 print:overflow-hidden" 
+               style={{ ...printExact, height: '99vh', minHeight: '100vh', pageBreakAfter: isLastPage ? 'auto' : 'always' }}>
+            <div className="text-center font-bold text-lg mb-2 py-1 border-b-2 border-black flex justify-between items-end">
+              <span>Modèle : {template.nom}</span>
+              <span className="text-xl uppercase">{nomsJours[dayIndex-1]}</span>
+            </div>
+            <div className="flex-1 flex flex-col relative border border-black/20">
+              {renderPrintGrid(gridLines, gridLabelsDaily, gridTicks)}
+              <div className="flex-1 relative z-10 flex flex-col mt-6">
+                {agents.map(agent => {
+                  const agentEvents = eventsDuJour.filter(e => e.extendedProps?.agentId === agent.id);
+                  const totalMins = agentEvents.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                  const fmtTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                  const heuresJourStr = fmtTime(totalMins);
+                  const amplitudeStr = getAmplitudeStr(agentEvents);
 
-        <div className="flex-1 relative overflow-hidden flex flex-col">
-          <div className="absolute inset-0 top-0 bottom-0 left-28 right-0 pointer-events-none z-0">
-            {gridLines.map(line => (
-               <div key={line.timeStr} className="absolute top-0 bottom-0" style={{ left: `${line.topPercent}%`, borderLeft: line.isHeurePleine || line.isSonnerie ? '2px solid rgba(0,0,0,0.3)' : '1px dashed rgba(0,0,0,0.15)' }}></div>
-            ))}
-          </div>
-
-          <div className="flex flex-col h-full w-full relative z-10 flex-1">
-            {agents.map(agent => {
-              const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
-              
-              return (
-                <div key={agent.id} className="flex border-b border-gray-300 flex-1 relative">
-                  <div className="w-28 shrink-0 flex items-center justify-end p-2 border-r border-black" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
-                    <span className="text-xs font-black text-right">{agent.nom}</span>
-                  </div>
-                  
-                  <div className="flex-1 relative my-1">
-                    {eventsDuJour.map(evt => {
-                      const startD = new Date(evt.start); const endD = new Date(evt.end);
-                      const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
-                      const left = Math.max(0, ((startMins - limitesHeures.baseMins) / limitesHeures.span) * 100);
-                      const width = Math.min(100 - left, ((endMins - startMins) / limitesHeures.span) * 100);
-                      
-                      return (
-                        <div key={evt.id} className="absolute top-0 bottom-0 rounded shadow-sm flex flex-col justify-center px-1 overflow-hidden border border-black/20"
-                          style={{ left: `${left}%`, width: `${width}%`, backgroundColor: evt.extendedProps?.posteCouleur || '#3b82f6', color: getContrastYIQ(evt.extendedProps?.posteCouleur || '#3b82f6') }}>
-                          <span className="font-bold text-[8px] truncate leading-tight">{evt.extendedProps?.posteNom}</span>
-                          {((endMins - startMins) > 15) && <span className="text-[7px] opacity-90 truncate leading-tight">{extTime(evt.start)}-{extTime(evt.end)}</span>}
+                  return (
+                    <div key={agent.id} className="flex border-b border-black/20 flex-1 relative min-h-[40px] items-center">
+                      <div className="w-24 shrink-0 flex flex-col items-end justify-center p-1 border-r border-black/20 z-10 h-full" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond), ...printExact }}>
+                        <span className="text-[10px] font-black text-right leading-tight truncate w-full">{agent.nom}</span>
+                        <div className="flex flex-col items-end gap-0.5 mt-0.5">
+                          {amplitudeStr && <span className="text-[7px] font-bold opacity-80 leading-none">{amplitudeStr}</span>}
+                          <span className="text-[8px] font-mono font-bold bg-black/20 px-1.5 py-0.5 rounded leading-none">{heuresJourStr}</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )
-            })}
+                      </div>
+                      <div className="flex-1 relative h-full">
+                        {agentEvents.map(evt => renderPrintEvent(evt, limitesHeures, false))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
+        );
+      })}
+    </>
   );
 };
 
 export const PrintAgentYearlyView = ({ agent, baseYear, anneeScolaire, getMondayStr, getInfosPeriode, exceptions, formatHeureTableau, absences, getHeuresTheoriquesJour, getHeuresAbsence }) => {
-  const semestre1 = anneeScolaire.slice(0, 6); 
-  const semestre2 = anneeScolaire.slice(6);    
-  const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
-
-  const renderTable = (moisList, title, pageNum) => (
-    <div className="print-agent-page flex flex-col justify-between p-4 bg-white">
-      <div className="text-center font-black text-lg uppercase mb-3 text-black border-b-2 border-black pb-2 shrink-0">
-        Bilan Annuel : {agent?.nom} — {title} ({baseYear}-{baseYear+1})
-      </div>
-      <div className="flex-1 flex flex-col justify-center">
-        <table className="w-full text-center border-collapse text-black border-2 border-black table-fixed">
-          <thead>
-            <tr>
-              {moisList.map((mois, i) => (
-                <th key={i} className="border border-black bg-yellow-400 py-1.5 uppercase font-bold text-[11px]">{mois.nom}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: 31 }, (_, i) => i + 1).map(jourNum => (
-              <tr key={jourNum}>
-                {moisList.map((mois, idx) => {
-                  const daysInMonth = new Date(mois.y, mois.m + 1, 0).getDate();
-                  if (jourNum > daysInMonth) return <td key={idx} className="border border-gray-400 bg-gray-200"></td>;
-
-                  const dateObj = new Date(mois.y, mois.m, jourNum);
-                  const dateStr = `${mois.y}-${String(mois.m+1).padStart(2,'0')}-${String(jourNum).padStart(2,'0')}`;
-                  
-                  const dayOfWeek = dateObj.getDay();
-                  const nomJour = nomsJours[dayOfWeek];
-                  const infoPeriode = getInfosPeriode(dateObj);
-
-                  const exc = exceptions[`${agent.id}_${dateStr}`];
-                  
-                  let hFinal = exc ? exc.h : getHeuresTheoriquesJour(agent.id, dateStr);
-                  
-                  const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr));
-                  const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + getHeuresAbsence(a), 0);
-                  hFinal = Math.max(0, hFinal - hDeduct);
-
-                  let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : '');
-                  if (absDuJour.length > 0) {
-                    const txtAbs = absDuJour.map(a => `${a.type.toUpperCase()}${a.deduire?' (-h)':''}`).join(', ');
-                    noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs;
-                  }
-
-                  let bgJour = "bg-white"; 
-                  if (dayOfWeek === 0) bgJour = "bg-gray-100"; 
-                  if (dayOfWeek === 6) bgJour = "bg-gray-50";  
-                  
-                  if (infoPeriode) {
-                    if (infoPeriode.type === 'ferie') bgJour = "bg-green-100 text-green-900 font-bold";
-                    else bgJour = "bg-blue-50 text-blue-900"; 
-                  }
-
-                  if (absDuJour.length > 0) bgJour = "bg-red-100 text-red-900 font-bold";
-
-                  return (
-                    <td key={idx} className="border border-black p-0 h-[18px]">
-                      <div className="flex h-full items-stretch text-[9px] overflow-hidden">
-                        <div className={`w-7 flex-shrink-0 flex items-center justify-center border-r border-black font-bold ${bgJour}`}>
-                          <span className="opacity-70 mr-0.5 text-[7px]">{nomJour[0]}</span>{jourNum}
-                        </div>
-                        <div className={`w-9 flex-shrink-0 flex items-center justify-center font-bold font-mono border-r border-black text-[9px] ${exc || absDuJour.length > 0 ? 'bg-orange-100 text-orange-900' : ''}`}>
-                          {formatHeureTableau(hFinal)}
-                        </div>
-                        <div className="flex-1 flex items-center px-1 text-[8px] text-gray-900 font-medium whitespace-nowrap overflow-hidden">
-                          {noteAffichage}
-                        </div>
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="text-right text-[10px] text-black font-bold mt-1 shrink-0">
-        Page {pageNum} / 2
-      </div>
-    </div>
-  );
-
+  const nomsJours = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+  
   return (
-    <div className="w-full bg-white print-agent-container">
-      {renderTable(semestre1, "Semestre 1", 1)}
-      {renderTable(semestre2, "Semestre 2", 2)}
+    <div className="w-full bg-white text-black p-4" style={printExact}>
+      <table className="w-full text-center border-collapse text-[10px] table-fixed shadow-sm">
+        <thead>
+          <tr>
+            {anneeScolaire.map((mois, i) => {
+              const daysInMonth = new Date(mois.y, mois.m + 1, 0).getDate();
+              let totalMensuel = 0;
+              
+              for (let jourNum = 1; jourNum <= daysInMonth; jourNum++) {
+                const dateStr = `${mois.y}-${String(mois.m+1).padStart(2,'0')}-${String(jourNum).padStart(2,'0')}`;
+                const exc = exceptions[`${agent.id}_${dateStr}`];
+                let hFinal = exc ? exc.h : getHeuresTheoriquesJour(agent.id, dateStr);
+                const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr));
+                const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + getHeuresAbsence(a), 0);
+                totalMensuel += Math.max(0, hFinal - hDeduct);
+              }
+
+              return (
+                <th key={i} className="border border-black bg-gray-200 py-1 uppercase tracking-wider" style={printExact}>
+                  <div className="flex flex-col items-center justify-center gap-0.5">
+                    <span>{mois.nom}</span>
+                    <span className="text-[8px] font-mono bg-white px-1.5 py-[1px] rounded border border-black/20 font-bold" style={printExact}>
+                      {formatHeureTableau(totalMensuel, true)}
+                    </span>
+                  </div>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 31 }, (_, i) => i + 1).map(jourNum => (
+            <tr key={jourNum}>
+              {anneeScolaire.map((mois, idx) => {
+                const daysInMonth = new Date(mois.y, mois.m + 1, 0).getDate();
+                if (jourNum > daysInMonth) return <td key={idx} className="border border-black bg-gray-100" style={printExact}></td>;
+
+                const dateObj = new Date(mois.y, mois.m, jourNum);
+                const dateStr = `${mois.y}-${String(mois.m+1).padStart(2,'0')}-${String(jourNum).padStart(2,'0')}`;
+                const dayOfWeek = dateObj.getDay();
+                const nomJour = nomsJours[dayOfWeek];
+                const infoPeriode = getInfosPeriode(dateObj);
+
+                const exc = exceptions[`${agent.id}_${dateStr}`];
+                let hFinal = exc ? exc.h : getHeuresTheoriquesJour(agent.id, dateStr);
+                const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr));
+                const hDeduct = absDuJour.filter(a => a.deduire).reduce((tot, a) => tot + getHeuresAbsence(a), 0);
+                hFinal = Math.max(0, hFinal - hDeduct);
+
+                let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : '');
+                if (hFinal > 0 && infoPeriode && infoPeriode.type === 'vacances') {
+                  noteAffichage = exc ? exc.note : '';
+                }
+                if (absDuJour.length > 0) {
+                  const txtAbs = absDuJour.map(a => `${a.type.toUpperCase()}${a.deduire?' (-h)':''}`).join(', ');
+                  noteAffichage = noteAffichage ? `${noteAffichage} / ${txtAbs}` : txtAbs;
+                }
+
+                let isGray = dayOfWeek === 0 || dayOfWeek === 6 || (infoPeriode && infoPeriode.type === 'vacances');
+                
+                return (
+                  <td key={idx} className={`border border-black p-0 ${isGray ? 'bg-gray-100' : 'bg-white'}`} style={isGray ? printExact : {}}>
+                    <div className="flex h-5 items-stretch">
+                      <div className={`w-5 flex-shrink-0 flex items-center justify-center border-r border-black/20 text-[8px] font-bold ${dayOfWeek === 0 || dayOfWeek === 6 ? 'bg-gray-300' : ''}`} style={dayOfWeek === 0 || dayOfWeek === 6 ? printExact : {}}>
+                        {nomJour}{jourNum}
+                      </div>
+                      <div className="w-7 flex-shrink-0 flex items-center justify-center font-bold font-mono border-r border-black/20">
+                        {formatHeureTableau(hFinal)}
+                      </div>
+                      <div className="flex-1 flex items-center px-1 truncate text-[7px] overflow-hidden whitespace-nowrap text-left" style={{ maxWidth: '65px' }}>
+                        {noteAffichage}
+                      </div>
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };

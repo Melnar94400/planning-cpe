@@ -166,8 +166,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setModalPoste({ isOpen: true, id: poste.id, nom: poste.nom, couleur: poste.couleur || '#8B5CF6', qte: poste.qte || 1, slots: defaultSlots });
   };
 
-  const generateBesoinsFromSlots = (posteId, posteNom, qte, slots) => {
-    const baseMonday = new Date(getMondayStr(currentTemplate?.dateDebut || new Date()));
+  const generateBesoinsFromSlots = (posteId, posteNom, qte, slots, templateDateStr) => {
+    const baseMonday = new Date(getMondayStr(templateDateStr || new Date()));
     const newBesoins = [];
     slots.forEach(slot => {
       if (slot.start && slot.end) {
@@ -195,21 +195,29 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const posteId = modalPoste.id || Date.now();
     const updatedPoste = { id: posteId, nom: modalPoste.nom.trim(), couleur: modalPoste.couleur, qte: Number(modalPoste.qte) || 1, slots: modalPoste.slots || [] };
 
-    if (modalPoste.id) {
-      setPostes(postes.map(p => p.id === modalPoste.id ? updatedPoste : p));
-      const filteredBesoins = currentTemplate.besoins.filter(b => b.extendedProps?.posteId !== posteId);
-      const generatedBesoins = generateBesoinsFromSlots(posteId, updatedPoste.nom, updatedPoste.qte, updatedPoste.slots);
-      updateCurrentTemplate(null, [...filteredBesoins, ...generatedBesoins]);
+    // 1. Mise à jour de la liste des postes
+    if (modalPoste.id) setPostes(postes.map(p => p.id === modalPoste.id ? updatedPoste : p));
+    else setPostes([...postes, updatedPoste]);
 
-      const updatedEvents = currentTemplate.events.map(evt => evt.extendedProps?.posteId === posteId ? {
-        ...evt, extendedProps: { ...evt.extendedProps, posteNom: updatedPoste.nom, posteCouleur: updatedPoste.couleur }
-      } : evt);
-      updateCurrentTemplate(updatedEvents, null);
-    } else {
-      setPostes([...postes, updatedPoste]);
-      const generatedBesoins = generateBesoinsFromSlots(posteId, updatedPoste.nom, updatedPoste.qte, updatedPoste.slots);
-      updateCurrentTemplate(null, [...currentTemplate.besoins, ...generatedBesoins]);
-    }
+    // 2. Mise à jour de TOUS les modèles (semaines types) existants d'un coup
+    const newTemplates = templateVersions.map(template => {
+      // On retire les anciens besoins de ce poste pour ce modèle
+      const filteredBesoins = (template.besoins || []).filter(b => b.extendedProps?.posteId !== posteId);
+      // On génère les nouveaux calés sur la date de ce modèle
+      const generatedBesoins = generateBesoinsFromSlots(posteId, updatedPoste.nom, updatedPoste.qte, updatedPoste.slots, template.dateDebut);
+      
+      let updatedEvents = template.events || [];
+      // Si c'est une édition, on met aussi à jour le nom/couleur dans les affectations existantes
+      if (modalPoste.id) {
+        updatedEvents = updatedEvents.map(evt => evt.extendedProps?.posteId === posteId ? {
+          ...evt, extendedProps: { ...evt.extendedProps, posteNom: updatedPoste.nom, posteCouleur: updatedPoste.couleur }
+        } : evt);
+      }
+      
+      return { ...template, events: updatedEvents, besoins: [...filteredBesoins, ...generatedBesoins] };
+    });
+    
+    setTemplateVersions(newTemplates);
     setModalPoste({ isOpen: false, id: null, nom: '', couleur: '#8B5CF6', qte: 1, slots: [] });
   };
 
