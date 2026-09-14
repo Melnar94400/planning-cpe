@@ -8,11 +8,15 @@ import {
   detecterChevauchements, getActiveContract, calculerContratProratise
 } from './utils.js';
 import { SetupWizard } from './SetupWizard.jsx';
-import { PrintDailyView, PrintTimeGridView, PrintTemplateView, PrintAgentYearlyView, PrintIndividualWeeklyView } from './PrintViews';
+import { PrintDailyView, PrintTimeGridView, PrintTemplateView, PrintAgentYearlyView, PrintIndividualWeeklyView } from './PrintViews.jsx';
 import { TimelineTrack, TimelineEvent } from './TimelineComponents.jsx';
 import { useHistory } from './useHistory.js';
 
-
+// --- IMPORT DES MODALES ---
+import { 
+  ModalPrint, ModalNewVersion, ModalPoste, ModalException, 
+  ModalParametres, ModalCreation, ModalBesoinMulti, ModalEditBesoin, ModalAgent 
+} from './Modals.jsx';
 
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
@@ -45,48 +49,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [sonneries, setSonneries] = useState(['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40']);
   const [sonneriesText, setSonneriesText] = useState('');
   const [absences, setAbsences] = useState([]);
-
-  // --- COMPOSANT MENU DÉROULANT AVEC COULEUR ---
-  const DropdownAvecCouleur = ({ options, value, onChange, placeholder }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = useRef(null);
-
-    useEffect(() => {
-      const handleClickOutside = (event) => {
-        if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsOpen(false);
-      };
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const selectedOpt = options.find(o => String(o.id) === String(value));
-
-    return (
-      <div className="relative w-full" ref={dropdownRef}>
-        <button type="button" onClick={() => setIsOpen(!isOpen)} className={`w-full flex items-center justify-between border ${t.borderLight} rounded p-2 text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm`}>
-          <div className="flex items-center gap-2 truncate">
-            {selectedOpt ? (
-              <>
-                {selectedOpt.couleur && <span className="w-3.5 h-3.5 rounded-full shadow-sm shrink-0 border border-black/10" style={{ backgroundColor: selectedOpt.couleur }}></span>}
-                <span className="truncate font-bold">{selectedOpt.nom}</span>
-              </>
-            ) : <span className="text-gray-500">{placeholder}</span>}
-          </div>
-          <span className="text-xs opacity-50 ml-2">{isOpen ? '▲' : '▼'}</span>
-        </button>
-        {isOpen && (
-          <div className={`absolute z-[99999] w-full mt-1 ${t.cardBg} border ${t.borderLight} rounded-md shadow-2xl max-h-52 overflow-y-auto`}>
-            {options.map(opt => (
-              <button key={opt.id} type="button" onClick={() => { onChange(opt.id); setIsOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-black/10 dark:hover:bg-white/10 text-left transition-colors`}>
-                {opt.couleur && <span className="w-3.5 h-3.5 rounded-full shadow-sm shrink-0 border border-black/10" style={{ backgroundColor: opt.couleur }}></span>}
-                <span className="truncate font-bold">{opt.nom}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   // --- HELPER AMPLITUDE HORAIRE ---
   const getAmplitudeStr = (eventsList) => {
@@ -197,25 +159,19 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const posteId = modalPoste.id || Date.now();
     const updatedPoste = { id: posteId, nom: modalPoste.nom.trim(), couleur: modalPoste.couleur, qte: Number(modalPoste.qte) || 1, slots: modalPoste.slots || [] };
 
-    // 1. Mise à jour de la liste des postes
     if (modalPoste.id) setPostes(postes.map(p => p.id === modalPoste.id ? updatedPoste : p));
     else setPostes([...postes, updatedPoste]);
 
-    // 2. Mise à jour de TOUS les modèles (semaines types) existants d'un coup
     const newTemplates = templateVersions.map(template => {
-      // On retire les anciens besoins de ce poste pour ce modèle
       const filteredBesoins = (template.besoins || []).filter(b => b.extendedProps?.posteId !== posteId);
-      // On génère les nouveaux calés sur la date de ce modèle
       const generatedBesoins = generateBesoinsFromSlots(posteId, updatedPoste.nom, updatedPoste.qte, updatedPoste.slots, template.dateDebut);
       
       let updatedEvents = template.events || [];
-      // Si c'est une édition, on met aussi à jour le nom/couleur dans les affectations existantes
       if (modalPoste.id) {
         updatedEvents = updatedEvents.map(evt => evt.extendedProps?.posteId === posteId ? {
           ...evt, extendedProps: { ...evt.extendedProps, posteNom: updatedPoste.nom, posteCouleur: updatedPoste.couleur }
         } : evt);
       }
-      
       return { ...template, events: updatedEvents, besoins: [...filteredBesoins, ...generatedBesoins] };
     });
     
@@ -284,7 +240,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const isInitialMount = useRef(true);
   const [needsBackup, setNeedsBackup] = useState(false);
   
-  // -- NOUVEL ETAT : PRESSE-PAPIER MULTIPLE --
   const [copiedEvents, setCopiedEvents] = useState([]);
 
   const getSchoolYearBase = () => {
@@ -325,13 +280,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
     for (const v of periodesFeriees) {
       let effectiveStart = v.debut;
-      
-      // FIX AUTO : L'Éducation Nationale fait commencer les vacances le vendredi soir.
-      // Si une période de vacances commence un vendredi, on décale le début effectif (0h) au samedi.
       if (v.type === 'vacances') {
         const dDebut = new Date(v.debut);
-        if (dDebut.getDay() === 5) { // 5 correspond au Vendredi
-          dDebut.setDate(dDebut.getDate() + 1); // On décale au samedi
+        if (dDebut.getDay() === 5) {
+          dDebut.setDate(dDebut.getDate() + 1);
           effectiveStart = `${dDebut.getFullYear()}-${pad(dDebut.getMonth()+1)}-${pad(dDebut.getDate())}`;
         }
       }
@@ -342,7 +294,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       }
     }
 
-    // Filtre pour nettoyer "Début des vacances d'été" en "Vacances d'été"
     const cleanName = (name) => {
       if (!name) return name;
       if (name.toLowerCase().includes("vacances d'été") || name.toLowerCase().includes("vacances d'ete")) return "Vacances d'été";
@@ -353,6 +304,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     if (ferie) return { type: 'ferie', nom: ferie.nom };
     return null;
   };
+
   const getHeuresTheoriquesJour = (agentId, dateStr) => {
     const dateObj = new Date(dateStr);
     const mondayStr = getMondayStr(dateObj);
@@ -413,14 +365,21 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         }
       }
       
-      const soldeGlobal = Math.trunc((agent.hContrat - heuresConsommees) * 60 + 1e-9) / 60;
       const applicableTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0];
       const hHebdoType = gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0;
+
+      // 1. Calcul du solde en minutes
+      let soldeMins = (agent.hContrat - heuresConsommees) * 60;
+      
+      // 2. Arrondi mathématique strict au palier de 5 minutes le plus proche
+      soldeMins = Math.round(soldeMins / 5) * 5;
+      
+      // 3. Reconversion en heures décimales
+      const soldeGlobal = soldeMins / 60;
 
       return { ...agent, heuresConsommees, soldeGlobal, hHebdoType };
     });
   }, [agents, baseYear, absences, exceptions, customWeeks, templateVersions, activeTemplateId, gabarits]);
-
   const shiftEventToWeek = (evt, targetMondayStr) => {
     const origMondayStr = getMondayStr(evt.start);
     if (origMondayStr === targetMondayStr) return { ...evt, id: String(evt.id).includes('_') ? evt.id : evt.id + '_' + targetMondayStr };
@@ -522,6 +481,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       return true;
     })
   ];
+
   const activeAlerts = useMemo(() => {
     const alerts = [];
     const nomsJoursAlert = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM']; 
@@ -575,7 +535,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return alerts;
   }, [agents, currentTemplate, currentViewMonday, customWeeks, absences, templateVersions, vueActive]);
 
-useEffect(() => {
+  useEffect(() => {
     const handleKeyDown = (e) => {
       // 1. Vider le presse-papier avec Échap
       if (e.key === 'Escape' && copiedEvents.length > 0) {
@@ -938,6 +898,7 @@ useEffect(() => {
     });
 
     setAbsences(newAbs);
+    // On garde notification silencieuse native pour simplifier, remplacé plus tard par react-hot-toast
     alert(`${formAbsence.agentIds.length} opération(s) enregistrée(s) avec succès !`);
     setFormAbsence({ agentIds: [], type: 'retard', journeeComplete: false, dateDebut: new Date().toISOString().split('T')[0], dateFin: '', dureeSaisie: '', impact: 'local', motif: '' });
   };
@@ -1148,587 +1109,47 @@ useEffect(() => {
   return (
     <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
       {/* -------------------- MODALES -------------------- */}
-{modalPrint.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">🖨️ Paramètres d'impression</h3></div>
-            <div className="p-5 space-y-4">
-              
-              {(modalPrint.type === 'planning' || modalPrint.type === 'template') && (
-                <div>
-                  <p className="text-sm font-bold mb-2">Que voulez-vous imprimer ?</p>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setModeImpression('global')} className={`flex-1 p-2 border rounded-lg text-xs font-bold transition-all ${modeImpression === 'global' ? 'bg-blue-500 border-blue-600 text-white shadow-sm' : 'bg-transparent border-black/20 text-gray-500 hover:bg-black/5 dark:hover:bg-white/5'}`}>🌍 Équipe complète</button>
-                    <button type="button" onClick={() => setModeImpression('individuel')} className={`flex-1 p-2 border rounded-lg text-xs font-bold transition-all ${modeImpression === 'individuel' ? 'bg-purple-600 border-purple-700 text-white shadow-sm' : 'bg-transparent border-black/20 text-gray-500 hover:bg-black/5 dark:hover:bg-white/5'}`}>👤 Fiches Individuelles</button>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <p className="text-sm font-bold mb-2">Format de la page :</p>
-                <select value={modalPrint.format} onChange={e => setModalPrint({...modalPrint, format: e.target.value})} className="w-full border border-black/10 dark:border-white/10 rounded p-2 text-sm bg-transparent">
-                  <option value="A4">A4 (Classique)</option>
-                  <option value="A3">A3 (Grand format)</option>
-                </select>
-              </div>
-              <div>
-                <p className="text-sm font-bold mb-2">Jours à imprimer (1 jour = 1 page) :</p>
-                <div className="flex flex-col gap-2 border border-black/10 dark:border-white/10 p-3 rounded-lg bg-black/5 dark:bg-white/5">
-                  {[1,2,3,4,5].map(d => (
-                    <label key={d} className="flex items-center gap-3 cursor-pointer font-bold text-sm hover:opacity-75">
-                      <input type="checkbox" className="w-4 h-4 cursor-pointer accent-[#3B82F6]" checked={modalPrint.jours.includes(d)} onChange={e => {
-                         const newJours = e.target.checked ? [...modalPrint.jours, d] : modalPrint.jours.filter(j => j !== d);
-                         setModalPrint({...modalPrint, jours: newJours.sort()});
-                      }} />
-                      {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][d-1]}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
-              <button onClick={() => setModalPrint({...modalPrint, isOpen: false})} className="px-4 py-2 text-gray-500 font-bold hover:bg-black/5 rounded transition">Annuler</button>
-              <button onClick={() => {
-                 setModalPrint({...modalPrint, isOpen: false});
-                 setIsPrinting(true);
-                 setTimeout(() => { window.print(); setIsPrinting(false); }, 800);
-              }} className={`px-5 py-2 ${t.btnPrimary} rounded font-bold shadow`}>Lancer l'impression</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {modalNewVersion.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">➕ Créer une évolution</h3></div>
-            <form onSubmit={validerCreationVersionModal}>
-              <div className="p-5 space-y-4">
-                <div>
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Date de début</label>
-                  <input type="date" required value={modalNewVersion.dateDebut} onChange={e => setModalNewVersion({...modalNewVersion, dateDebut: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
-                </div>
-                <div>
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nom court du modèle</label>
-                  <input type="text" required value={modalNewVersion.nom} onChange={e => setModalNewVersion({...modalNewVersion, nom: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
-                </div>
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
-                <button type="button" onClick={() => setModalNewVersion({...modalNewVersion, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
-                <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>Créer</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {modalPoste.isOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4 shrink-0 flex justify-between items-center`}>
-              <h3 className="font-bold text-lg">{modalPoste.id ? 'Modifier le poste' : 'Nouveau poste & Grille de besoins'}</h3>
-              <button type="button" onClick={() => setModalPoste({...modalPoste, isOpen: false})} className="hover:opacity-75 font-bold text-lg">✖</button>
-            </div>
-            <form onSubmit={validerPosteModal} className="flex flex-col overflow-hidden">
-              <div className="p-5 space-y-4 overflow-y-auto">
-                <div className="flex gap-4">
-                  <div className="flex-[2]">
-                    <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Nom du poste</label>
-                    <input type="text" required value={modalPoste.nom} onChange={e => setModalPoste({...modalPoste, nom: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold`} placeholder="Ex: Loge, Cantine..." autoFocus />
-                  </div>
-                  <div className="flex-1">
-                    <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Effectif (Qte)</label>
-                    <input type="number" min="1" required value={modalPoste.qte} onChange={e => setModalPoste({...modalPoste, qte: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm text-center font-bold bg-transparent`} />
-                  </div>
-                  <div>
-                    <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Couleur</label>
-                    <input type="color" value={modalPoste.couleur} onChange={e => setModalPoste({...modalPoste, couleur: e.target.value})} className="w-10 h-10 rounded cursor-pointer p-0 border-0" />
-                  </div>
-                </div>
-                
-                <div className={`border ${t.borderLight} rounded-xl p-4 ${t.bgLight}`}>
-                  <div className="flex justify-between items-center mb-3">
-                    <div>
-                      <h4 className={`font-bold text-sm ${t.header}`}>Grille horaire des besoins</h4>
-                      <p className="text-[11px] text-gray-500">Définissez les créneaux récurrents de ce poste pour la semaine type.</p>
-                    </div>
-                    <button type="button" onClick={() => setModalPoste({...modalPoste, slots: [...modalPoste.slots, { id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]})} className={`text-xs ${t.btnPrimary} px-2.5 py-1.5 rounded font-bold shadow-sm`}>➕ Ajouter une plage</button>
-                  </div>
-                  <div className="space-y-3">
-                    {modalPoste.slots.map((slot, idx) => (
-                      <div key={idx} className={`p-3 rounded-lg border ${t.borderLight} ${t.cardBg} flex flex-col gap-2 shadow-xs`}>
-                        <div className="flex items-center gap-2">
-                          <input type="time" required value={slot.start} onChange={e => {
-                            const ns = [...modalPoste.slots]; ns[idx].start = e.target.value; setModalPoste({...modalPoste, slots: ns});
-                          }} className={`border ${t.borderLight} p-1.5 text-xs rounded bg-transparent w-28 text-center font-bold ${t.header}`} />
-                          <span className="text-gray-400 text-xs font-bold">à</span>
-                          <input type="time" required value={slot.end} onChange={e => {
-                            const ns = [...modalPoste.slots]; ns[idx].end = e.target.value; setModalPoste({...modalPoste, slots: ns});
-                          }} className={`border ${t.borderLight} p-1.5 text-xs rounded bg-transparent w-28 text-center font-bold ${t.header}`} />
-                          
-                          <button type="button" onClick={() => {
-                            const ns = [...modalPoste.slots]; ns.splice(idx, 1); setModalPoste({...modalPoste, slots: ns});
-                          }} className="text-red-500 hover:text-red-700 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ml-auto" title="Retirer cette plage">✖</button>
-                        </div>
-                        <div className="flex gap-1.5 mt-1">
-                          {[1, 2, 3, 4, 5].map(day => (
-                            <label key={day} className={`flex-1 flex items-center justify-center py-1 rounded border text-[11px] font-bold cursor-pointer transition-colors ${slot.days[day] ? `${t.btnPrimary} border-transparent shadow-xs` : `bg-transparent text-gray-500 border-black/10 hover:bg-black/5`}`}>
-                              <input type="checkbox" className="hidden" checked={slot.days[day]} onChange={e => {
-                                const ns = [...modalPoste.slots]; ns[idx].days[day] = e.target.checked; setModalPoste({...modalPoste, slots: ns});
-                              }} />
-                              {nomsJours[day % 7]}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                    {modalPoste.slots.length === 0 && (
-                      <p className="text-xs italic text-gray-500 text-center py-2">Aucune plage horaire définie. Cliquez sur "Ajouter une plage".</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} shrink-0 flex justify-end gap-3`}>
-                <button type="button" onClick={() => setModalPoste({...modalPoste, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium text-sm">Annuler</button>
-                <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-bold text-sm shadow`}>{modalPoste.id ? 'Mettre à jour' : 'Créer le poste'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {modalException.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">Modifier le jour ({modalException.dateStr})</h3></div>
-            <form onSubmit={validerExceptionJourModal}>
-              <div className="p-5 space-y-4">
-                <div>
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Heures travaillées (ex: 8h45 ou 0)</label>
-                  <input type="text" required value={modalException.h} onChange={e => setModalException({...modalException, h: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} autoFocus />
-                </div>
-                <div>
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif / Note (ex: Toussaint, Stage)</label>
-                  <input type="text" value={modalException.note} onChange={e => setModalException({...modalException, note: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
-                </div>
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center`}>
-                <button type="button" onClick={supprimerExceptionJour} className="px-3 py-2 text-red-500 hover:bg-red-500/10 rounded font-bold text-xs transition-colors">🗑️ Rétablir l'horaire normal</button>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setModalException({isOpen: false, agentId: null, dateStr: null, h: '0h00', note: ''})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
-                  <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>Enregistrer</button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {modalParametres && (
-        <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh] border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-5 flex justify-between items-center shrink-0`}>
-              <h3 className="font-bold text-xl">⚙️ Paramètres Généraux</h3>
-              <button onClick={() => setModalParametres(false)} className="hover:opacity-50 font-bold text-xl transition-opacity">✖</button>
-            </div>
-            
-            <div className={`p-6 overflow-y-auto flex-1 ${t.bgMain}`}>
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                <div className="lg:col-span-7 flex flex-col gap-6">
-                  <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm`}>
-                    <h4 className={`font-bold text-lg ${t.header} mb-4`}>🕒 Horaires & Amplitude</h4>
-                    <div className="flex gap-4 mb-4 pb-4 border-b border-black/10 dark:border-white/10">
-                      <div className="flex-1">
-                        <label className="text-xs font-bold text-gray-500 uppercase">Début de journée</label>
-                        <input type="time" value={amplitude.start} onChange={e => setAmplitude({...amplitude, start: e.target.value})} className={`mt-1 w-full border ${t.borderLight} rounded-lg p-2 text-sm bg-transparent font-bold`} />
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-xs font-bold text-gray-500 uppercase">Fin de journée</label>
-                        <input type="time" value={amplitude.end} onChange={e => setAmplitude({...amplitude, end: e.target.value})} className={`mt-1 w-full border ${t.borderLight} rounded-lg p-2 text-sm bg-transparent font-bold`} />
-                      </div>
-                    </div>
-
-                    <h5 className={`font-bold text-sm ${t.header} mb-1`}>🔔 Heures de Sonneries</h5>
-                    <p className="text-xs text-gray-500 mb-3">Séparez par des virgules. Elles apparaîtront en traits pleins.</p>
-                    <textarea 
-                      value={sonneriesText} 
-                      onChange={(e) => setSonneriesText(e.target.value)}
-                      onBlur={handleSonneriesBlur}
-                      className={`w-full border ${t.borderLight} rounded-lg p-3 text-sm bg-transparent font-mono shadow-inner`}
-                      rows="2"
-                      placeholder="Ex: 08:00, 08:55, 10:05..."
-                    />
-                  </div>
-
-                  <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm flex-1 flex flex-col`}>
-                    <h4 className={`font-bold text-lg ${t.header} mb-4`}>🏖️ Périodes de Vacances & Fériés</h4>
-                    <form onSubmit={ajouterPeriodeFeriee} className={`p-4 rounded-lg border ${t.borderLight} ${t.bgLight} mb-6`}>
-                      <h5 className="font-bold text-xs text-gray-500 uppercase mb-3">➕ Ajouter une nouvelle période</h5>
-                      <div className="space-y-3">
-                        <div className="flex gap-3">
-                          <input type="text" required placeholder="Nom (ex: Pont Ascension)" value={formPeriode.nom} onChange={e => setFormPeriode({...formPeriode, nom: e.target.value})} className="flex-[2] border rounded p-2 text-sm bg-transparent" />
-                          <select value={formPeriode.type} onChange={e => setFormPeriode({...formPeriode, type: e.target.value})} className="flex-1 border rounded p-2 text-sm bg-transparent">
-                            <option value="vacances">Vacances (0h)</option>
-                            <option value="ferie">Jour Férié / Pont</option>
-                          </select>
-                        </div>
-                        <div className="flex gap-3">
-                          <div className="flex-1"><label className="text-xs font-bold text-gray-500">Début</label><input type="date" required value={formPeriode.debut} onChange={e => setFormPeriode({...formPeriode, debut: e.target.value})} className="w-full border rounded p-2 text-sm bg-transparent" /></div>
-                          <div className="flex-1"><label className="text-xs font-bold text-gray-500">Fin (Optionnel)</label><input type="date" value={formPeriode.fin} onChange={e => setFormPeriode({...formPeriode, fin: e.target.value})} className="w-full border rounded p-2 text-sm bg-transparent" /></div>
-                          <div className="flex items-end"><button type="submit" className={`h-9 px-5 ${t.btnPrimary} rounded text-sm font-bold shadow`}>Ajouter</button></div>
-                        </div>
-                      </div>
-                    </form>
-
-                    <h5 className="font-bold text-xs text-gray-500 uppercase mb-2">Périodes enregistrées</h5>
-                    <ul className="space-y-2 overflow-y-auto pr-2 flex-1 max-h-[250px]">
-                      {periodesFeriees.length === 0 && <p className="text-sm italic text-gray-500 text-center py-4">Aucune période configurée.</p>}
-                      {periodesFeriees.map(p => (
-                        <li key={p.id} className={`${t.bgMain} p-3 rounded-lg border ${t.borderLight} flex justify-between items-center text-sm shadow-sm`}>
-                          <div>
-                            <span className={`font-bold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>{p.nom}</span> 
-                            <span className={`ml-2 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-white ${p.type === 'ferie' ? 'bg-green-600' : 'bg-blue-600'}`}>
-                              {p.type === 'ferie' ? 'Férié (Payé)' : 'Vacances (0h)'}
-                            </span>
-                            <br/><span className="text-gray-500 text-xs">({p.debut === p.fin ? p.debut : `Du ${p.debut} au ${p.fin}`})</span>
-                          </div>
-                          <button onClick={() => supprimerPeriodeFeriee(p.id)} className="text-red-500 hover:bg-red-500/20 px-2 py-1 rounded transition-colors font-bold">✖</button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="lg:col-span-5 flex flex-col gap-6">
-                  <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm`}>
-                    <div className="flex justify-between items-center mb-4">
-                      <h4 className={`font-bold text-lg ${t.header}`}>🎨 Thème visuel</h4>
-                      <button type="button" onClick={toggleDarkMode} className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all ${isDarkMode ? 'bg-gray-700 text-yellow-300 border border-gray-600' : 'bg-white text-gray-800 border border-gray-300'}`}>
-                        {isDarkMode ? '☀️ Mode Clair' : '🌙 Mode Sombre'}
-                      </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 gap-3 mb-6">
-                      {Object.entries(THEMES).filter(([id]) => id !== 'personnalise').map(([id, theme]) => {
-                        const currentMode = isDarkMode ? theme.dark : theme.light;
-                        return (
-                          <button type="button" key={id} onClick={() => changeTheme(id)} className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all ${themeId === id ? `border-[${theme.fcPrimary}] shadow-md ${currentMode.cardBg}` : `border-transparent hover:border-black/5 dark:hover:border-white/5 ${t.bgMain}`}`}>
-                            <div className={`flex shrink-0 overflow-hidden rounded-full w-10 h-10 border border-black/10 dark:border-white/10 shadow-inner ${currentMode.cardBg}`}>
-                              <div className={`w-1/2 h-full ${currentMode.sidebar.split(' ')[0]}`}></div>
-                              <div className={`w-1/2 h-full ${theme.btnPrimary.split(' ')[0]}`}></div>
-                            </div>
-                            <span className={`text-sm font-bold text-left leading-tight ${t.header}`}>{theme.nom}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className={`pt-5 border-t ${t.borderLight}`}>
-                      <h5 className={`font-bold text-sm mb-3 ${t.header}`}>✨ Thème Personnalisé</h5>
-                      <div className="flex items-end gap-3">
-                        <label className={`flex flex-col text-[10px] font-bold uppercase ${t.textMenuMuted}`}>
-                          Dominante
-                          <input type="color" value={customColors.primary} onChange={(e) => updateCustomColor('primary', e.target.value)} className="w-12 h-10 mt-1 cursor-pointer border-0 rounded p-0 bg-transparent" />
-                        </label>
-                        <label className={`flex flex-col text-[10px] font-bold uppercase ${t.textMenuMuted}`}>
-                          Accent
-                          <input type="color" value={customColors.accent} onChange={(e) => updateCustomColor('accent', e.target.value)} className="w-12 h-10 mt-1 cursor-pointer border-0 rounded p-0 bg-transparent" />
-                        </label>
-                        <button type="button" onClick={() => changeTheme('personnalise')} className={`flex-1 px-3 h-10 text-xs font-bold rounded shadow transition-all ${themeId === 'personnalise' ? 'bg-blue-600 text-white' : `${t.bgLight} ${t.header} hover:opacity-80`}`}>
-                          {themeId === 'personnalise' ? '✅ Actif' : 'Activer'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {modalCreation.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-visible animate-in zoom-in duration-200 border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4 rounded-t-xl`}><h3 className="font-bold text-lg">{modalCreation.eventId ? 'Modifier l\'affectation' : 'Nouvelle affectation'}</h3></div>
-            <form onSubmit={validerCreationModal}>
-              <div className="p-5 space-y-4">
-                {(vueActive === 'planning' || vueActive === 'journee') && !modalCreation.eventId && (
-                  <div>
-                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Type d'action</label>
-                    <select value={formTypeEvent} onChange={e => setFormTypeEvent(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 ${t.bgLight} font-bold text-sm`}>
-                      <option value="affectation">Affectation de poste</option>
-                      <option value="absence">Absence ou Retard</option>
-                    </select>
-                  </div>
-                )}
-
-                <div>
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>👤 Agent</label>
-                  <DropdownAvecCouleur 
-                    options={agents.map(a => ({ id: a.id, nom: a.nom, couleur: a.couleurFond }))}
-                    value={formAgent}
-                    onChange={setFormAgent}
-                    placeholder="-- Sélectionner un agent --"
-                  />
-                </div>
-                
-                {formTypeEvent === 'absence' ? (
-                  <>
-                    <div>
-                      <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nature</label>
-                      <select value={formTypeAbsence} onChange={e => setFormTypeAbsence(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`}>
-                        <option value="absence">🚫 Absence (Plage horaire)</option>
-                        <option value="retard">⏰ Retard</option>
-                        <option value="heures_supp">🟢 Heures Supp' / Rattrapage</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className={`block text-sm font-semibold mb-1 mt-2 ${t.header}`}>Impact sur les compteurs</label>
-                      <select value={formAbsImpact} onChange={e => setFormAbsImpact(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent font-bold text-sm`}>
-                        <option value="global">🌍 Bilan Annuel Global</option>
-                        <option value="local">📍 Compteur Local (Dette / Compensation)</option>
-                        {['absence', 'retard'].includes(formTypeAbsence) && <option value="neutre">⚪ Neutre (Ignoré)</option>}
-                      </select>
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>📍 Poste</label>
-                    <DropdownAvecCouleur 
-                      options={postes.map(p => ({ id: p.id, nom: p.nom, couleur: p.couleur }))}
-                      value={formPoste}
-                      onChange={setFormPoste}
-                      placeholder="-- Sélectionner un poste --"
-                    />
-                  </div>
-                )}
-
-                <div className="flex gap-4">
-                  <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Début</label><input type="time" required value={extractTimeStr(modalCreation.start)} onChange={e => setModalCreation({...modalCreation, start: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div>
-                  <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin</label><input type="time" required value={extractTimeStr(modalCreation.end)} onChange={e => setModalCreation({...modalCreation, end: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div>
-                </div>
-                <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>📝 {formTypeEvent === 'absence' ? 'Motif' : 'Note'}</label><input type="text" value={formNote} onChange={e => setFormNote(e.target.value)} placeholder={formTypeEvent === 'absence' ? "Ex: Maladie..." : "Ex: Réunion..."} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} autoFocus={!!modalCreation.eventId} /></div>
-              </div>
-              
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center rounded-b-xl`}>
-                <div>
-                  {modalCreation.eventId && (
-                    <button type="button" onClick={() => {
-                      if(window.confirm('Voulez-vous vraiment supprimer cet élément ?')) {
-                        if (formTypeEvent === 'absence') {
-                          supprimerAbsence(String(modalCreation.eventId).replace('abs_','').split('_')[0]);
-                        } else {
-                          applyAction('delete', { 
-                            id: modalCreation.eventId, 
-                            start: `${modalCreation.date}T${modalCreation.start || '08:00'}:00` 
-                          });
-                        }
-                        setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' });
-                      }
-                    }} className="px-3 py-2 bg-red-500/10 text-red-600 hover:bg-red-500/20 rounded font-bold transition-colors text-sm shadow-sm flex items-center gap-1">
-                      🗑️ Supprimer
-                    </button>
-                  )}
-                </div>
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
-                  <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>{modalCreation.eventId ? 'Enregistrer' : 'Créer'}</button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {modalBesoinMulti.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-visible animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
-            <div className="bg-red-700 text-white p-4 shrink-0 rounded-t-xl"><h3 className="font-bold text-lg">🎯 Saisie d'une grille de besoins</h3></div>
-            <form onSubmit={validerBesoinMultiModal} className="flex flex-col overflow-hidden">
-              <div className="p-5 space-y-4 overflow-y-auto">
-                <div className="flex gap-4">
-                  <div className="flex-[2]">
-                    <label className="block text-sm font-semibold mb-1 text-red-600">Poste requis</label>
-                    <DropdownAvecCouleur 
-                      options={postes.map(p => ({ id: p.id, nom: p.nom, couleur: p.couleur }))}
-                      value={modalBesoinMulti.posteId}
-                      onChange={val => setModalBesoinMulti({...modalBesoinMulti, posteId: val})}
-                      placeholder="-- Sélectionner le poste --"
-                    />
-                  </div>
-                  <div className="flex-1"><label className="block text-sm font-semibold mb-1 text-red-600">Effectif</label><input type="number" min="1" required value={modalBesoinMulti.qte} onChange={e => setModalBesoinMulti({...modalBesoinMulti, qte: e.target.value})} className="w-full border border-red-500/50 rounded p-2 text-center font-bold bg-transparent" /></div>
-                </div>
-                
-                <div className="border border-red-500/30 rounded p-3 bg-red-900/10">
-                  <div className="flex justify-between items-center mb-3">
-                    <p className="text-sm font-bold text-red-600">Créez vos plages horaires et cochez les jours :</p>
-                    <button type="button" onClick={() => setModalBesoinMulti({...modalBesoinMulti, slots: [...modalBesoinMulti.slots, { id: Date.now(), start: '08:00', end: '10:00', days: { 1: false, 2: false, 3: false, 4: false, 5: false } }]})} className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 font-semibold shadow">➕ Plage</button>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    {modalBesoinMulti.slots.map((slot, idx) => (
-                      <div key={idx} className="flex flex-col gap-2 border-b border-red-500/30 pb-3 last:border-0 last:pb-0">
-                        <div className="flex items-center gap-2">
-                          <input type="time" required value={slot.start} onChange={e => {
-                            const ns = [...modalBesoinMulti.slots]; ns[idx].start = e.target.value; setModalBesoinMulti({...modalBesoinMulti, slots: ns});
-                          }} className="border border-red-500/50 p-1 text-sm rounded bg-transparent w-24 text-center text-red-600 font-bold" />
-                          <span className="text-gray-500 text-xs font-bold">à</span>
-                          <input type="time" required value={slot.end} onChange={e => {
-                            const ns = [...modalBesoinMulti.slots]; ns[idx].end = e.target.value; setModalBesoinMulti({...modalBesoinMulti, slots: ns});
-                          }} className="border border-red-500/50 p-1 text-sm rounded bg-transparent w-24 text-center text-red-600 font-bold" />
-                          {modalBesoinMulti.slots.length > 1 && (
-                            <button type="button" onClick={() => {
-                              const ns = [...modalBesoinMulti.slots]; ns.splice(idx, 1); setModalBesoinMulti({...modalBesoinMulti, slots: ns});
-                            }} className="text-red-400 hover:text-red-600 text-xs rounded-full w-5 h-5 flex items-center justify-center shadow-sm ml-auto" title="Retirer cette plage">✖</button>
-                          )}
-                        </div>
-                        <div className="flex gap-2 pl-1 mt-1">
-                          {[1, 2, 3, 4, 5].map(day => (
-                            <label key={day} className={`flex items-center gap-1 px-2 py-1 rounded border text-xs font-bold cursor-pointer transition-colors ${slot.days[day] ? 'bg-red-600 text-white border-red-700 shadow-sm' : `bg-transparent text-gray-500 border-gray-500/30 hover:${t.bgLight}`}`}>
-                              <input type="checkbox" className="hidden" checked={slot.days[day]} onChange={e => {
-                                const ns = [...modalBesoinMulti.slots]; ns[idx].days[day] = e.target.checked; setModalBesoinMulti({...modalBesoinMulti, slots: ns});
-                              }} />
-                              {nomsJours[day % 7]}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} shrink-0 flex justify-end gap-3 rounded-b-xl`}><button type="button" onClick={() => setModalBesoinMulti({ isOpen: false, posteId: '', qte: 1, slots: [] })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button><button type="submit" className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium shadow">Générer la grille</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {modalEditBesoin.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
-            <div className="bg-red-700 text-white p-4"><h3 className="font-bold text-lg">Modifier le besoin</h3></div>
-            <form onSubmit={validerEditBesoin}>
-              <div className="p-5 space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold mb-1 text-red-600">Effectif attendu</label>
-                  <input type="number" min="1" required value={modalEditBesoin.qte} onChange={e => setModalEditBesoin({...modalEditBesoin, qte: e.target.value})} className="w-full border border-red-500/50 rounded p-2 text-center font-bold text-lg bg-transparent" autoFocus />
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Début</label>
-                    <input type="time" required value={modalEditBesoin.start} onChange={e => setModalEditBesoin({...modalEditBesoin, start: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} />
-                  </div>
-                  <div className="flex-1">
-                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin</label>
-                    <input type="time" required value={modalEditBesoin.end} onChange={e => setModalEditBesoin({...modalEditBesoin, end: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} />
-                  </div>
-                </div>
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center`}>
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    if(window.confirm('Voulez-vous vraiment supprimer ce besoin ?')) {
-                      updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id).split('_')[0] !== modalEditBesoin.id));
-                      setModalEditBesoin({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' });
-                    }
-                  }} 
-                  className="px-3 py-2 bg-red-500/10 text-red-600 hover:bg-red-500/20 rounded font-bold transition-colors text-sm shadow-sm flex items-center gap-1"
-                >
-                  🗑️ Supprimer
-                </button>
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setModalEditBesoin({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' })} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
-                  <button type="submit" className="px-5 py-2 bg-red-600 text-white rounded font-medium">Mettre à jour</button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {modalAgent.isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
-          <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-md overflow-hidden border ${t.borderLight}`}>
-            <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">{modalAgent.id ? 'Modifier un agent' : 'Nouvel agent'}</h3></div>
-            <form onSubmit={validerAgentModal}>
-              <div className="p-5 space-y-4">
-                <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nom complet</label><input type="text" required value={modalAgent.nom} onChange={e => setModalAgent({...modalAgent, nom: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} autoFocus /></div>
-                <div className="flex gap-4">
-                  <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Quotité (%)</label><input type="number" step="0.1" required value={modalAgent.quotite} onChange={e => handleEditAgentChange('quotite', e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 font-bold text-center bg-transparent`} /></div>
-                  <div className="flex-1 flex flex-col justify-end"><label className={`flex items-center gap-2 p-2 border ${t.borderLight} ${t.bgLight} rounded cursor-pointer font-bold text-sm ${t.header}`}><input type="checkbox" checked={modalAgent.estEtudiant} onChange={e => handleEditAgentChange('estEtudiant', e.target.checked)} className="w-4 h-4" />🎓 Statut Étudiant</label></div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Contrat (Calculé)</label>
-                    <input type="text" required value={typeof modalAgent.hContrat === 'number' ? formatHeureMinutes(modalAgent.hContrat) : modalAgent.hContrat} onChange={e => setModalAgent({...modalAgent, hContrat: e.target.value})} onBlur={e => setModalAgent({...modalAgent, hContrat: parseHeureSaisie(e.target.value)})} className={`w-full border ${t.borderLight} rounded p-2 font-mono text-center bg-transparent`} />
-                  </div>
-                  <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Couleur</label><div className="flex items-center gap-3"><input type="color" value={modalAgent.couleurFond} onChange={e => setModalAgent({...modalAgent, couleurFond: e.target.value})} className={`w-10 h-10 p-1 border ${t.borderLight} rounded cursor-pointer bg-transparent`} /><span className={`text-sm uppercase ${t.header}`}>{modalAgent.couleurFond}</span></div></div>
-                </div>
-                
-                <div className="flex flex-col mt-2">
-                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Jours de présence (Semaine Type)</label>
-                  <div className="flex gap-2">
-                    {[1, 2, 3, 4, 5].map(day => (
-                      <label key={day} className={`flex-1 flex items-center justify-center py-1.5 rounded border text-[11px] font-bold cursor-pointer transition-colors ${modalAgent.jours?.[day] ? `${t.btnPrimary} border-transparent shadow-sm` : `bg-transparent text-gray-400 border-gray-300 hover:bg-black/5`}`}>
-                        <input type="checkbox" className="hidden" checked={modalAgent.jours?.[day] || false} onChange={e => setModalAgent({...modalAgent, jours: {...(modalAgent.jours || {1:true,2:true,3:true,4:true,5:true}), [day]: e.target.checked}})} />
-                        {['LUN', 'MAR', 'MER', 'JEU', 'VEN'][day - 1]}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-col mt-4 pt-4 border-t border-black/10 dark:border-white/10">
-                  <div className="flex justify-between items-center mb-2">
-                    <label className={`text-sm font-semibold ${t.header}`}>Avenants (Changement en cours d'année)</label>
-                    <button type="button" onClick={() => {
-                      const newAv = [...(modalAgent.avenants || []), { date: '', quotite: 100, estEtudiant: false }];
-                      setModalAgent({...modalAgent, avenants: newAv});
-                    }} className="text-xs bg-black/10 hover:bg-black/20 px-2 py-1 rounded font-bold transition-colors">➕ Ajouter</button>
-                  </div>
-                  {(modalAgent.avenants || []).map((av, idx) => (
-                    <div key={idx} className="flex gap-2 items-center mb-2 bg-black/5 p-2 rounded shadow-inner">
-                      <input type="date" required value={av.date} onChange={e => {
-                        const newAv = [...modalAgent.avenants]; newAv[idx].date = e.target.value;
-                        const newAgent = {...modalAgent, avenants: newAv};
-                        newAgent.hContrat = calculerContratProratise(newAgent, baseYear, calculerContratBetty);
-                        setModalAgent(newAgent);
-                      }} className="flex-1 border border-black/20 rounded p-1 text-xs bg-transparent" />
-                      <input type="number" step="0.1" required value={av.quotite} onChange={e => {
-                        const newAv = [...modalAgent.avenants]; newAv[idx].quotite = e.target.value;
-                        const newAgent = {...modalAgent, avenants: newAv};
-                        newAgent.hContrat = calculerContratProratise(newAgent, baseYear, calculerContratBetty);
-                        setModalAgent(newAgent);
-                      }} className="w-16 border border-black/20 rounded p-1 text-xs text-center bg-transparent font-bold" placeholder="%" />
-                      <label className="flex items-center gap-1 text-[10px] font-bold cursor-pointer">
-                        <input type="checkbox" checked={av.estEtudiant} onChange={e => {
-                          const newAv = [...modalAgent.avenants]; newAv[idx].estEtudiant = e.target.checked;
-                          const newAgent = {...modalAgent, avenants: newAv};
-                          newAgent.hContrat = calculerContratProratise(newAgent, baseYear, calculerContratBetty);
-                          setModalAgent(newAgent);
-                        }} /> Étud.
-                      </label>
-                      <button type="button" onClick={() => {
-                        const newAv = [...modalAgent.avenants]; newAv.splice(idx, 1);
-                        const newAgent = {...modalAgent, avenants: newAv};
-                        newAgent.hContrat = calculerContratProratise(newAgent, baseYear, calculerContratBetty);
-                        setModalAgent(newAgent);
-                      }} className="text-red-500 hover:text-red-700 px-1 font-black transition-colors" title="Supprimer cet avenant">✖</button>
-                    </div>
-                  ))}
-                  {(modalAgent.avenants || []).length > 0 && (
-                    <p className="text-[10px] text-gray-500 italic leading-tight mt-1">Le contrat global est recalculé automatiquement au prorata exact des jours de l'année scolaire (1er Sept. au 31 Août).</p>
-                  )}
-                </div>
-              </div>
-              <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
-                <button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded">Annuler</button>
-                <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-bold`}>{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ModalPrint modalPrint={modalPrint} setModalPrint={setModalPrint} modeImpression={modeImpression} setModeImpression={setModeImpression} setIsPrinting={setIsPrinting} t={t} />
+      
+      <ModalNewVersion modalNewVersion={modalNewVersion} setModalNewVersion={setModalNewVersion} validerCreationVersionModal={validerCreationVersionModal} t={t} />
+      
+      <ModalPoste modalPoste={modalPoste} setModalPoste={setModalPoste} validerPosteModal={validerPosteModal} t={t} />
+      
+      <ModalException modalException={modalException} setModalException={setModalException} validerExceptionJourModal={validerExceptionJourModal} supprimerExceptionJour={supprimerExceptionJour} t={t} />
+      
+    <ModalParametres 
+        modalParametres={modalParametres} 
+        setModalParametres={setModalParametres} 
+        amplitude={amplitude} 
+        setAmplitude={setAmplitude} 
+        sonneriesText={sonneriesText} 
+        setSonneriesText={setSonneriesText} 
+        handleSonneriesBlur={handleSonneriesBlur} 
+        formPeriode={formPeriode} 
+        setFormPeriode={setFormPeriode} 
+        ajouterPeriodeFeriee={ajouterPeriodeFeriee} 
+        periodesFeriees={periodesFeriees} 
+        supprimerPeriodeFeriee={supprimerPeriodeFeriee} 
+        isDarkMode={isDarkMode} 
+        toggleDarkMode={toggleDarkMode} 
+        themeId={themeId} 
+        changeTheme={changeTheme} 
+        customColors={customColors} 
+        updateCustomColor={updateCustomColor} 
+        handleExport={handleExport} 
+        handleImport={handleImport} 
+        setPeriodesFeriees={setPeriodesFeriees}
+        baseYear={baseYear}
+        t={t} 
+      />
+      
+      <ModalCreation modalCreation={modalCreation} setModalCreation={setModalCreation} validerCreationModal={validerCreationModal} formTypeEvent={formTypeEvent} setFormTypeEvent={setFormTypeEvent} formTypeAbsence={formTypeAbsence} setFormTypeAbsence={setFormTypeAbsence} formAbsImpact={formAbsImpact} setFormAbsImpact={setFormAbsImpact} formAgent={formAgent} setFormAgent={setFormAgent} formPoste={formPoste} setFormPoste={setFormPoste} formNote={formNote} setFormNote={setFormNote} agents={agents} postes={postes} posteActif={posteActif} t={t} vueActive={vueActive} supprimerAbsence={supprimerAbsence} applyAction={applyAction} />
+      
+      <ModalBesoinMulti modalBesoinMulti={modalBesoinMulti} setModalBesoinMulti={setModalBesoinMulti} validerBesoinMultiModal={validerBesoinMultiModal} postes={postes} t={t} />
+      
+      <ModalEditBesoin modalEditBesoin={modalEditBesoin} setModalEditBesoin={setModalEditBesoin} validerEditBesoin={validerEditBesoin} updateCurrentTemplate={updateCurrentTemplate} currentTemplate={currentTemplate} t={t} />
+      
+      <ModalAgent modalAgent={modalAgent} setModalAgent={setModalAgent} validerAgentModal={validerAgentModal} handleEditAgentChange={handleEditAgentChange} baseYear={baseYear} t={t} />
 
       {/* -------------------- PANEAU LATÉRAL -------------------- */}
       <div className={`${isSidebarOpen ? 'w-80' : 'w-0'} ${t.sidebar} shadow-lg flex flex-col z-20 border-r ${isSidebarOpen ? t.borderLight : 'border-transparent'} no-print shrink-0 transition-all duration-300 ease-in-out`}>
@@ -1741,13 +1162,13 @@ useEffect(() => {
           
             <div className="flex items-center justify-between bg-black/10 p-1.5 rounded-lg gap-1">
               <input type="file" id="import-file" accept=".json" onChange={handleImport} className="hidden" />
-              <button onClick={() => document.getElementById('import-file').click()} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Restaurer une sauvegarde">⬆️</button>
-              <button onClick={handleExport} className={`relative p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500 text-white' : t.sidebarIconBtn}`} title="Sauvegarder les données (Fichier JSON)">
+              <button onClick={() => document.getElementById('import-file').click()} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Restaurer une sauvegarde">⬆️</button>
+              <button onClick={handleExport} className={`relative p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105 ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500 text-white' : t.sidebarIconBtn}`} title="Sauvegarder les données (Fichier JSON)">
                 ⬇️{needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
               </button>
 
               <div className="relative flex-1 flex justify-center">
-                <button onClick={() => setShowNotificationMenu(!showNotificationMenu)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors w-full flex items-center justify-center relative`} title="Centre de notifications">
+                <button onClick={() => setShowNotificationMenu(!showNotificationMenu)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors w-full flex items-center justify-center relative hover:scale-105`} title="Centre de notifications">
                   🔔
                   {activeAlerts.length > 0 && (
                     <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-sm">
@@ -1781,10 +1202,11 @@ useEffect(() => {
                 )}
               </div>
 
-              <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
-              <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center`} title="Paramètres">⚙️</button>
+              <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
+              <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Paramètres">⚙️</button>
               <button onClick={() => setModalPrint({ isOpen: true, type: vueActive, jours: [1, 2, 3, 4, 5], format: 'A4' })} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Imprimer le planning">🖨️</button>
-              <button onClick={handleResetAll} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm hover:scale-105 transition-transform" title="Tout réinitialiser">🗑️</button>            </div>
+              <button onClick={handleResetAll} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm hover:scale-105 transition-transform" title="Tout réinitialiser">🗑️</button>
+            </div>
 
             <div className="flex flex-col bg-black/10 rounded p-2 shadow-inner gap-1 mt-2">
               <button onClick={() => setVueActive('template')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'template' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📐 Modèle : Semaine Type</button>
@@ -1794,20 +1216,21 @@ useEffect(() => {
               <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-base font-medium py-2 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>👤 Calendriers Individuels</button>
               <button onClick={() => setVueActive('absences')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📋 Absences & Retards</button>
             </div>
+
             {/* ENCART TUTORIEL COPIER-COLLER & SUPPRESSION */}
             {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
-              <div className={`mt-3 p-3 rounded-xl border ${t.borderLight} bg-blue-500/10 text-blue-900 dark:text-blue-200 text-xs shadow-sm`}>
+              <div className={`mt-3 p-3 rounded-xl border ${t.borderLight} ${isDarkMode ? 'bg-blue-900/30 text-blue-200' : 'bg-blue-500/10 text-blue-900'} text-xs shadow-sm`}>
                 <p className="font-black mb-1.5 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">💡 Raccourcis Clavier</p>
                 <ul className="space-y-1.5 opacity-90 leading-tight">
-                  <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Ctrl</kbd> + <strong>Clic</strong> : Sélectionner 1 créneau</li>
-                  <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Ctrl</kbd> + <strong>Glisser</strong> : Lasso multiple</li>
-                  <li className="pt-1 mt-1 border-t border-blue-500/20"><strong>Clic</strong> (sur la grille) : Coller la sélection</li>
-                  <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Suppr</kbd> : <strong>Supprimer</strong> la sélection</li>
-                  <li><kbd className="bg-black/10 dark:bg-white/20 px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold">Échap</kbd> : Vider la sélection (Annuler)</li>
+                  <li><kbd className={`${isDarkMode ? 'bg-white/20 text-white' : 'bg-black/10 text-black'} px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold`}>Ctrl</kbd> + <strong>Clic</strong> : Sélectionner 1 créneau</li>
+                  <li><kbd className={`${isDarkMode ? 'bg-white/20 text-white' : 'bg-black/10 text-black'} px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold`}>Ctrl</kbd> + <strong>Glisser</strong> : Lasso multiple</li>
+                  <li className={`pt-1 mt-1 border-t ${isDarkMode ? 'border-blue-400/20' : 'border-blue-500/20'}`}><strong>Clic</strong> (sur la grille) : Coller la sélection</li>
+                  <li><kbd className={`${isDarkMode ? 'bg-white/20 text-white' : 'bg-black/10 text-black'} px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold`}>Suppr</kbd> : <strong>Supprimer</strong> la sélection</li>
+                  <li><kbd className={`${isDarkMode ? 'bg-white/20 text-white' : 'bg-black/10 text-black'} px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold`}>Échap</kbd> : Vider la sélection (Annuler)</li>
                 </ul>
               </div>
-            )}          
-            </div>
+            )}
+          </div>
 
           {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
             <div className={`p-4 flex-1 overflow-y-auto space-y-4 ${t.bgMain}`}>
@@ -1847,7 +1270,7 @@ useEffect(() => {
                         let diffAgentHebdo = agentWeekHours - objectifHebdoAgent;
                         if (Math.abs(diffAgentHebdo) < 0.01) diffAgentHebdo = 0;                        
                         return (
-                          <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-3 rounded border-l-4 cursor-pointer ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 border-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
+                          <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-3 rounded border-l-4 cursor-pointer ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ${t.borderLight}/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
                             <div className="flex flex-col leading-tight">
                               <span className={`text-base font-bold ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</span>
                               <div className="flex gap-2 mt-1">
@@ -1857,7 +1280,7 @@ useEffect(() => {
                               <span className={`text-xs font-mono mt-1 ${agent.soldeGlobal > 0 ? 'text-green-600' : (agent.soldeGlobal < 0 ? 'text-red-500' : 'text-gray-500')}`}>Solde global: {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</span>
                             </div>
                             <div className="flex gap-1.5 items-center shrink-0">
-                              <button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className="text-gray-400 hover:text-gray-800 text-sm px-1">⚙️</button>
+                              <button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className={`text-gray-400 hover:opacity-75 text-sm px-1 ${t.headerText}`}>⚙️</button>
                               <button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-sm px-1">✖</button>
                             </div>
                           </li>
@@ -1869,10 +1292,10 @@ useEffect(() => {
                     <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Postes</h2><button onClick={ouvrirCreationPoste} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600 flex items-center justify-center">+</button></div>
                     <ul className="space-y-1">
                       {postes.map((poste) => (
-                        <li key={poste.id} onClick={() => setPosteActif(posteActif === poste.id ? null : poste.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${posteActif === poste.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 border-black/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: poste.couleur }}>
+                        <li key={poste.id} onClick={() => setPosteActif(posteActif === poste.id ? null : poste.id)} className={`flex justify-between items-center p-2 rounded border-l-4 cursor-pointer text-sm ${posteActif === poste.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ${t.borderLight}/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: poste.couleur }}>
                           <span className={t.header}>{poste.nom}</span>
                           <div className="flex gap-1 items-center shrink-0">
-                            <button onClick={(e) => { e.stopPropagation(); ouvrirEditionPoste(poste); }} className="text-gray-400 hover:text-gray-800 text-xs px-1">⚙️</button>
+                            <button onClick={(e) => { e.stopPropagation(); ouvrirEditionPoste(poste); }} className={`text-gray-400 hover:opacity-75 text-xs px-1 ${t.headerText}`}>⚙️</button>
                             <button onClick={(e) => supprimerPoste(poste.id, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
                           </div>
                         </li>
@@ -2018,7 +1441,7 @@ useEffect(() => {
                             })];
 
                             return (
-                              <div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
+                              <div key={agent.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 dark:hover:bg-white/5 transition-colors min-h-[60px] hover:z-50`}>
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)] sticky left-0`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
                                   <span className="text-sm font-black text-right leading-tight truncate w-full">{agent.nom}</span>
                                   <div className="flex items-center gap-1.5 mt-0.5 justify-end w-full">
@@ -2027,7 +1450,7 @@ useEffect(() => {
                                   </div>
                                 </div>
                                 
-<TimelineTrack 
+                                <TimelineTrack 
                                   limitesHeures={limitesHeures} isBesoins={false} copiedEvents={copiedEvents} snapPoints={allLineSnapPoints}
                                   onAddCopy={(startMins) => {
                                     if (copiedEvents.length === 0) return;
@@ -2049,7 +1472,6 @@ useEffect(() => {
                                     const monStr = getMondayStr(jourConsulte);
                                     const currentWeek = customWeeks[monStr] ? [...customWeeks[monStr]] : getEventsForWeek(monStr);
                                     setCustomWeeks({ ...customWeeks, [monStr]: [...currentWeek, ...newEvents] });
-                                    // ASTUCE : Le presse-papier n'est plus vidé ici, tu peux coller à l'infini !
                                   }}
                                   onAddLasso={(startMins, endMins) => {
                                     const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
@@ -2072,7 +1494,6 @@ useEffect(() => {
                                     });
                                     if (selected.length > 0) {
                                       setCopiedEvents(prev => { 
-                                        // Sécurité : on vide si on change d'agent
                                         const isDifferentLine = prev.length > 0 && prev[0].extendedProps?.agentId !== agent.id;
                                         const base = isDifferentLine ? [] : prev;
                                         const n = [...base]; 
@@ -2090,7 +1511,7 @@ useEffect(() => {
                                     return (
                                       <TimelineEvent 
                                         key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={false} 
-                                        bgColor={posteCouleur} borderColor='rgba(0,0,0,0.2)' textColor={getContrastYIQ(posteCouleur)} 
+                                        bgColor={posteCouleur} borderColor={isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'} textColor={getContrastYIQ(posteCouleur)} 
                                         title={evt.extendedProps?.posteNom || 'Poste'} subtitle={agent.nom} extInfo={null} conflit={false} snapPoints={allLineSnapPoints}
                                         isCopied={copiedEvents.some(c => c.id === evt.id)}
                                         onUpdate={(min, max) => {
@@ -2104,7 +1525,7 @@ useEffect(() => {
                                             const isDifferentLine = prev.length > 0 && prev[0].extendedProps?.agentId !== agent.id;
                                             const base = isDifferentLine ? [] : prev;
                                             if (base.some(p => p.id === evt.id)) return base.filter(p => p.id !== evt.id);
-                                            return [...base, { id: evt.id, title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: dur, startMins: startM }];
+                                            return [...base, { id: evt.id, title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: dur, startMins: startM }];
                                           });
                                         }}
                                       />
@@ -2124,7 +1545,7 @@ useEffect(() => {
           );
         })()}
 
-      {/* 2. VUE MODELE (SEMAINE TYPE) */}
+        {/* 2. VUE MODELE (SEMAINE TYPE) */}
         {vueActive === 'template' && (() => {
           if (isPrinting) {
             return modeImpression === 'individuel' ? (
@@ -2149,7 +1570,8 @@ useEffect(() => {
                 formatHeureTableau={formatHeureTableau} 
               />
             );
-          }          const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
+          }
+          const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
           const templateDateObj = new Date(currentTemplate?.dateDebut || baseYear + '-09-01');
           templateDateObj.setDate(templateDateObj.getDate() + (jourTemplate - 1));
           const pad = n => String(n).padStart(2, '0');
@@ -2172,9 +1594,9 @@ useEffect(() => {
                 </div>
                 <div className="flex gap-2 mt-3 items-center">
                   {[1, 2, 3, 4, 5].map(d => (
-                    <button key={d} onClick={() => setJourTemplate(d)} className={`px-5 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${jourTemplate === d ? t.activeTab : `${t.cardBg} ${t.textMenuMuted} border border-transparent hover:border-black/10`}`}>{['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][d - 1]}</button>
+                    <button key={d} onClick={() => setJourTemplate(d)} className={`px-5 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${jourTemplate === d ? t.activeTab : `${t.cardBg} ${t.textMenuMuted} border border-transparent hover:border-black/10 dark:hover:border-white/10`}`}>{['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][d - 1]}</button>
                   ))}
-                  <div className="ml-auto text-xs font-bold px-3 py-1.5 rounded-full border border-black/10 shadow-inner bg-black/5">Lignes : {isBesoinsMode ? '🎯 Postes (Besoins structurels)' : '👤 Agents (Affectations nominatives)'}</div>
+                  <div className="ml-auto text-xs font-bold px-3 py-1.5 rounded-full border border-black/10 dark:border-white/10 shadow-inner bg-black/5 dark:bg-white/5">Lignes : {isBesoinsMode ? '🎯 Postes (Besoins structurels)' : '👤 Agents (Affectations nominatives)'}</div>
                 </div>
               </div>
 
@@ -2224,7 +1646,7 @@ useEffect(() => {
                             })];
 
                             return (
-                              <div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 transition-colors min-h-[60px] hover:z-50`}>
+                              <div key={item.id} className={`flex border-b ${t.borderLight} flex-1 relative group hover:bg-black/5 dark:hover:bg-white/5 transition-colors min-h-[60px] hover:z-50`}>
                                 <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)] sticky left-0`} style={{ backgroundColor: rowBgColor, color: getContrastYIQ(rowBgColor) }}>
                                   <span className="text-sm font-black text-right leading-tight truncate w-full">{item.nom}</span>
                                   <div className="flex items-center gap-1.5 mt-0.5 justify-end w-full">
@@ -2233,7 +1655,7 @@ useEffect(() => {
                                   </div>
                                 </div>
                                 
-<TimelineTrack 
+                                <TimelineTrack 
                                   limitesHeures={limitesHeures} isBesoins={isBesoinsMode} copiedEvents={copiedEvents} snapPoints={allLineSnapPoints}
                                   onAddCopy={(startMins) => {
                                     if (currentTemplate?.statut === 'valide' || copiedEvents.length === 0) return;
@@ -2289,7 +1711,7 @@ useEffect(() => {
                                         const isSous = evt.extendedProps?.isSousEffectif;
                                         bg = isSous ? '#dc2626' : '#16a34a'; border = isSous ? '#991b1b' : '#166534'; title = `${evt.extendedProps?.minCount} / ${evt.extendedProps?.qte} pers.`;
                                       } else {
-                                        bg = evt.extendedProps?.posteCouleur || '#3b82f6'; border = 'rgba(0,0,0,0.2)'; title = evt.extendedProps?.posteNom || 'Poste';
+                                        bg = evt.extendedProps?.posteCouleur || '#3b82f6'; border = isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'; title = evt.extendedProps?.posteNom || 'Poste';
                                         if (conflitsIds.has(String(evt.id).split('_')[0])) bg = '#dc2626';
                                       }
                                       return { id: evt.id, title: evt.title || title, backgroundColor: bg, borderColor: border, extendedProps: { ...evt.extendedProps }, durationMins: dur, startMins: sM };
@@ -2318,7 +1740,7 @@ useEffect(() => {
                                       evtBgColor = evt.extendedProps?.posteCouleur || '#3b82f6';
                                       const estEnConflit = conflitsIds.has(String(evt.id).split('_')[0]);
                                       if (estEnConflit) { evtBgColor = '#dc2626'; }
-                                      evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = getContrastYIQ(evtBgColor);
+                                      evtBorderColor = isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'; evtTextColor = getContrastYIQ(evtBgColor);
                                       evtTitle = (estEnConflit ? '⚠️ ' : '') + (evt.extendedProps?.posteNom || 'Poste');
                                       extInfo = evt.extendedProps?.note || null;
                                     }
@@ -2384,7 +1806,7 @@ useEffect(() => {
                       <button onClick={() => { const d = new Date(activeMonday); d.setDate(d.getDate() - 7); setCurrentViewMonday(getMondayStr(d)); }} className={`px-3 py-1.5 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:bg-black/5 dark:hover:bg-white/5 shadow-sm transition-colors`} title="Semaine précédente">◀</button>
                       
                       <div className="flex items-center gap-2">
-                        <span className={`font-bold ${t.headerText} text-sm`}>Semaine du</span>
+                        <span className={`font-bold ${t.header} text-sm`}>Semaine du</span>
                         <input 
                           type="date" 
                           value={activeMonday} 
@@ -2409,7 +1831,7 @@ useEffect(() => {
                 </div>
               </div>
               
-<div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
+              <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
                 {isPrinting ? (
                   modeImpression === 'individuel' ? (
                     <PrintIndividualWeeklyView 
@@ -2434,7 +1856,8 @@ useEffect(() => {
                     />
                   )
                 ) : (
-                  <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>                    <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
+                  <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
+                    <div className="flex-1 overflow-x-auto overflow-y-auto flex flex-col min-h-0">
                       <div className="min-w-[900px] flex-1 flex flex-col relative">
                         <div className={`flex border-b ${t.borderLight} ${t.bgLight} shrink-0 ml-32 relative h-8 items-center`}>
                           {gridTicks?.map(tick => (
@@ -2467,7 +1890,7 @@ useEffect(() => {
                             const nomJour = nomsJours[dayIndex];
 
                             return (
-                              <div key={dateStr} className="flex flex-col border-b-4 border-black/15 dark:border-white/10 relative z-10 hover:z-[60]">
+                              <div key={dateStr} className={`flex flex-col border-b-4 border-black/10 dark:border-white/5 relative z-10 hover:z-[60]`}>
                                 <div className={`px-4 py-1.5 font-bold uppercase text-xs tracking-wider sticky left-0 z-20 ${t.bgLight} ${t.header} border-b ${t.borderLight}`}>{nomJour} {dateDuJour.getDate()}/{dateDuJour.getMonth()+1}</div>
                                 
                                 {agents.map(agent => {
@@ -2482,7 +1905,7 @@ useEffect(() => {
                                   })];
 
                                   return (
-                                    <div key={`${dateStr}-${agent.id}`} className={`flex border-b ${t.borderLight} h-14 relative group hover:bg-black/5 hover:z-50 transition-colors`}>
+                                    <div key={`${dateStr}-${agent.id}`} className={`flex border-b ${t.borderLight} h-14 relative group hover:bg-black/5 dark:hover:bg-white/5 hover:z-50 transition-colors`}>
                                       <div className={`w-32 shrink-0 flex flex-col items-end justify-center p-2 border-r ${t.borderLight} z-20 shadow-[2px_0_5px_rgba(0,0,0,0.05)] sticky left-0`} style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
                                         <span className="text-sm font-black text-right leading-tight truncate w-full">{agent.nom}</span>
                                         <div className="flex items-center gap-1.5 mt-0.5 justify-end w-full">
@@ -2491,7 +1914,7 @@ useEffect(() => {
                                         </div>
                                       </div>
                                       
-<TimelineTrack 
+                                      <TimelineTrack 
                                         limitesHeures={limitesHeures} isBesoins={false} copiedEvents={copiedEvents} snapPoints={allLineSnapPoints}
                                         onAddCopy={(startMins) => {
                                           if (copiedEvents.length === 0) return;
@@ -2559,7 +1982,7 @@ useEffect(() => {
                                             evtBgColor = evt.extendedProps?.posteCouleur || '#3b82f6';
                                             const estEnConflit = conflitsIds.has(String(evt.id).split('_')[0]);
                                             if (estEnConflit) { evtBgColor = '#dc2626'; }
-                                            evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = getContrastYIQ(evtBgColor);
+                                            evtBorderColor = isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'; evtTextColor = getContrastYIQ(evtBgColor);
                                             evtTitle = (estEnConflit ? '⚠️ ' : '') + (evt.extendedProps?.posteNom || 'Poste');
                                             extInfo = evt.extendedProps?.note || null;
                                           }
@@ -2631,20 +2054,21 @@ useEffect(() => {
               <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden`}>
                 <table className="w-full text-sm text-left">
                   <thead className={`${t.headerBg} ${t.headerText} font-medium uppercase text-xs`}>
-                    <tr><th className="p-4 border-r border-black/10">Agent</th><th className="p-4 border-r border-black/10 text-center">%</th><th className="p-4 border-r border-black/10 text-center bg-black/10">H. Contrat</th><th className="p-4 border-r border-black/10 text-center">H. Type Hebdo</th><th className="p-4 border-r border-black/10 text-center bg-black/10">H. Consommées</th><th className="p-4 text-center">Solde Final</th></tr>
+                    <tr><th className={`p-4 border-r ${t.borderLight}`}>Agent</th><th className={`p-4 border-r ${t.borderLight} text-center`}>%</th><th className={`p-4 border-r ${t.borderLight} text-center bg-black/10 dark:bg-white/5`}>H. Contrat</th><th className={`p-4 border-r ${t.borderLight} text-center`}>H. Type Hebdo</th><th className={`p-4 border-r ${t.borderLight} text-center bg-black/10 dark:bg-white/5`}>H. Consommées</th><th className="p-4 text-center">Solde Final</th></tr>
                   </thead>
-                  <tbody className="divide-y divide-black/5">
+                  <tbody className="divide-y divide-black/5 dark:divide-white/5">
                     {statsAgents.map(agent => (
                       <tr key={agent.id} className={`hover:${t.bgLight} transition-colors`}>
                         <td className={`p-4 font-bold border-r ${t.borderLight} ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</td>
                         <td className={`p-4 text-center border-r ${t.borderLight}`}>
-                          <span className="px-2 py-1 rounded-full text-xs font-bold" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
+                          <span className="px-2 py-1 rounded-full text-xs font-bold shadow-sm" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
                             {getActiveContract(agent, todayStr).quotite}% {(agent.avenants?.length > 0) && <span title="Des avenants modifient son temps de travail en cours d'année" className="ml-1 cursor-help">📝</span>}
                           </span>
                         </td>
                         <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.header}`}>
                           {formatHeureTableau(agent.hContratProratise, true)}
-                        </td>                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono text-gray-500`}>{formatHeureTableau(agent.hHebdoType, true)}</td>
+                        </td>                        
+                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono text-gray-500`}>{formatHeureTableau(agent.hHebdoType, true)}</td>
                         <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.bgLight} ${t.header}`}>{formatHeureTableau(agent.heuresConsommees, true)}</td>
                         <td className={`p-4 text-center font-mono font-black text-lg ${agent.soldeGlobal > 0 ? 'bg-green-500/20 text-green-600' : (agent.soldeGlobal < 0 ? 'bg-red-500/20 text-red-500' : 'bg-emerald-500/10 text-emerald-500')}`}>{agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</td>
                       </tr>
@@ -2656,9 +2080,8 @@ useEffect(() => {
           );
         })()}
 
-{/* 5. VUE ABSENCES & RETARDS */}
+        {/* 5. VUE ABSENCES & RETARDS */}
         {vueActive === 'absences' && (() => {
-          // Tri des événements (les plus récents en premier) et filtrage si une carte agent est cliquée
           const absencesFiltrees = [...absences]
             .filter(a => filtreAgentAbsence ? a.agentId === filtreAgentAbsence : true)
             .sort((a, b) => new Date(b.start) - new Date(a.start)); 
@@ -2670,7 +2093,7 @@ useEffect(() => {
               {bilanAbsences.map(b => (
                 <div key={b.id} 
                      onClick={() => setFiltreAgentAbsence(filtreAgentAbsence === b.id ? null : b.id)}
-                     className={`${t.cardBg} rounded-xl shadow-sm border ${t.borderLight} p-4 border-l-4 cursor-pointer transition-all ${filtreAgentAbsence === b.id ? 'ring-2 ring-blue-500 scale-[1.02]' : 'hover:bg-black/5'}`} 
+                     className={`${t.cardBg} rounded-xl shadow-sm border ${t.borderLight} p-4 border-l-4 cursor-pointer transition-all ${filtreAgentAbsence === b.id ? 'ring-2 ring-blue-500 scale-[1.02]' : 'hover:opacity-80'}`} 
                      style={{ borderLeftColor: b.couleur }}
                      title="Cliquez pour filtrer l'historique sur cet agent">
                   <div className={`font-black text-lg ${t.header} mb-3 flex justify-between items-center`}>
@@ -2678,13 +2101,13 @@ useEffect(() => {
                     {filtreAgentAbsence === b.id && <span className="text-[10px] bg-blue-500 text-white px-2 py-1 rounded-full uppercase tracking-wider shadow-sm">Filtré</span>}
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                    <div className="bg-red-500/10 rounded p-1"><div className="text-gray-500 text-[9px] font-bold uppercase">Absences</div><div className="font-mono text-red-600 font-bold mt-1 text-sm">{b.nbAbs} <span className="text-[10px] text-gray-500 block leading-none">({formatHeureTableau(b.hAbs, true)})</span></div></div>
-                    <div className="bg-orange-500/10 rounded p-1"><div className="text-gray-500 text-[9px] font-bold uppercase">Retards</div><div className="font-mono text-orange-600 font-bold mt-1 text-sm">{b.nbRet} <span className="text-[10px] text-gray-500 block leading-none">({formatHeureTableau(b.hRet, true)})</span></div></div>
-                    <div className="bg-green-500/10 rounded p-1"><div className="text-gray-500 text-[9px] font-bold uppercase">H. Supp / Rattrapage</div><div className="font-mono text-green-700 font-bold mt-1 text-sm">{b.nbSupp} <span className="text-[10px] text-gray-500 block leading-none">({formatHeureTableau(b.hSupp, true)})</span></div></div>
+                    <div className="bg-red-500/10 rounded p-1"><div className="text-gray-500 text-[9px] font-bold uppercase">Absences</div><div className={`font-mono font-bold mt-1 text-sm ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>{b.nbAbs} <span className="text-[10px] text-gray-500 block leading-none">({formatHeureTableau(b.hAbs, true)})</span></div></div>
+                    <div className="bg-orange-500/10 rounded p-1"><div className="text-gray-500 text-[9px] font-bold uppercase">Retards</div><div className={`font-mono font-bold mt-1 text-sm ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>{b.nbRet} <span className="text-[10px] text-gray-500 block leading-none">({formatHeureTableau(b.hRet, true)})</span></div></div>
+                    <div className="bg-green-500/10 rounded p-1"><div className="text-gray-500 text-[9px] font-bold uppercase">H. Supp / Rattrapage</div><div className={`font-mono font-bold mt-1 text-sm ${isDarkMode ? 'text-green-400' : 'text-green-700'}`}>{b.nbSupp} <span className="text-[10px] text-gray-500 block leading-none">({formatHeureTableau(b.hSupp, true)})</span></div></div>
                   </div>
-                  {b.hDetteRestante > 0 && (<div className="pt-2 border-t border-gray-500/30 text-xs font-bold text-red-500">⚠️ Dette Locale : {formatHeureTableau(b.hDetteRestante, true)} à rattraper.</div>)}
-                  {b.hAvance > 0 && (<div className="pt-2 border-t border-gray-500/30 text-xs font-bold text-blue-600">🔵 Crédit Local : {formatHeureTableau(b.hAvance, true)} d'avance.</div>)}
-                  {b.nbRet > 0 && b.hDetteRestante === 0 && b.hAvance === 0 && (<div className="pt-2 border-t border-gray-500/30 text-xs font-bold text-green-600">✅ Tous les retards locaux sont compensés.</div>)}
+                  {b.hDetteRestante > 0 && (<div className={`pt-2 border-t border-gray-500/30 text-xs font-bold ${isDarkMode ? 'text-red-400' : 'text-red-500'}`}>⚠️ Dette Locale : {formatHeureTableau(b.hDetteRestante, true)} à rattraper.</div>)}
+                  {b.hAvance > 0 && (<div className={`pt-2 border-t border-gray-500/30 text-xs font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>🔵 Crédit Local : {formatHeureTableau(b.hAvance, true)} d'avance.</div>)}
+                  {b.nbRet > 0 && b.hDetteRestante === 0 && b.hAvance === 0 && (<div className={`pt-2 border-t border-gray-500/30 text-xs font-bold ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>✅ Tous les retards locaux sont compensés.</div>)}
                 </div>
               ))}
             </div>
@@ -2693,19 +2116,20 @@ useEffect(() => {
               <div className={`lg:col-span-1 ${t.cardBg} p-6 rounded-xl shadow border ${t.borderLight} h-fit`}>
                 <h3 className={`font-bold text-md ${t.header} mb-4 pb-2 border-b ${t.borderLight}`}>Déclarer un événement</h3>
                 <form onSubmit={ajouterAbsenceRetard} className="space-y-4">
+                  {/* 1. SELECTION DES AGENTS */}
                   <div>
                     <div className={`flex justify-between items-center mb-1`}>
                       <label className={`block text-sm font-semibold ${t.header}`}>Agent(s) concerné(s)</label>
                       <button type="button" onClick={() => {
                         if (formAbsence.agentIds.length === agents.length) setFormAbsence({...formAbsence, agentIds: []});
                         else setFormAbsence({...formAbsence, agentIds: agents.map(a => a.id)});
-                      }} className="text-[10px] bg-black/10 hover:bg-black/20 px-2 py-0.5 rounded font-bold transition-colors">
+                      }} className={`text-[10px] ${t.bgLight} hover:opacity-75 px-2 py-0.5 rounded font-bold transition-colors ${t.header}`}>
                         {formAbsence.agentIds.length === agents.length ? 'Tout décocher' : 'Tous'}
                       </button>
                     </div>
                     <div className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm max-h-32 overflow-y-auto flex flex-col gap-1 shadow-inner`}>
                       {agents.map(a => (
-                        <label key={a.id} className={`flex items-center gap-2 p-1.5 rounded cursor-pointer transition-colors ${formAbsence.agentIds.includes(a.id) ? 'bg-blue-500/10 dark:bg-blue-500/20' : 'hover:bg-black/5 dark:hover:bg-white/5'}`}>
+                        <label key={a.id} className={`flex items-center gap-2 p-1.5 rounded cursor-pointer transition-colors ${formAbsence.agentIds.includes(a.id) ? 'bg-blue-500/10 dark:bg-blue-500/20' : `hover:bg-black/5 dark:hover:bg-white/5`}`}>
                           <input type="checkbox" className="w-4 h-4 cursor-pointer accent-blue-600 rounded"
                             checked={formAbsence.agentIds.includes(a.id)}
                             onChange={(e) => {
@@ -2715,17 +2139,18 @@ useEffect(() => {
                               setFormAbsence({...formAbsence, agentIds: newIds});
                             }}
                           />
-                          <span className="font-bold">{a.nom}</span>
+                          <span className={`font-bold ${t.header}`}>{a.nom}</span>
                         </label>
                       ))}
                       {agents.length === 0 && <span className="text-xs text-gray-500 italic">Aucun agent configuré.</span>}
                     </div>
                   </div>
 
+                  {/* 2. NATURE DE L'EVENEMENT */}
                   <div>
                     <label className={`block text-sm font-semibold mb-1 mt-3 ${t.header}`}>Type d'événement</label>
-                    <select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', impact: e.target.value === 'heures_supp' && formAbsence.impact === 'neutre' ? 'local' : formAbsence.impact})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm font-bold`}>
-                      <option value="absence">🚫 Absence</option>
+                    <select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', impact: e.target.value === 'heures_supp' && formAbsence.impact === 'neutre' ? 'local' : formAbsence.impact})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm font-bold ${t.header}`}>
+                      <option value="absence">🚫 Absence (Plage horaire)</option>
                       <option value="retard">⏰ Retard</option>
                       <option value="heures_supp">🟢 Heures Supp' / Rattrapage</option>
                     </select>
@@ -2734,27 +2159,28 @@ useEffect(() => {
                   {formAbsence.type === 'absence' && (<label className={`flex items-center gap-2 text-sm font-bold ${t.textAccent} cursor-pointer ${t.bgLight} p-2 rounded border ${t.borderLight}`}><input type="checkbox" checked={formAbsence.journeeComplete} onChange={e => setFormAbsence({...formAbsence, journeeComplete: e.target.checked})} className="w-4 h-4 cursor-pointer" />Journée(s) complète(s)</label>)}
                   
                   <div className="flex gap-4">
-                    <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>{formAbsence.type === 'absence' && formAbsence.journeeComplete ? 'Début' : 'Date'}</label><input type="date" required value={formAbsence.dateDebut} onChange={e => setFormAbsence({...formAbsence, dateDebut: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>
-                    {formAbsence.type === 'absence' && formAbsence.journeeComplete && (<div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin (Optionnel)</label><input type="date" value={formAbsence.dateFin} onChange={e => setFormAbsence({...formAbsence, dateFin: e.target.value})} min={formAbsence.dateDebut} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>)}
+                    <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>{formAbsence.type === 'absence' && formAbsence.journeeComplete ? 'Début' : 'Date'}</label><input type="date" required value={formAbsence.dateDebut} onChange={e => setFormAbsence({...formAbsence, dateDebut: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent ${t.header}`} /></div>
+                    {formAbsence.type === 'absence' && formAbsence.journeeComplete && (<div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin (Optionnel)</label><input type="date" value={formAbsence.dateFin} onChange={e => setFormAbsence({...formAbsence, dateFin: e.target.value})} min={formAbsence.dateDebut} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent ${t.header}`} /></div>)}
                   </div>
 
                   {formAbsence.type !== 'absence' || !formAbsence.journeeComplete ? (
                     <div>
                       <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Durée (ex: 0h45, 30min)</label>
-                      <input type="text" required value={formAbsence.dureeSaisie || ''} onChange={e => setFormAbsence({...formAbsence, dureeSaisie: e.target.value})} placeholder="Ex: 0h45" className={`w-full border ${t.borderLight} rounded p-2 text-sm font-bold text-center bg-transparent`} />
+                      <input type="text" required value={formAbsence.dureeSaisie || ''} onChange={e => setFormAbsence({...formAbsence, dureeSaisie: e.target.value})} placeholder="Ex: 0h45" className={`w-full border ${t.borderLight} rounded p-2 text-sm font-bold text-center bg-transparent ${t.header}`} />
                     </div>
                   ) : null}
 
-                  <div className="p-3 border border-black/10 rounded bg-black/5 dark:bg-white/5">
+                  <div className={`p-3 border ${t.borderLight} rounded ${t.bgLight}`}>
                     <label className={`block text-sm font-semibold mb-2 ${t.header}`}>Impact sur les compteurs</label>
-                    <select value={formAbsence.impact} onChange={e => setFormAbsence({...formAbsence, impact: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent font-bold text-sm`}>
+                    <select value={formAbsence.impact} onChange={e => setFormAbsence({...formAbsence, impact: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent font-bold text-sm ${t.header}`}>
                       <option value="global">🌍 Bilan Annuel Global</option>
                       <option value="local">📍 Compteur Local (Dette / Compensation)</option>
                       {['absence', 'retard'].includes(formAbsence.type) && <option value="neutre">⚪ Neutre (Ignoré)</option>}
                     </select>
                   </div>
 
-                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif / Note</label><input type="text" required={formAbsence.type === 'absence'} value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder={formAbsence.type === 'heures_supp' ? "Ex: Réunion, Pré-rentrée..." : "Optionnel..."} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>
+                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif / Note</label><input type="text" required={formAbsence.type === 'absence'} value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder={formAbsence.type === 'heures_supp' ? "Ex: Réunion, Pré-rentrée..." : "Optionnel..."} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent ${t.header}`} /></div>
+                  
                   <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition mt-2`}>Enregistrer pour {formAbsence.agentIds.length} agent(s)</button>
                 </form>
               </div>
@@ -2767,7 +2193,7 @@ useEffect(() => {
                 <div className="overflow-x-auto flex-1">
                   <table className="w-full text-sm text-left">
                     <thead className={`${t.bgLight} ${t.header} uppercase text-xs border-b ${t.borderLight}`}><tr><th className="p-3">Date</th>{!filtreAgentAbsence && <th className="p-3">Agent</th>}<th className="p-3">Type</th><th className="p-3 text-center">Durée</th><th className="p-3">Motif</th><th className="p-3 text-center">Statut (Retards)</th><th className="p-3 text-center">Action</th></tr></thead>
-                    <tbody className="divide-y divide-black/5">
+                    <tbody className="divide-y divide-black/5 dark:divide-white/5">
                       {absencesFiltrees.map(a => {
                         const ag = agents.find(agent => agent.id === a.agentId); const typeAbs = a.type || 'absence'; 
                         const dureeAbs = getHeuresAbsence(a);
@@ -2777,10 +2203,10 @@ useEffect(() => {
                             {!filtreAgentAbsence && <td className={`p-3 font-bold ${t.header}`}>{ag ? ag.nom : 'Inconnu'}</td>}
                             <td className="p-3 flex items-center gap-1"><span className={`px-2 py-0.5 rounded text-xs font-bold ${typeAbs === 'absence' ? 'bg-red-500/20 text-red-500' : typeAbs === 'retard' ? 'bg-orange-500/20 text-orange-500' : 'bg-green-500/20 text-green-600'}`}>{typeAbs.toUpperCase()}</span></td>
                             <td className={`p-3 text-center font-mono font-bold ${t.header}`}>{formatHeureTableau(dureeAbs, true)}</td>
-                            <td className="p-3 font-bold text-xs"><span className={`px-2 py-1 rounded bg-black/5`}>{a.impact === 'global' ? '🌍 Global' : a.impact === 'local' ? '📍 Local' : '⚪ Neutre'}</span></td>
+                            <td className="p-3 font-bold text-xs"><span className={`px-2 py-1 rounded bg-black/5 dark:bg-white/5`}>{a.impact === 'global' ? '🌍 Global' : a.impact === 'local' ? '📍 Local' : '⚪ Neutre'}</span></td>
                             <td className="p-3 text-gray-500 italic">{a.motif || ''}</td>
                             <td className="p-3 text-center"><button onClick={() => supprimerAbsence(a.id)} className="text-gray-500 hover:text-red-500 px-2 py-1 rounded text-xs font-bold transition">✖</button></td>
-                          </tr>                        
+                          </tr>                       
                         );
                       })}
                       {absencesFiltrees.length === 0 && ( <tr><td colSpan={filtreAgentAbsence ? "6" : "7"} className="p-6 text-center text-gray-500 italic">Aucune absence ou retard enregistré{filtreAgentAbsence ? ' pour cet agent' : ''}.</td></tr> )}
@@ -2800,12 +2226,12 @@ useEffect(() => {
               <div className="flex gap-4 items-center">
                 <select value={agentConsulte} onChange={(e) => setAgentConsulte(Number(e.target.value))} className={`bg-transparent ${t.headerText} border ${t.borderLight} font-bold p-2 rounded outline-none cursor-pointer`}>
                   {agents.map(a => (
-                    <option key={a.id} value={a.id} className="text-gray-900 bg-white dark:text-gray-100 dark:bg-gray-800">
+                    <option key={a.id} value={a.id} className="text-black bg-white">
                       {a.nom} ({a.quotite}%)
                     </option>
                   ))}
                 </select>
-<span className={`text-sm font-medium ${t.textMenuMuted}`}>Année Scolaire {baseYear}-{baseYear+1}</span>
+                <span className={`text-sm font-medium ${t.textMenuMuted}`}>Année Scolaire {baseYear}-{baseYear+1}</span>
               </div>
               <div className={`hidden print:block text-xl font-bold ${t.headerText}`}>Bilan Annuel : {agents.find(a=>a.id===agentConsulte)?.nom} ({baseYear}-{baseYear+1})</div>
               <div className={`flex gap-6 ${t.bgLight} p-2 rounded border ${t.borderLight} print:border-none`}>
@@ -2826,7 +2252,13 @@ useEffect(() => {
                 
                 <div className="flex flex-col items-center">
                   <span className={`text-xs ${t.textMenuMuted} print:text-black`}>Solde Actuel</span>
-                  <span className={`font-mono font-bold px-2 rounded print:border print:border-black ${statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal > 0 ? 'bg-green-500/20 text-green-600 print:text-green-800 print:bg-green-100' : (statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal < 0 ? 'bg-red-500/20 text-red-500 print:text-red-800 print:bg-red-100' : 'bg-emerald-500/20 text-emerald-500 print:text-emerald-800 print:bg-emerald-100')}`}>
+                  <span className={`font-mono font-bold px-2 rounded print:border print:border-black ${
+                    statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal > 0 
+                      ? `bg-green-500/20 ${isDarkMode ? 'text-green-400' : 'text-green-600'} print:text-green-800 print:bg-green-100` 
+                      : (statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal < 0 
+                          ? `bg-red-500/20 ${isDarkMode ? 'text-red-400' : 'text-red-600'} print:text-red-800 print:bg-red-100` 
+                          : `bg-blue-500/20 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} print:text-blue-800 print:bg-blue-100`)
+                  }`}>
                     {statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.soldeGlobal, true)}
                   </span>
                 </div>
@@ -2835,10 +2267,9 @@ useEffect(() => {
             </div>
             <div className={`flex-1 overflow-auto p-4 ${t.bgMain} print:bg-white print:hidden`}>
               <table className="w-full text-center border-collapse text-xs table-fixed min-w-[1200px] shadow-sm">
-<thead>
+                <thead>
                   <tr>
                     {anneeScolaire.map((mois, i) => {
-                      // Calcul dynamique du total des heures pour ce mois précis
                       const daysInMonth = new Date(mois.y, mois.m + 1, 0).getDate();
                       let totalMensuel = 0;
                       
@@ -2866,7 +2297,7 @@ useEffect(() => {
                     })}
                   </tr>
                 </thead>
-                  <tbody>
+                <tbody>
                   {Array.from({ length: 31 }, (_, i) => i + 1).map(jourNum => (
                     <tr key={jourNum}>
                       {anneeScolaire.map((mois, idx) => {
@@ -2890,7 +2321,6 @@ useEffect(() => {
 
                         let noteAffichage = infoPeriode ? infoPeriode.nom : (exc ? exc.note : '');
                         
-                        // Si des heures sont travaillées pendant les vacances, on masque le texte "Vacances..."
                         if (hFinal > 0 && infoPeriode && infoPeriode.type === 'vacances') {
                           noteAffichage = exc ? exc.note : '';
                         }
@@ -2905,15 +2335,15 @@ useEffect(() => {
                         if (dayOfWeek === 6) bgJour = t.bgMain;  
                         
                         if (infoPeriode) {
-                          if (infoPeriode.type === 'ferie') bgJour = "bg-green-500/20 text-green-600 font-bold";
+                          if (infoPeriode.type === 'ferie') bgJour = `bg-green-500/20 font-bold ${isDarkMode ? 'text-green-400' : 'text-green-600'}`;
                           else bgJour = `${t.bgLight} ${t.header}`; 
                         }
 
-                        if (absDuJour.length > 0) bgJour = "bg-red-500/20 text-red-500 font-bold";
+                        if (absDuJour.length > 0) bgJour = `bg-red-500/20 font-bold ${isDarkMode ? 'text-red-400' : 'text-red-600'}`;
 
                         const isExc = exc || absDuJour.length > 0;
-                        const cellBg1 = isExc ? 'bg-orange-500/20 text-orange-500' : t.cardBg;
-                        const cellBg2 = isExc ? 'bg-orange-500/10 text-orange-500 font-bold' : `${t.cardBg} ${t.textMenuMuted}`;
+                        const cellBg1 = isExc ? `bg-orange-500/20 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}` : t.cardBg;
+                        const cellBg2 = isExc ? `bg-orange-500/10 font-bold ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}` : `${t.cardBg} ${t.textMenuMuted}`;
 
                         return (
                           <td key={idx} className={`border ${t.borderLight} p-0 hover:outline hover:outline-2 hover:outline-blue-500 cursor-pointer relative`} onClick={() => gererClicJourAgent(agentConsulte, dateStr, hFinal, noteAffichage)}>

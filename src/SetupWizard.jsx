@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { getJoursFerie, calculerContratBetty, getContrastYIQ, parseHeureSaisie, formatHeureMinutes, executeImport } from './utils';
+import { getJoursFerie, calculerContratBetty, getContrastYIQ, parseHeureSaisie, formatHeureMinutes } from './utils';
+import { saveAppData } from './storage.js';
 
 export const SetupWizard = ({ onComplete, t }) => {
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
@@ -54,11 +55,21 @@ export const SetupWizard = ({ onComplete, t }) => {
         .filter(r => !r.population || !r.population.toLowerCase().includes("enseignant"))
         .filter(r => r.description && r.description.toLowerCase().includes("vacances"))
         .map(r => {
+           const startD = new Date(r.start_date);
+           // FIX : L'Éducation Nationale fixe le début au vendredi soir après les cours.
+           // On décale le début officiel au samedi pour ne pas amputer les heures du vendredi !
+           if (startD.getDay() === 5) { // 5 = Vendredi
+             startD.setDate(startD.getDate() + 1); // Décale au Samedi
+           }
+           
            const endD = new Date(r.end_date); 
            endD.setDate(endD.getDate() - 1);
+           
            const pad = n => String(n).padStart(2, '0');
+           const startStr = `${startD.getFullYear()}-${pad(startD.getMonth()+1)}-${pad(startD.getDate())}`;
+           
            return { 
-             id: `vac_${Date.now()}_${Math.random()}`, nom: r.description, debut: r.start_date.split('T')[0], fin: `${endD.getFullYear()}-${pad(endD.getMonth()+1)}-${pad(endD.getDate())}`, type: 'vacances'
+             id: `vac_${Date.now()}_${Math.random()}`, nom: r.description, debut: startStr, fin: `${endD.getFullYear()}-${pad(endD.getMonth()+1)}-${pad(endD.getDate())}`, type: 'vacances'
            };
         });
 
@@ -89,12 +100,7 @@ export const SetupWizard = ({ onComplete, t }) => {
     setIsFetchingDates(false);
   };
 
-  const finishSetup = () => {
-    localStorage.setItem('edt-periodes', JSON.stringify(periodes));
-    localStorage.setItem('edt-agents', JSON.stringify(agents));
-    localStorage.setItem('edt-postes', JSON.stringify(postes));
-    localStorage.setItem('edt-dotation', dotation.toString());
-    
+  const finishSetup = async () => {
     const baseDate = new Date(`${anneeScolaireDeBase}-09-01`);
     const day = baseDate.getDay() || 7; 
     baseDate.setDate(baseDate.getDate() - (day - 1));
@@ -127,28 +133,71 @@ export const SetupWizard = ({ onComplete, t }) => {
       }
     });
 
-    localStorage.setItem('edt-template-versions', JSON.stringify([{ id: 1, nom: "Modèle Initial", dateDebut: startStr, events: [], besoins: initialBesoins, statut: 'brouillon' }]));
+    const templateVersions = [{ id: 1, nom: "Modèle Initial", dateDebut: startStr, events: [], besoins: initialBesoins, statut: 'brouillon' }];
+
+    // --- FIX : ENREGISTREMENT SÉCURISÉ DANS INDEXEDDB ---
+    await saveAppData({
+      agents,
+      postes,
+      periodesFeriees: periodes,
+      dotation,
+      templateVersions,
+      customWeeks: {},
+      exceptions: {},
+      absences: [],
+      amplitude: { start: '07:30', end: '18:00' },
+      sonneries: ['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40']
+    });
+
     localStorage.setItem('edt-setup-done', 'true');
     onComplete();
   };
 
-  // NOUVELLE FONCTION POUR L'IMPORT DEPUIS LE WIZARD
+  // --- FIX : NOUVELLE FONCTION POUR L'IMPORT DEPUIS LE WIZARD VIA INDEXEDDB ---
   const handleWizardImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
-        const data = JSON.parse(event.target.result);
-        executeImport(data);
-        alert("Sauvegarde restaurée avec succès !");
-        // On signale directement à React que c'est fini sans avoir besoin de recharger la page
-        onComplete();
+        let parsed = JSON.parse(event.target.result);
+        if (parsed) {
+          const extractData = (newKey, oldKey) => {
+            let val = parsed[newKey] !== undefined ? parsed[newKey] : parsed[oldKey];
+            if (typeof val === 'string') {
+              try { val = JSON.parse(val); } catch(err) {}
+            }
+            if (typeof val === 'string') {
+              try { val = JSON.parse(val); } catch(err) {}
+            }
+            return val;
+          };
+
+          const importedData = {
+            agents: extractData('agents', 'edt-agents') || [],
+            postes: extractData('postes', 'edt-postes') || [],
+            periodesFeriees: extractData('periodesFeriees', 'edt-periodes') || [],
+            templateVersions: extractData('templateVersions', 'edt-template-versions') || [],
+            customWeeks: extractData('customWeeks', 'edt-custom-weeks') || {},
+            exceptions: extractData('exceptions', 'edt-exceptions') || {},
+            absences: extractData('absences', 'edt-absences-retards') || [],
+            amplitude: extractData('amplitude', 'edt-amplitude') || { start: '07:30', end: '18:00' },
+            sonneries: extractData('sonneries', 'edt-sonneries') || ['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40'],
+            dotation: parseFloat(extractData('dotation', 'edt-dotation')) || 0
+          };
+
+          await saveAppData(importedData);
+          localStorage.setItem('edt-setup-done', 'true');
+          alert("Sauvegarde restaurée avec succès !");
+          onComplete(); // Relance l'App principale
+        }
       } catch (err) {
         alert("Erreur lors de la lecture du fichier JSON.");
+        console.error(err);
       }
     };
     reader.readAsText(file);
+    e.target.value = ''; // Reset l'input pour permettre le re-clic sur le même fichier
   };
 
   return (
