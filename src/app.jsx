@@ -246,9 +246,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [modalException, setModalException] = useState({ isOpen: false, agentId: null, dateStr: null, h: '0h00', note: '' });
 
   const [formAbsence, setFormAbsence] = useState({
-    agentId: '', type: 'retard',  journeeComplete: false, dateDebut: new Date().toISOString().split('T')[0],
+    agentIds: [], type: 'retard',  journeeComplete: false, dateDebut: new Date().toISOString().split('T')[0],
     dateFin: '', dureeSaisie: '', impact: 'local', motif: ''
   });
+  const [filtreAgentAbsence, setFiltreAgentAbsence] = useState(null);
 
   const [modalBesoinMulti, setModalBesoinMulti] = useState({ isOpen: false, posteId: '', qte: 1, slots: [] });
   const [modalEditBesoin, setModalEditBesoin] = useState({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' });
@@ -895,9 +896,8 @@ useEffect(() => {
   const ajouterAbsenceRetard = (e) => {
     e.preventDefault();
     sauvegarderEtatPrecedent();
-    if (!formAbsence.agentId || !formAbsence.dateDebut) return alert("Sélectionnez un agent et une date.");
+    if (!formAbsence.agentIds || formAbsence.agentIds.length === 0 || !formAbsence.dateDebut) return alert("Sélectionnez au moins un agent et une date.");
 
-    const agentId = Number(formAbsence.agentId);
     let datesToProcess = [];
     const startD = new Date(formAbsence.dateDebut);
     
@@ -910,35 +910,40 @@ useEffect(() => {
     } else {
       datesToProcess.push(formAbsence.dateDebut);
     }
+    
+    let dureeDecimal = 0;
+    if (!formAbsence.journeeComplete || ['retard', 'heures_supp'].includes(formAbsence.type)) {
+      dureeDecimal = parseHeureSaisie(formAbsence.dureeSaisie || '0');
+      if (dureeDecimal <= 0) return alert("Indiquez une durée valide (ex: 0h45).");
+    }
 
     let newAbs = [...absences];
 
-    datesToProcess.forEach(dateStr => {
-      let startStr = `${dateStr}T08:00:00`;
-      let endStr = `${dateStr}T17:30:00`;
+    formAbsence.agentIds.forEach(agentId => {
+      datesToProcess.forEach(dateStr => {
+        let startStr = `${dateStr}T08:00:00`;
+        let endStr = `${dateStr}T17:30:00`;
 
-      if (!formAbsence.journeeComplete || ['retard', 'heures_supp'].includes(formAbsence.type)) {
-        const dureeDecimal = parseHeureSaisie(formAbsence.dureeSaisie || '0');
-        if (dureeDecimal <= 0) return alert("Indiquez une durée valide (ex: 0h45).");
-        
-        const pad = n => String(n).padStart(2, '0');
-        const startT = new Date(`${dateStr}T08:00:00`);
-        const endT = new Date(startT.getTime() + dureeDecimal * 3600000);
-        startStr = `${dateStr}T08:00:00`;
-        endStr = `${dateStr}T${pad(endT.getHours())}:${pad(endT.getMinutes())}:00`;
-      }
+        if (!formAbsence.journeeComplete || ['retard', 'heures_supp'].includes(formAbsence.type)) {
+          const pad = n => String(n).padStart(2, '0');
+          const startT = new Date(`${dateStr}T08:00:00`);
+          const endT = new Date(startT.getTime() + dureeDecimal * 3600000);
+          startStr = `${dateStr}T08:00:00`;
+          endStr = `${dateStr}T${pad(endT.getHours())}:${pad(endT.getMinutes())}:00`;
+        }
 
-      newAbs.push({
-        id: String(Date.now() + Math.random()),
-        agentId, type: formAbsence.type, start: startStr, end: endStr,
-        motif: formAbsence.motif, impact: formAbsence.impact, 
-        journeeComplete: formAbsence.journeeComplete && formAbsence.type === 'absence'
+        newAbs.push({
+          id: String(Date.now() + Math.random()),
+          agentId: Number(agentId), type: formAbsence.type, start: startStr, end: endStr,
+          motif: formAbsence.motif, impact: formAbsence.impact, 
+          journeeComplete: formAbsence.journeeComplete && formAbsence.type === 'absence'
+        });
       });
     });
 
     setAbsences(newAbs);
-    alert("Opération enregistrée !");
-    setFormAbsence({ agentId: '', type: 'retard', journeeComplete: false, dateDebut: new Date().toISOString().split('T')[0], dateFin: '', dureeSaisie: '', impact: 'local', motif: '' });
+    alert(`${formAbsence.agentIds.length} opération(s) enregistrée(s) avec succès !`);
+    setFormAbsence({ agentIds: [], type: 'retard', journeeComplete: false, dateDebut: new Date().toISOString().split('T')[0], dateFin: '', dureeSaisie: '', impact: 'local', motif: '' });
   };
   
   const supprimerAbsence = (id) => {
@@ -2612,14 +2617,27 @@ useEffect(() => {
           );
         })()}
 
-        {/* 5. VUE ABSENCES & RETARDS */}
-        {vueActive === 'absences' && (
+{/* 5. VUE ABSENCES & RETARDS */}
+        {vueActive === 'absences' && (() => {
+          // Tri des événements (les plus récents en premier) et filtrage si une carte agent est cliquée
+          const absencesFiltrees = [...absences]
+            .filter(a => filtreAgentAbsence ? a.agentId === filtreAgentAbsence : true)
+            .sort((a, b) => new Date(b.start) - new Date(a.start)); 
+
+          return (
           <div className={`flex-1 p-6 overflow-auto ${t.bgMain}`}>
             <h2 className={`text-2xl font-bold ${t.header} mb-6`}>Gestion des Absences et Retards</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               {bilanAbsences.map(b => (
-                <div key={b.id} className={`${t.cardBg} rounded-xl shadow-sm border ${t.borderLight} p-4 border-l-4`} style={{ borderLeftColor: b.couleur }}>
-                  <div className={`font-black text-lg ${t.header} mb-3`}>{b.nom}</div>
+                <div key={b.id} 
+                     onClick={() => setFiltreAgentAbsence(filtreAgentAbsence === b.id ? null : b.id)}
+                     className={`${t.cardBg} rounded-xl shadow-sm border ${t.borderLight} p-4 border-l-4 cursor-pointer transition-all ${filtreAgentAbsence === b.id ? 'ring-2 ring-blue-500 scale-[1.02]' : 'hover:bg-black/5'}`} 
+                     style={{ borderLeftColor: b.couleur }}
+                     title="Cliquez pour filtrer l'historique sur cet agent">
+                  <div className={`font-black text-lg ${t.header} mb-3 flex justify-between items-center`}>
+                    {b.nom}
+                    {filtreAgentAbsence === b.id && <span className="text-[10px] bg-blue-500 text-white px-2 py-1 rounded-full uppercase tracking-wider shadow-sm">Filtré</span>}
+                  </div>
                   <div className="grid grid-cols-3 gap-2 text-center mb-3">
                     <div className="bg-red-500/10 rounded p-1"><div className="text-gray-500 text-[9px] font-bold uppercase">Absences</div><div className="font-mono text-red-600 font-bold mt-1 text-sm">{b.nbAbs} <span className="text-[10px] text-gray-500 block leading-none">({formatHeureTableau(b.hAbs, true)})</span></div></div>
                     <div className="bg-orange-500/10 rounded p-1"><div className="text-gray-500 text-[9px] font-bold uppercase">Retards</div><div className="font-mono text-orange-600 font-bold mt-1 text-sm">{b.nbRet} <span className="text-[10px] text-gray-500 block leading-none">({formatHeureTableau(b.hRet, true)})</span></div></div>
@@ -2636,9 +2654,37 @@ useEffect(() => {
               <div className={`lg:col-span-1 ${t.cardBg} p-6 rounded-xl shadow border ${t.borderLight} h-fit`}>
                 <h3 className={`font-bold text-md ${t.header} mb-4 pb-2 border-b ${t.borderLight}`}>Déclarer un événement</h3>
                 <form onSubmit={ajouterAbsenceRetard} className="space-y-4">
-                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Agent concerné</label><select required value={formAbsence.agentId} onChange={e => setFormAbsence({...formAbsence, agentId: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm`}><option value="" disabled>-- Choisir un agent --</option>{agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}</select></div>
                   <div>
-                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Type d'événement</label>
+                    <div className={`flex justify-between items-center mb-1`}>
+                      <label className={`block text-sm font-semibold ${t.header}`}>Agent(s) concerné(s)</label>
+                      <button type="button" onClick={() => {
+                        if (formAbsence.agentIds.length === agents.length) setFormAbsence({...formAbsence, agentIds: []});
+                        else setFormAbsence({...formAbsence, agentIds: agents.map(a => a.id)});
+                      }} className="text-[10px] bg-black/10 hover:bg-black/20 px-2 py-0.5 rounded font-bold transition-colors">
+                        {formAbsence.agentIds.length === agents.length ? 'Tout décocher' : 'Tous'}
+                      </button>
+                    </div>
+                    <div className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm max-h-32 overflow-y-auto flex flex-col gap-1 shadow-inner`}>
+                      {agents.map(a => (
+                        <label key={a.id} className={`flex items-center gap-2 p-1.5 rounded cursor-pointer transition-colors ${formAbsence.agentIds.includes(a.id) ? 'bg-blue-500/10 dark:bg-blue-500/20' : 'hover:bg-black/5 dark:hover:bg-white/5'}`}>
+                          <input type="checkbox" className="w-4 h-4 cursor-pointer accent-blue-600 rounded"
+                            checked={formAbsence.agentIds.includes(a.id)}
+                            onChange={(e) => {
+                              const newIds = e.target.checked 
+                                ? [...formAbsence.agentIds, a.id] 
+                                : formAbsence.agentIds.filter(id => id !== a.id);
+                              setFormAbsence({...formAbsence, agentIds: newIds});
+                            }}
+                          />
+                          <span className="font-bold">{a.nom}</span>
+                        </label>
+                      ))}
+                      {agents.length === 0 && <span className="text-xs text-gray-500 italic">Aucun agent configuré.</span>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-semibold mb-1 mt-3 ${t.header}`}>Type d'événement</label>
                     <select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', impact: e.target.value === 'heures_supp' && formAbsence.impact === 'neutre' ? 'local' : formAbsence.impact})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm font-bold`}>
                       <option value="absence">🚫 Absence</option>
                       <option value="retard">⏰ Retard</option>
@@ -2669,23 +2715,27 @@ useEffect(() => {
                     </select>
                   </div>
 
-                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif / Note</label><input type="text" required={formAbsence.type === 'absence'} value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder={formAbsence.type === 'heures_supp' ? "Ex: Sortie scolaire..." : "Optionnel..."} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>
-                  <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition`}>Enregistrer</button>
+                  <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Motif / Note</label><input type="text" required={formAbsence.type === 'absence'} value={formAbsence.motif} onChange={e => setFormAbsence({...formAbsence, motif: e.target.value})} placeholder={formAbsence.type === 'heures_supp' ? "Ex: Réunion, Pré-rentrée..." : "Optionnel..."} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} /></div>
+                  <button type="submit" className={`w-full ${t.btnPrimary} rounded p-2.5 text-sm font-bold shadow transition mt-2`}>Enregistrer pour {formAbsence.agentIds.length} agent(s)</button>
                 </form>
               </div>
               
               <div className={`lg:col-span-2 ${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden flex flex-col`}>
-                <div className={`${t.headerBg} ${t.headerText} p-4 font-bold text-sm`}>Historique complet des événements</div>
+                <div className={`${t.headerBg} ${t.headerText} p-4 font-bold text-sm flex justify-between items-center`}>
+                  <span>Historique {filtreAgentAbsence ? `de ${agents.find(a=>a.id===filtreAgentAbsence)?.nom}` : 'complet des événements'}</span>
+                  {filtreAgentAbsence && <button onClick={() => setFiltreAgentAbsence(null)} className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 rounded transition-colors shadow-sm">Afficher tout</button>}
+                </div>
                 <div className="overflow-x-auto flex-1">
                   <table className="w-full text-sm text-left">
-                    <thead className={`${t.bgLight} ${t.header} uppercase text-xs border-b ${t.borderLight}`}><tr><th className="p-3">Date</th><th className="p-3">Agent</th><th className="p-3">Type</th><th className="p-3 text-center">Durée</th><th className="p-3">Motif</th><th className="p-3 text-center">Statut (Retards)</th><th className="p-3 text-center">Action</th></tr></thead>
+                    <thead className={`${t.bgLight} ${t.header} uppercase text-xs border-b ${t.borderLight}`}><tr><th className="p-3">Date</th>{!filtreAgentAbsence && <th className="p-3">Agent</th>}<th className="p-3">Type</th><th className="p-3 text-center">Durée</th><th className="p-3">Motif</th><th className="p-3 text-center">Statut (Retards)</th><th className="p-3 text-center">Action</th></tr></thead>
                     <tbody className="divide-y divide-black/5">
-                      {absences.map(a => {
+                      {absencesFiltrees.map(a => {
                         const ag = agents.find(agent => agent.id === a.agentId); const typeAbs = a.type || 'absence'; 
                         const dureeAbs = getHeuresAbsence(a);
                         return (
                           <tr key={a.id} className={`hover:${t.bgLight} transition-colors`}>
-                            <td className="p-3 font-mono text-xs text-gray-500">{a.start.split('T')[0]}</td><td className={`p-3 font-bold ${t.header}`}>{ag ? ag.nom : 'Inconnu'}</td>
+                            <td className="p-3 font-mono text-xs text-gray-500">{a.start.split('T')[0]}</td>
+                            {!filtreAgentAbsence && <td className={`p-3 font-bold ${t.header}`}>{ag ? ag.nom : 'Inconnu'}</td>}
                             <td className="p-3 flex items-center gap-1"><span className={`px-2 py-0.5 rounded text-xs font-bold ${typeAbs === 'absence' ? 'bg-red-500/20 text-red-500' : typeAbs === 'retard' ? 'bg-orange-500/20 text-orange-500' : 'bg-green-500/20 text-green-600'}`}>{typeAbs.toUpperCase()}</span></td>
                             <td className={`p-3 text-center font-mono font-bold ${t.header}`}>{formatHeureTableau(dureeAbs, true)}</td>
                             <td className="p-3 font-bold text-xs"><span className={`px-2 py-1 rounded bg-black/5`}>{a.impact === 'global' ? '🌍 Global' : a.impact === 'local' ? '📍 Local' : '⚪ Neutre'}</span></td>
@@ -2694,15 +2744,16 @@ useEffect(() => {
                           </tr>                        
                         );
                       })}
-                      {absences.length === 0 && ( <tr><td colSpan="7" className="p-6 text-center text-gray-500 italic">Aucune absence ou retard enregistré.</td></tr> )}
+                      {absencesFiltrees.length === 0 && ( <tr><td colSpan={filtreAgentAbsence ? "6" : "7"} className="p-6 text-center text-gray-500 italic">Aucune absence ou retard enregistré{filtreAgentAbsence ? ' pour cet agent' : ''}.</td></tr> )}
                     </tbody>
                   </table>
                 </div>
               </div>
             </div>
           </div>
-        )}
-
+          );
+        })()}
+        
         {/* 6. VUE CALENDRIER ANNUEL AGENT */}
         {vueActive === 'agent' && agentConsulte && (
           <div className={`flex-1 flex flex-col h-full ${t.bgMain} print:h-auto print:bg-white`}>
