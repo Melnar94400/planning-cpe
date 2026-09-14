@@ -1,22 +1,23 @@
 import React, { useState, useRef } from 'react';
 
-export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvents, snapPoints, onAddCopy, onAddLasso, children }) => {
+export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvents, snapPoints, onAddCopy, onAddLasso, onLassoSelect, children }) => {
   const [lasso, setLasso] = useState(null);
   const trackRef = useRef(null);
 
   const handleMouseDown = (e) => {
+    if (e.button !== 0 || e.metaKey) return;
     if (e.target.closest('.event-item')) return;
-    if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
     e.preventDefault();
 
+    const isCtrl = e.ctrlKey;
     const rect = trackRef.current.getBoundingClientRect();
     const startX = e.clientX;
     const startPercent = Math.max(0, Math.min(1, (startX - rect.left) / rect.width));
     const startMinsRaw = limitesHeures.baseMins + (startPercent * limitesHeures.span);
     const startMins = Math.round(startMinsRaw / 5) * 5;
 
-    // Si on a des créneaux dans le presse-papier, le clic sert à coller
-    if (copiedEvents && copiedEvents.length > 0) {
+    // Si on clique sans Ctrl et qu'on a un presse-papier, on colle !
+    if (!isCtrl && copiedEvents && copiedEvents.length > 0) {
       onAddCopy(startMins);
       return;
     }
@@ -29,7 +30,7 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvents, snapPoin
       const currentMinsRaw = limitesHeures.baseMins + (movePercent * limitesHeures.span);
 
       if (hasMoved) {
-        setLasso({ min: Math.min(startMinsRaw, currentMinsRaw), max: Math.max(startMinsRaw, currentMinsRaw) });
+        setLasso({ min: Math.min(startMinsRaw, currentMinsRaw), max: Math.max(startMinsRaw, currentMinsRaw), isCtrl });
       }
     };
 
@@ -42,12 +43,15 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvents, snapPoin
           if (currentLasso) {
             const finalMin = Math.round(currentLasso.min / 5) * 5;
             const finalMax = Math.round(currentLasso.max / 5) * 5;
-            if (finalMax - finalMin >= 5) onAddLasso(finalMin, finalMax);
+            if (finalMax - finalMin >= 5) {
+              if (currentLasso.isCtrl && onLassoSelect) onLassoSelect(finalMin, finalMax);
+              else if (!currentLasso.isCtrl) onAddLasso(finalMin, finalMax);
+            }
           }
           return null;
         });
       } else {
-        onAddLasso(startMins, Math.min(startMins + 5, limitesHeures.baseMins + limitesHeures.span));
+        if (!isCtrl) onAddLasso(startMins, Math.min(startMins + 5, limitesHeures.baseMins + limitesHeures.span));
       }
     };
 
@@ -71,14 +75,15 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvents, snapPoin
     lassoText = `${formatTime(lasso.min)} - ${formatTime(lasso.max)}`;
   }
 
+  const lassoClass = lasso?.isCtrl 
+    ? 'bg-purple-500/40 border-purple-600 text-purple-950 dark:text-purple-100' 
+    : (isBesoins ? 'bg-red-500/40 border-red-600 text-red-950 dark:text-red-100' : 'bg-blue-500/40 border-blue-600 text-blue-950 dark:text-blue-100');
+
   return (
     <div ref={trackRef} className={`timeline-track flex-1 h-full relative group/timeline select-none ${copiedEvents && copiedEvents.length > 0 ? 'cursor-alias' : 'cursor-crosshair'}`} onMouseDown={handleMouseDown}>
       {children}
       {lasso && (
-        <div 
-          className={`absolute top-0.5 bottom-0.5 rounded border-2 border-dashed z-[999] pointer-events-none flex items-center justify-center text-[9px] font-bold shadow-md ${isBesoins ? 'bg-red-500/40 border-red-600 text-red-950 dark:text-red-100' : 'bg-blue-500/40 border-blue-600 text-blue-950 dark:text-blue-100'}`}
-          style={lassoStyle}
-        >
+        <div className={`absolute top-0.5 bottom-0.5 rounded border-2 border-dashed z-[999] pointer-events-none flex items-center justify-center text-[9px] font-bold shadow-md ${lassoClass}`} style={lassoStyle}>
           {lassoText}
         </div>
       )}
@@ -119,7 +124,6 @@ export const TimelineEvent = ({
     e.stopPropagation();
     e.preventDefault();
 
-    // Gestion du Ctrl+Clic pour la sélection multiple
     if (actionType === 'move' && (e.ctrlKey || e.metaKey)) {
       onCopy(durationMins, startMins);
       return;
@@ -185,7 +189,7 @@ export const TimelineEvent = ({
 
   return (
     <div 
-      className={`event-item absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-0.5 border group/item ${dragState ? 'transition-none z-[99999] opacity-90 scale-[1.02]' : 'transition-all z-10 hover:z-50'} ${conflit ? 'ring-2 ring-red-500 animate-pulse' : ''} ${isCopied ? 'ring-4 ring-blue-500 shadow-xl brightness-110 z-[60]' : 'hover:ring-2'}`}
+      className={`event-item absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-0.5 border group/item ${dragState ? 'transition-none z-[99999] opacity-90 scale-[1.02]' : 'transition-all z-10 hover:z-50'} ${conflit ? 'ring-2 ring-red-500 animate-pulse' : ''} ${isCopied ? 'ring-4 ring-purple-500 shadow-xl brightness-110 z-[60] scale-105' : 'hover:ring-2'}`}
       style={{ left: `${left}%`, width: `${width}%`, backgroundColor: bgColor, borderColor: borderColor, color: textColor, cursor: dragState ? 'grabbing' : 'pointer' }}
       onMouseDown={(e) => handleMouseDown(e, 'move')}
       onMouseEnter={handleMouseEnter}
@@ -202,8 +206,9 @@ export const TimelineEvent = ({
         )}
       </div>
 
-{!isLocked && <div className={`absolute left-0 inset-y-0 cursor-w-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100 ${isMicro ? 'w-[30%]' : 'w-2'}`} onMouseDown={(e) => handleMouseDown(e, 'resizeStart')}></div>}
-      {!isLocked && <div className={`absolute right-0 inset-y-0 cursor-e-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100 ${isMicro ? 'w-[30%]' : 'w-2'}`} onMouseDown={(e) => handleMouseDown(e, 'resizeEnd')}></div>}      
+      {!isLocked && <div className={`absolute left-0 inset-y-0 cursor-w-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100 ${isMicro ? 'w-[30%]' : 'w-2'}`} onMouseDown={(e) => handleMouseDown(e, 'resizeStart')}></div>}
+      {!isLocked && <div className={`absolute right-0 inset-y-0 cursor-e-resize hover:bg-black/30 z-20 opacity-0 group-hover/item:opacity-100 ${isMicro ? 'w-[30%]' : 'w-2'}`} onMouseDown={(e) => handleMouseDown(e, 'resizeEnd')}></div>}
+      
       {!dragState && (
         <div className={`absolute hidden group-hover/item:flex flex-col opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 bg-gray-900 text-white p-2.5 rounded-lg shadow-xl z-[99999] pointer-events-none w-max min-w-[130px] text-center border border-gray-700 
           ${tooltipPos.y === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} 
