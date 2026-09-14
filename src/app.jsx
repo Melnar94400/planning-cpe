@@ -848,6 +848,27 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       setTemplateVersions(templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, statut: 'brouillon' } : tv));
     }
   };
+  
+  const supprimerModele = (idToSuppr) => {
+    if (templateVersions.length <= 1) {
+      alert("Vous ne pouvez pas supprimer le dernier modèle restant.");
+      return;
+    }
+    const modeletest = templateVersions.find(v => v.id === idToSuppr);
+    requestConfirm({
+      title: 'Supprimer ce modèle',
+      message: `Voulez-vous vraiment supprimer le modèle "${modeletest?.nom}" ?\nCette action est irréversible.`,
+      confirmText: 'Supprimer',
+      isDanger: true,
+      onConfirm: () => {
+        const remaining = templateVersions.filter(v => v.id !== idToSuppr);
+        setTemplateVersions(remaining);
+        if (activeTemplateId === idToSuppr) {
+          setActiveTemplateId(remaining[0].id);
+        }
+      }
+    });
+  };
 
   const validerCreationVersionModal = (e) => {
     e.preventDefault();
@@ -1625,9 +1646,21 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   <h2 className={`text-lg font-bold ${t.header} flex items-center gap-2`}>📐 Modèle : {currentTemplate?.nom || 'Semaine Type'}</h2>
                   <div className="flex gap-2 items-center">
                     {currentTemplate?.statut === 'brouillon' && (<button onClick={validerModele} className="bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded hover:bg-green-700 shadow-sm animate-pulse">✅ Valider et Appliquer</button>)}
+                  <div className="flex items-center gap-1.5">
                     <select value={activeTemplateId} onChange={e => setActiveTemplateId(Number(e.target.value))} className={`border ${t.borderLight} rounded p-1.5 text-xs font-bold ${t.cardBg} ${t.header} outline-none`}>
                       {templateVersions.map(tv => <option key={tv.id} value={tv.id}>{tv.statut==='valide'?'🔒':'✏️'} {tv.nom}</option>)}
                     </select>
+                    {templateVersions.length > 1 && (
+                      <button 
+                        type="button" 
+                        onClick={() => supprimerModele(activeTemplateId)} 
+                        className="bg-red-500/10 text-red-500 hover:bg-red-500/20 px-2 py-1.5 rounded text-xs font-bold transition-colors shadow-sm"
+                        title="Supprimer le modèle actif"
+                      >
+                        🗑️
+                      </button>
+                    )}
+                  </div>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3 items-center">
@@ -1636,6 +1669,20 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   ))}
                   <div className="ml-auto text-xs font-bold px-3 py-1.5 rounded-full border border-black/10 dark:border-white/10 shadow-inner bg-black/5 dark:bg-white/5">Lignes : {isBesoinsMode ? '🎯 Postes (Besoins structurels)' : '👤 Agents (Affectations nominatives)'}</div>
                 </div>
+                {/* --- BANDEAU LÉGENDE POSTES (MODÈLE) --- */}
+              <div className={`flex flex-wrap gap-2 p-2.5 mt-3 border ${t.borderLight} rounded-xl ${t.bgLight} items-center justify-center shrink-0 shadow-xs`}>
+                <span className="text-xs font-bold text-gray-500 mr-2 uppercase tracking-wider">Postes :</span>
+                {postes.map(p => (
+                  <span key={p.id} className="px-2.5 py-1 rounded text-[11px] font-bold shadow-sm flex items-center gap-1.5" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>
+                    {p.nom}
+                    <button onClick={() => ouvrirEditionPoste(p)} className="hover:opacity-75 text-xs ml-0.5 cursor-pointer" title="Modifier ce poste">⚙️</button>
+                    <button onClick={(e) => supprimerPoste(p.id, p.nom, e)} className="hover:opacity-60 text-xs font-black ml-0.5 cursor-pointer" title="Supprimer ce poste">✖</button>
+                  </span>
+                ))}
+                <button onClick={ouvrirCreationPoste} className={`ml-2 px-2.5 py-1 rounded text-xs font-bold ${t.btnPrimary} shadow-sm transition-transform hover:scale-105`}>
+                  ➕ Poste
+                </button>
+              </div>
               </div>
 
               <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
@@ -1866,6 +1913,19 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                       <button onClick={reinitialiserSemaineReelle} className="bg-orange-500/20 text-orange-500 hover:bg-orange-500/40 px-3 py-1 rounded text-xs font-bold border border-orange-500 shadow-sm transition">🔄 Rétablir</button>
                     )}
                   </div>
+                </div>
+                <div className={`flex flex-wrap gap-2 p-2.5 mt-3 border ${t.borderLight} rounded-xl ${t.bgLight} items-center justify-center shrink-0 shadow-xs`}>
+                  <span className="text-xs font-bold text-gray-500 mr-2 uppercase tracking-wider">Postes :</span>
+                  {postes.map(p => (
+                    <span key={p.id} className="px-2.5 py-1 rounded text-[11px] font-bold shadow-sm flex items-center gap-1.5" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>
+                      {p.nom}
+                      <button onClick={() => ouvrirEditionPoste(p)} className="hover:opacity-75 text-xs ml-0.5 cursor-pointer" title="Modifier ce poste">⚙️</button>
+                      <button onClick={(e) => supprimerPoste(p.id, p.nom, e)} className="hover:opacity-60 text-xs font-black ml-0.5 cursor-pointer" title="Supprimer ce poste">✖</button>
+                    </span>
+                  ))}
+                  <button onClick={ouvrirCreationPoste} className={`ml-2 px-2.5 py-1 rounded text-xs font-bold ${t.btnPrimary} shadow-sm transition-transform hover:scale-105`}>
+                    ➕ Poste
+                  </button>
                 </div>
               </div>
               

@@ -704,17 +704,6 @@ export const ModalAgent = ({ modalAgent, setModalAgent, validerAgentModal, handl
               <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Couleur</label><div className="flex items-center gap-3"><input type="color" value={modalAgent.couleurFond} onChange={e => setModalAgent({...modalAgent, couleurFond: e.target.value})} className={`w-10 h-10 p-1 border ${t.borderLight} rounded cursor-pointer bg-transparent`} /><span className={`text-sm uppercase ${t.header}`}>{modalAgent.couleurFond}</span></div></div>
             </div>
             
-            <div className="flex flex-col mt-2">
-              <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Jours de présence (Semaine Type)</label>
-              <div className="flex gap-2">
-                {[1, 2, 3, 4, 5].map(day => (
-                  <label key={day} className={`flex-1 flex items-center justify-center py-1.5 rounded border text-[11px] font-bold cursor-pointer transition-colors ${modalAgent.jours?.[day] ? `${t.btnPrimary} border-transparent shadow-sm` : `bg-transparent text-gray-400 border-gray-300 hover:bg-black/5`}`}>
-                    <input type="checkbox" className="hidden" checked={modalAgent.jours?.[day] || false} onChange={e => setModalAgent({...modalAgent, jours: {...(modalAgent.jours || {1:true,2:true,3:true,4:true,5:true}), [day]: e.target.checked}})} />
-                    {['LUN', 'MAR', 'MER', 'JEU', 'VEN'][day - 1]}
-                  </label>
-                ))}
-              </div>
-            </div>
 
             <div className="flex flex-col mt-4 pt-4 border-t border-black/10 dark:border-white/10">
               <div className="flex justify-between items-center mb-2">
