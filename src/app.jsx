@@ -521,7 +521,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       if (printFilter.type === 'poste') return e.extendedProps?.posteId === printFilter.id || e.extendedProps?.isBesoin;
       return true;
     }),
-    ...absences.map(a => ({
+    // FIX : On n'injecte les événements "réels" (absences/retards) QUE si on n'est PAS dans la vue Modèle
+    ...(vueActive === 'template' ? [] : absences.map(a => ({
       id: `abs_${a.id}`,
       start: a.start,
       end: a.end,
@@ -534,7 +535,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     })).filter(e => {
       if (printFilter.type === 'agent' && e.extendedProps.agentId !== printFilter.id) return false;
       return true;
-    })
+    }))
   ];
 
   const activeAlerts = useMemo(() => {
@@ -2392,12 +2393,25 @@ useEffect(() => {
                 <div className="flex justify-between items-center mb-2">
                   <h2 className={`text-lg font-bold ${t.header}`}>📅 Planning Réel {printFilter.type === 'agent' && ` - Filtré pour : ${agents.find(a=>a.id===printFilter.id)?.nom}`} {printFilter.type === 'poste' && ` - Filtré pour le poste : ${postes.find(p=>p.id===printFilter.id)?.nom}`}</h2>
                   <div className="flex gap-2 items-center">
-                    <div className="flex items-center gap-3 mr-4">
+                  <div className="flex items-center gap-3 mr-4">
                       <button onClick={() => setCurrentViewMonday(getMondayStr(new Date()))} className={`px-3 py-1.5 rounded text-xs uppercase tracking-wider font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:bg-black/5 dark:hover:bg-white/5 shadow-sm transition-colors`} title="Revenir à la semaine en cours">
                         Aujourd'hui
                       </button>
                       <button onClick={() => { const d = new Date(activeMonday); d.setDate(d.getDate() - 7); setCurrentViewMonday(getMondayStr(d)); }} className={`px-3 py-1.5 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:bg-black/5 dark:hover:bg-white/5 shadow-sm transition-colors`} title="Semaine précédente">◀</button>
-                      <span className={`font-bold ${t.headerText} text-sm min-w-[160px] text-center`}>Semaine du {activeMonday}</span>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className={`font-bold ${t.headerText} text-sm`}>Semaine du</span>
+                        <input 
+                          type="date" 
+                          value={activeMonday} 
+                          onChange={(e) => {
+                            if (e.target.value) setCurrentViewMonday(getMondayStr(e.target.value));
+                          }} 
+                          className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold ${t.cardBg} ${t.header} outline-none shadow-sm cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors`}
+                          title="Choisir une date pour y aller directement"
+                        />
+                      </div>
+
                       <button onClick={() => { const d = new Date(activeMonday); d.setDate(d.getDate() + 7); setCurrentViewMonday(getMondayStr(d)); }} className={`px-3 py-1.5 rounded text-sm font-bold ${t.cardBg} ${t.header} border ${t.borderLight} hover:bg-black/5 dark:hover:bg-white/5 shadow-sm transition-colors`} title="Semaine suivante">▶</button>
                     </div>
                     <select onChange={(e) => { if(e.target.value) importerModele(e.target.value); e.target.value=''; }} className={`${t.cardBg} ${t.textAccent} px-2 py-1 rounded text-xs font-bold border ${t.borderLight} shadow-sm outline-none cursor-pointer hover:opacity-75`}>
