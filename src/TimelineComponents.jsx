@@ -6,7 +6,11 @@ export const TimelineTrack = ({ limitesHeures, isBesoins, copiedEvents, snapPoin
 
   const handleMouseDown = (e) => {
     if (e.button !== 0 || e.metaKey) return;
-    if (e.target.closest('.event-item')) return;
+    
+    // ASTUCE : On bloque le clic sur un créneau UNIQUEMENT si on n'appuie PAS sur Ctrl.
+    // Si Ctrl est enfoncé, on laisse passer le clic pour pouvoir démarrer le lasso par-dessus !
+    if (!e.ctrlKey && e.target.closest('.event-item')) return;
+    
     e.preventDefault();
 
     const isCtrl = e.ctrlKey;
@@ -121,13 +125,16 @@ export const TimelineEvent = ({
 
   const handleMouseDown = (e, actionType) => {
     if (e.button !== 0 || isLocked) return;
-    e.stopPropagation();
-    e.preventDefault();
 
     if (actionType === 'move' && (e.ctrlKey || e.metaKey)) {
       onCopy(durationMins, startMins);
+      // On NE FAIT PAS stopPropagation() ici pour laisser l'événement traverser
+      // le créneau et atteindre la grille en dessous afin de démarrer le lasso.
       return;
     }
+
+    e.stopPropagation();
+    e.preventDefault();
 
     const track = e.currentTarget.closest('.timeline-track');
     if (!track) return;
