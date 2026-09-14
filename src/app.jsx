@@ -1257,14 +1257,14 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
             {/* ENCART TUTORIEL COPIER-COLLER & SUPPRESSION */}
             {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
-              <div className={`mt-3 p-3 rounded-xl border ${t.borderLight} ${isDarkMode ? 'bg-blue-900/30 text-blue-200' : 'bg-blue-500/10 text-blue-900'} text-xs shadow-sm`}>
-                <p className="font-black mb-1.5 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">💡 Raccourcis Clavier</p>
-                <ul className="space-y-1.5 opacity-90 leading-tight">
-                  <li><kbd className={`${isDarkMode ? 'bg-white/20 text-white' : 'bg-black/10 text-black'} px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold`}>Ctrl</kbd> + <strong>Clic</strong> : Sélectionner 1 créneau</li>
-                  <li><kbd className={`${isDarkMode ? 'bg-white/20 text-white' : 'bg-black/10 text-black'} px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold`}>Ctrl</kbd> + <strong>Glisser</strong> : Lasso multiple</li>
-                  <li className={`pt-1 mt-1 border-t ${isDarkMode ? 'border-blue-400/20' : 'border-blue-500/20'}`}><strong>Clic</strong> (sur la grille) : Coller la sélection</li>
-                  <li><kbd className={`${isDarkMode ? 'bg-white/20 text-white' : 'bg-black/10 text-black'} px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold`}>Suppr</kbd> : <strong>Supprimer</strong> la sélection</li>
-                  <li><kbd className={`${isDarkMode ? 'bg-white/20 text-white' : 'bg-black/10 text-black'} px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold`}>Échap</kbd> : Vider la sélection (Annuler)</li>
+              <div className={`mt-3 p-3 rounded-xl border ${t.borderLight} ${t.bgLight} text-xs shadow-sm`}>
+                <p className={`font-black mb-1.5 flex items-center gap-1.5 text-[11px] uppercase tracking-wider ${t.header}`}>💡 Raccourcis Clavier</p>
+                <ul className={`space-y-1.5 ${t.header} opacity-90 leading-tight`}>
+                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Ctrl</kbd> + <strong className={t.header}>Clic</strong> : Sélectionner 1 créneau</li>
+                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Ctrl</kbd> + <strong className={t.header}>Glisser</strong> : Lasso multiple</li>
+                  <li className={`pt-1 mt-1 border-t ${t.borderLight}`}><strong className={t.header}>Clic</strong> (sur la grille) : Coller la sélection</li>
+                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Suppr</kbd> : <strong className={t.header}>Supprimer</strong> la sélection</li>
+                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Échap</kbd> : <strong className={t.header}>Vider</strong> la sélection (Annuler)</li>
                 </ul>
               </div>
             )}
