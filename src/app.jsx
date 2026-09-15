@@ -1289,6 +1289,9 @@ const targetMonday = (vueActive === 'template')
               <button onClick={() => setVueActive('dashboard')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'dashboard' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📊 Bilan Équipe</button>
               <button onClick={() => { setVueActive('agent'); if(!agentConsulte) setAgentConsulte(agents[0]?.id); }} className={`text-base font-medium py-2 rounded transition ${vueActive === 'agent' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>👤 Calendriers Individuels</button>
               <button onClick={() => setVueActive('absences')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'absences' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📋 Absences & Retards</button>
+              {/* NOUVEAU BOUTON AIDE */}
+              <div className="h-px bg-black/10 dark:bg-white/10 my-1"></div>
+              <button onClick={() => setVueActive('aide')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'aide' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📖 Mode d'emploi</button>
             </div>
 
             {/* ENCART TUTORIEL COPIER-COLLER & SUPPRESSION */}
@@ -2490,9 +2493,91 @@ const targetMonday = (vueActive === 'template')
             </div>
           </div>
         )}
-      </div>
+{/* 7. VUE MODE D'EMPLOI */}
+        {vueActive === 'aide' && (
+          <div className={`flex-1 overflow-y-auto ${t.bgMain} p-4 md:p-8`}>
+            <div className={`max-w-5xl mx-auto ${t.cardBg} rounded-xl shadow-lg border ${t.borderLight} overflow-hidden mb-8`}>
+              <div className={`${t.headerBg} ${t.headerText} p-6 border-b ${t.borderLight}`}>
+                <h2 className="text-2xl font-black text-center tracking-wider">📖 Guide d'utilisation : Planning CPE</h2>
+              </div>
+              
+              <div className={`p-6 md:p-8 space-y-8 text-sm md:text-base leading-relaxed ${t.header}`}>
+                
+                <div className={`p-5 rounded-xl border-l-4 border-blue-500 bg-blue-500/10`}>
+                  <h3 className={`font-bold text-blue-600 dark:text-blue-400 mb-2 uppercase tracking-wider text-xs`}>🎓 La philosophie de l'application</h3>
+                  <p className="italic font-medium">"Ce planning fonctionne en deux temps : on crée d'abord un modèle idéal (la semaine type), puis l'application se charge de la dérouler sur toute l'année, où l'on ne gère plus que les imprévus (absences, remplacements)."</p>
+                </div>
 
-      {/* TOASTS ET BUBBLES */}
+                <div>
+                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>Étape 1 : Préparer le terrain (Les fondations)</h3>
+                  <p className="opacity-80 mb-2">Avant de placer des créneaux, il faut définir vos besoins et vos ressources.</p>
+                  <ul className="list-disc pl-5 space-y-3 opacity-90">
+                    <li><strong>Créer les Postes :</strong> Définissez les lieux ou missions (ex: <em>Grille, Permanence, Bureau CPE</em>). Pour chaque poste, indiquez vos besoins structurels.</li>
+                    <li>
+                      <strong>Créer les Agents :</strong> Ajoutez vos AED. Indiquez leur quotité (ex: 50%, 100%) et s'ils sont étudiants. L'application calculera automatiquement leur contrat annuel.
+                      <div className="mt-1 p-2 rounded bg-black/5 dark:bg-white/5 text-sm border-l-2 border-orange-500">
+                        <strong>📝 Changement de contrat (Avenant) :</strong> Si la quotité d'un agent évolue en cours d'année, ouvrez ses paramètres (⚙️) et ajoutez un <strong>Avenant</strong>. L'application ajustera intelligemment son temps de travail exigé à partir de la date indiquée.
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>Étape 2 : Dessiner la "Semaine Type" (Le Modèle)</h3>
+                  <p className="opacity-80 mb-2">C'est le cœur du réacteur. C'est ici que vous construisez l'emploi du temps théorique "parfait".</p>
+                  <ul className="list-disc pl-5 space-y-3 opacity-90">
+                    <li>Placez vos agents sur les différents postes (ligne par ligne).</li>
+                    <li>L'application surveille <strong>les sous-effectifs</strong> (alerte rouge si un poste manque de personnel) et <strong>les heures</strong> (calculées en temps réel par rapport au contrat).</li>
+                    <li>Une fois équilibré, <strong>validez le modèle</strong>. Il sera alors verrouillé et déployé sur l'ensemble du calendrier scolaire.</li>
+                    <li>
+                      <strong>Créer une Évolution du modèle :</strong> Les plannings changent souvent (ex: 2ème semestre). Sur un modèle validé, cliquez sur "➕ Créer une évolution". L'application copiera votre modèle actuel et vous permettra de l'ajuster pour qu'il prenne le relais à partir de la nouvelle date que vous choisirez.
+                    </li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>Étape 3 : Le Quotidien (Planning Réel & Vue Quotidienne)</h3>
+                  <p className="opacity-80 mb-2">Une fois le modèle validé, vous n'y touchez plus. Vous basculez sur les vues réelles :</p>
+                  <ul className="list-disc pl-5 space-y-2 opacity-90">
+                    <li><strong>Vue Quotidienne :</strong> Idéale pour le matin même, elle montre la journée heure par heure.</li>
+                    <li><strong>Planning Hebdo (Réel) :</strong> Permet d'ajuster la semaine en cours.</li>
+                  </ul>
+                  <p className={`mt-3 text-xs ${t.bgLight} p-3 rounded italic opacity-80 border ${t.borderLight}`}><strong>Exemple :</strong> Un agent est absent mardi ? Allez sur la Vue Quotidienne du mardi, supprimez son créneau et affectez un collègue en remplacement. Cela ne modifiera que ce mardi précis, sans casser votre Semaine Type théorique.</p>
+                </div>
+
+                <div>
+                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>Étape 4 : Les Absences et les Compteurs</h3>
+                  <ul className="list-disc pl-5 space-y-2 opacity-90">
+                    <li>La vue <strong>Absences & Retards</strong> permet de gérer les imprévus.</li>
+                    <li><strong>Impact Global :</strong> Impacte le bilan annuel de l'agent.</li>
+                    <li><strong>Impact Local :</strong> Impacte un compteur interne à compenser entre collègues (ex: un retard de 15 min à rattraper la semaine suivante).</li>
+                  </ul>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className={`p-4 rounded-xl border ${t.borderLight} ${t.bgLight}`}>
+                    <h3 className="font-bold mb-2 flex items-center gap-2">💡 Raccourcis Clavier</h3>
+                    <ul className="space-y-1.5 text-xs opacity-90">
+                      <li><kbd className={`border ${t.borderLight} ${t.cardBg} px-1.5 py-0.5 rounded shadow-sm font-mono`}>Ctrl</kbd> + <strong>Clic</strong> : Sélectionner</li>
+                      <li><kbd className={`border ${t.borderLight} ${t.cardBg} px-1.5 py-0.5 rounded shadow-sm font-mono`}>Ctrl</kbd> + <strong>Glisser</strong> : Lasso multiple</li>
+                      <li><strong>Clic (grille)</strong> : Coller la sélection</li>
+                      <li><kbd className={`border ${t.borderLight} ${t.cardBg} px-1.5 py-0.5 rounded shadow-sm font-mono`}>Suppr</kbd> : Supprimer créneau</li>
+                      <li><kbd className={`border ${t.borderLight} ${t.cardBg} px-1.5 py-0.5 rounded shadow-sm font-mono`}>Ctrl+Z</kbd> : Annuler action</li>
+                    </ul>
+                  </div>
+                  <div className={`p-4 rounded-xl border ${t.borderLight} ${t.bgLight}`}>
+                    <h3 className="font-bold mb-2 flex items-center gap-2">💾 Sauvegarde & Année Suivante</h3>
+                    <p className="text-xs opacity-90 mb-2">L'application fonctionne hors-ligne. Pensez à aller dans les <strong>Paramètres</strong> pour télécharger régulièrement une sauvegarde (fichier JSON).</p>
+                    <p className="text-xs opacity-90">En fin d'année, l'<strong>Assistant de Bascule d'Année</strong> vous permet de préparer la rentrée suivante sans tout retaper.</p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+ {/* TOASTS ET BUBBLES */}
       {showUndoToast && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3 border border-gray-700 animate-in slide-in-from-bottom duration-150 no-print">
           <span className="text-base">↩️</span>

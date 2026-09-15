@@ -998,19 +998,38 @@ export const ModalBasculement = ({ modalBasculement, setModalBasculement, baseYe
             </div>
           </div>
 
-          <div className="space-y-2.5 pt-2">
+<div className="space-y-2.5 pt-2">
             <label className={`flex items-center gap-2 text-sm font-bold cursor-pointer ${t.header}`}>
               <input type="checkbox" checked={garderPostes} onChange={e => setGarderPostes(e.target.checked)} className="w-4 h-4 accent-blue-600" />
               Conserver les postes et leurs grilles ({postes.length} postes)
             </label>
+            
             <label className={`flex items-center gap-2 text-sm font-bold cursor-pointer ${t.header}`}>
-              <input type="checkbox" checked={garderTemplateActuel} onChange={e => setGarderTemplateActuel(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+              <input 
+                type="checkbox" 
+                checked={garderTemplateActuel} 
+                onChange={e => {
+                  const val = e.target.checked;
+                  setGarderTemplateActuel(val);
+                  if (val) setGarderAgents(true); // Force la conservation des agents si on garde le planning
+                }} 
+                className="w-4 h-4 accent-blue-600" 
+              />
               Conserver et reporter la semaine type actuelle ({currentTemplate?.events?.length || 0} affectations, {currentTemplate?.besoins?.length || 0} besoins)
             </label>
+
             <label className={`flex items-center gap-2 text-sm font-bold cursor-pointer ${t.header}`}>
-              <input type="checkbox" checked={garderAgents} onChange={e => setGarderAgents(e.target.checked)} className="w-4 h-4 accent-blue-600" />
-              Conserver la liste des agents ({agents.length} agents)
+              <input 
+                type="checkbox" 
+                checked={garderAgents} 
+                disabled={garderTemplateActuel} // Grisé et bloqué à true si la semaine type est cochée
+                onChange={e => setGarderAgents(e.target.checked)} 
+                className="w-4 h-4 accent-blue-600 disabled:opacity-50" 
+              />
+              Conserver la liste des agents ({agents.length} agents) 
+              {garderTemplateActuel && <span className="text-[11px] font-normal text-blue-500 italic">(Requis pour les affectations)</span>}
             </label>
+
             <p className="text-[11px] text-orange-500 italic mt-1">⚠️ Pensez à faire un export JSON de sauvegarde dans les paramètres avant de lancer cette action !</p>
           </div>
         </div>
