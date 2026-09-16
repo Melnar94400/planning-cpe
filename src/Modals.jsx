@@ -103,26 +103,67 @@ export const ModalPrint = ({ modalPrint, setModalPrint, modeImpression, setModeI
   );
 };
 
-export const ModalNewVersion = ({ modalNewVersion, setModalNewVersion, validerCreationVersionModal, t }) => {
-  if (!modalNewVersion.isOpen) return null;
-  return (
+export const ModalTemplateProps = ({ modalTemplate, setModalTemplate, validerTemplateModal, templateVersions, t }) => {
+  if (!modalTemplate || !modalTemplate.isOpen) return null;
+    return (
     <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
-      <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
-        <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">➕ Créer une évolution</h3></div>
-        <form onSubmit={validerCreationVersionModal}>
+      <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
+        <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">{modalTemplate.id ? '⚙️ Propriétés du modèle' : '➕ Nouveau modèle'}</h3></div>
+        <form onSubmit={validerTemplateModal}>
           <div className="p-5 space-y-4">
             <div>
-              <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Date de début</label>
-              <input type="date" required value={modalNewVersion.dateDebut} onChange={e => setModalNewVersion({...modalNewVersion, dateDebut: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
+              <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nom du modèle</label>
+              <input type="text" required value={modalTemplate.nom} onChange={e => setModalTemplate({...modalTemplate, nom: e.target.value})} placeholder="Ex: Semaine A, Semaine de stage..." className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold`} />
             </div>
-            <div>
-              <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nom court du modèle</label>
-              <input type="text" required value={modalNewVersion.nom} onChange={e => setModalNewVersion({...modalNewVersion, nom: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
+
+            {!modalTemplate.id && (
+              <div>
+                <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Copier depuis</label>
+                <select value={modalTemplate.baseTemplateId || 'vierge'} onChange={e => setModalTemplate({...modalTemplate, baseTemplateId: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold`}>
+                  <option value="vierge">📄 Modèle vierge (Grille vide)</option>
+                  <optgroup label="Modèles existants">
+                    {(templateVersions || []).map(tv => (
+                      <option key={tv.id} value={tv.id}>Copier : {tv.nom}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+            )}
+            
+            <div className={`p-3 rounded-lg border ${t.borderLight} ${t.bgLight}`}>
+              <label className={`block text-sm font-semibold mb-2 ${t.header}`}>Type de modèle</label>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="typeModele" value="standard" checked={modalTemplate.typeModele === 'standard'} onChange={() => setModalTemplate({...modalTemplate, typeModele: 'standard'})} className="accent-blue-600" />
+                  <div><strong>Standard</strong> <span className="text-gray-500 text-xs">(Se déploie automatiquement)</span></div>
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input type="radio" name="typeModele" value="ponctuel" checked={modalTemplate.typeModele === 'ponctuel'} onChange={() => setModalTemplate({...modalTemplate, typeModele: 'ponctuel', rythme: 'toutes'})} className="accent-blue-600" />
+                  <div><strong>Volant / Réserve</strong> <span className="text-gray-500 text-xs">(Application manuelle, sans date)</span></div>
+                </label>
+              </div>
             </div>
+
+            {modalTemplate.typeModele === 'standard' && (
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>À partir du</label>
+                  <input type="date" required value={modalTemplate.dateDebut} onChange={e => setModalTemplate({...modalTemplate, dateDebut: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
+                </div>
+                <div className="flex-1">
+                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Alternance</label>
+                  <select value={modalTemplate.rythme || 'toutes'} onChange={e => setModalTemplate({...modalTemplate, rythme: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold`}>
+                    <option value="toutes">Toutes les semaines</option>
+                    <option value="pair">Semaines Paires (A)</option>
+                    <option value="impair">Semaines Impaires (B)</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
           <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
-            <button type="button" onClick={() => setModalNewVersion({...modalNewVersion, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
-            <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>Créer</button>
+            <button type="button" onClick={() => setModalTemplate({...modalTemplate, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
+            <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>{modalTemplate.id ? 'Enregistrer' : 'Créer'}</button>
           </div>
         </form>
       </div>
@@ -457,8 +498,8 @@ export const ModalParametres = ({
                     ⬆️ Restaurer (Importer JSON)
                   </button>
                   <button onClick={() => setModalBasculement(true)} className="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 rounded text-sm font-bold shadow flex items-center justify-center gap-2 transition-colors">
-  📁 Préparer la rentrée suivante (Bascule)
-</button>
+                    📁 Préparer la rentrée suivante (Bascule)
+                  </button>
                 </div>
               </div>
 
@@ -477,6 +518,9 @@ export const ModalCreation = ({
   supprimerAbsence, applyAction
 }) => {
   if (!modalCreation.isOpen) return null;
+
+  const isJourneeEntiere = modalCreation.journeeEntiere !== false;
+
   return (
     <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
       <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-sm overflow-visible animate-in zoom-in duration-200 border ${t.borderLight}`}>
@@ -509,7 +553,7 @@ export const ModalCreation = ({
                 <div>
                   <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nature</label>
                   <select value={formTypeAbsence} onChange={e => setFormTypeAbsence(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`}>
-                    <option value="absence">🚫 Absence (Plage horaire)</option>
+                    <option value="absence">🚫 Absence</option>
                     <option value="retard">⏰ Retard</option>
                     <option value="heures_supp">🟢 Heures Supp' / Rattrapage</option>
                   </select>
@@ -522,25 +566,64 @@ export const ModalCreation = ({
                     {['absence', 'retard'].includes(formTypeAbsence) && <option value="neutre">⚪ Neutre (Ignoré)</option>}
                   </select>
                 </div>
+
+                {/* NOUVEAU BLOC DATES ET DURÉE POUR ABSENCE */}
+                <div className="p-3 border border-blue-500/30 bg-blue-500/5 rounded-lg mt-3 space-y-3 shadow-inner">
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Du (Date)</label>
+                      <input type="date" required value={modalCreation.date} onChange={e => setModalCreation({...modalCreation, date: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
+                    </div>
+                    <div className="flex-1">
+                      <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Au (Inclus)</label>
+                      <input type="date" required value={modalCreation.dateFin || modalCreation.date} onChange={e => setModalCreation({...modalCreation, dateFin: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent`} />
+                    </div>
+                  </div>
+
+                  <label className={`flex items-center gap-2 text-sm font-bold cursor-pointer ${t.header}`}>
+                    <input type="checkbox" checked={isJourneeEntiere} onChange={e => setModalCreation({...modalCreation, journeeEntiere: e.target.checked})} className="w-4 h-4 accent-blue-600" />
+                    Journée(s) entière(s)
+                  </label>
+
+                  {!isJourneeEntiere && (
+                    <div>
+                      <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Durée manuelle (ex: 1h30)</label>
+                      <input type="text" required placeholder="Ex: 1h30" value={modalCreation.duree || ''} onChange={e => setModalCreation({ ...modalCreation, duree: e.target.value })} className={`w-full border ${t.borderLight} rounded p-2 font-bold text-center bg-transparent`} />
+                    </div>
+                  )}
+                  {isJourneeEntiere && (
+                    <p className="text-[11px] text-blue-600 dark:text-blue-400 italic leading-tight">
+                      La durée sera calculée automatiquement d'après l'emploi du temps de l'agent sur cette période.
+                    </p>
+                  )}
+                </div>
               </>
             ) : (
-              <div>
-                <label className={`block text-sm font-semibold mb-1 ${t.header}`}>📍 Poste</label>
-                <DropdownAvecCouleur 
-                  options={postes.map(p => ({ id: p.id, nom: p.nom, couleur: p.couleur }))}
-                  value={formPoste}
-                  onChange={setFormPoste}
-                  placeholder="-- Sélectionner un poste --"
-                  t={t}
-                />
-              </div>
+              <>
+                <div>
+                  <label className={`block text-sm font-semibold mb-1 ${t.header}`}>📍 Poste</label>
+                  <DropdownAvecCouleur 
+                    options={postes.map(p => ({ id: p.id, nom: p.nom, couleur: p.couleur }))}
+                    value={formPoste}
+                    onChange={setFormPoste}
+                    placeholder="-- Sélectionner un poste --"
+                    t={t}
+                  />
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Début</label>
+                    <input type="time" required value={extractTimeStr(modalCreation.start)} onChange={e => setModalCreation({...modalCreation, start: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} />
+                  </div>
+                  <div className="flex-1">
+                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin</label>
+                    <input type="time" required value={extractTimeStr(modalCreation.end)} onChange={e => setModalCreation({...modalCreation, end: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} />
+                  </div>
+                </div>
+              </>
             )}
 
-            <div className="flex gap-4">
-              <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Début</label><input type="time" required value={extractTimeStr(modalCreation.start)} onChange={e => setModalCreation({...modalCreation, start: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div>
-              <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Fin</label><input type="time" required value={extractTimeStr(modalCreation.end)} onChange={e => setModalCreation({...modalCreation, end: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} /></div>
-            </div>
-            <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>📝 {formTypeEvent === 'absence' ? 'Motif' : 'Note'}</label><input type="text" value={formNote} onChange={e => setFormNote(e.target.value)} placeholder={formTypeEvent === 'absence' ? "Ex: Maladie..." : "Ex: Réunion..."} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} autoFocus={!!modalCreation.eventId} /></div>
+            <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>📝 {formTypeEvent === 'absence' ? 'Motif' : 'Note'}</label><input type="text" value={formNote} onChange={e => setFormNote(e.target.value)} placeholder={formTypeEvent === 'absence' ? "Ex: Maladie, Grève..." : "Ex: Réunion..."} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} autoFocus={!!modalCreation.eventId} /></div>
           </div>
           
           <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-between items-center rounded-b-xl`}>
@@ -794,7 +877,7 @@ export const ModalBasculement = ({ modalBasculement, setModalBasculement, baseYe
   const [nouvelleAnnee, setNouvelleAnnee] = useState(baseYear + 1);
   const [zone, setZone] = useState("Zone C");
   const [garderPostes, setGarderPostes] = useState(true);
-    const [garderAgents, setGarderAgents] = useState(true); // <-- Correctement activé par défaut pour garder les agents et leurs affectations
+  const [garderAgents, setGarderAgents] = useState(true); // <-- Correctement activé par défaut pour garder les agents et leurs affectations
   const [garderTemplateActuel, setGarderTemplateActuel] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -998,7 +1081,7 @@ export const ModalBasculement = ({ modalBasculement, setModalBasculement, baseYe
             </div>
           </div>
 
-<div className="space-y-2.5 pt-2">
+          <div className="space-y-2.5 pt-2">
             <label className={`flex items-center gap-2 text-sm font-bold cursor-pointer ${t.header}`}>
               <input type="checkbox" checked={garderPostes} onChange={e => setGarderPostes(e.target.checked)} className="w-4 h-4 accent-blue-600" />
               Conserver les postes et leurs grilles ({postes.length} postes)
