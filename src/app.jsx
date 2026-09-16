@@ -40,41 +40,12 @@ const SafeTimelineEvent = (props) => {
 };
 // =========================================================================
 
-// =========================================================================
-// MOTEUR DE SEMAINE A/B ET MODÈLES VOLANTS 
-// =========================================================================
-const getNumeroSemaine = (dateStr) => {
-  const d = new Date(dateStr.split('T')[0]);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
-  const week1 = new Date(d.getFullYear(), 0, 4);
-  return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-};
-
-const getApplicableTemplate = (mondayStr, templates) => {
-  if (!templates || templates.length === 0) return null;
-  const weekNum = getNumeroSemaine(mondayStr);
-  const isPair = weekNum % 2 === 0;
-
-  const templatesPossibles = [...templates]
-    .filter(t => t.typeModele !== 'ponctuel')
-    .sort((a,b) => b.dateDebut.localeCompare(a.dateDebut));
-
-  return templatesPossibles.find(t => {
-    if (t.dateDebut > mondayStr) return false;
-    if (t.rythme === 'pair' && !isPair) return false;
-    if (t.rythme === 'impair' && isPair) return false;
-    return true;
-  }) || templatesPossibles[0] || templates[0];
-};
-// =========================================================================
-
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
   
   const [modalBasculement, setModalBasculement] = useState(false);
+
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [now, setNow] = useState(new Date());
-
   // --- GESTIONNAIRE DE CONFIRMATION ---
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isDanger: true, confirmText: 'Confirmer' });
   const requestConfirm = (options) => setConfirmDialog({ isOpen: true, isDanger: true, confirmText: 'Confirmer', ...options });
@@ -93,12 +64,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   });
   
+  // -- ÉTATS VIDES AU DÉMARRAGE (Remontés par IndexedDB) --
   const [agents, setAgents] = useState([]);
   const [postes, setPostes] = useState([]);
   const [jourTemplate, setJourTemplate] = useState(1); 
   const [periodesFeriees, setPeriodesFeriees] = useState([]);
   const [dotation, setDotation] = useState(0);
-  
   const [templateVersions, setTemplateVersions] = useState([{ id: 1, nom: 'Chargement...', dateDebut: `2024-09-01`, statut: 'brouillon', events: [], besoins: [] }]);
   const [activeTemplateId, setActiveTemplateId] = useState(1);
   const [customWeeks, setCustomWeeks] = useState({});
@@ -134,6 +105,37 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   };
   const baseYear = getSchoolYearBase();
   const fallbackTemplateDate = getMondayStr(`${baseYear}-09-01`);
+
+  // =========================================================================
+  // MOTEUR INTELLIGENT DE SEMAINE A/B ET MODÈLES VOLANTS 
+  // =========================================================================
+  const getSchoolWeekRelative = useCallback((dateStr) => {
+    const targetMonday = new Date(getMondayStr(dateStr));
+    const rentree = new Date(baseYear, 8, 1);
+    const rentreeMonday = new Date(getMondayStr(rentree));
+    const diffTime = targetMonday.getTime() - rentreeMonday.getTime();
+    return Math.round(diffTime / (1000 * 60 * 60 * 24 * 7)); 
+  }, [baseYear]);
+
+  const getApplicableTemplate = useCallback((mondayStr, templates) => {
+    if (!templates || templates.length === 0) return null;
+    
+    const weekIndex = getSchoolWeekRelative(mondayStr);
+    const isPair = weekIndex % 2 === 0; 
+
+    const templatesPossibles = [...templates]
+      .filter(t => t.typeModele !== 'ponctuel') 
+      .sort((a,b) => (b.dateDebut || '').localeCompare(a.dateDebut || ''));
+
+    return templatesPossibles.find(t => {
+      if ((t.dateDebut || '') > mondayStr) return false;
+      if (t.rythme === 'pair' && !isPair) return false;
+      if (t.rythme === 'impair' && isPair) return false;
+      return true;
+    }) || templatesPossibles[0] || templates[0];
+  }, [getSchoolWeekRelative]);
+  // =========================================================================
+
   // =========================================================================
   // CHARGEMENT INITIAL (INDEXED DB)
   // =========================================================================
@@ -157,16 +159,16 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
           setTemplateVersions(data.templateVersions.map(p => ({ ...p, statut: p.statut || 'valide' })));
           setActiveTemplateId(data.templateVersions[0].id);
         } else {
-          setTemplateVersions([{ id: 1, nom: 'Semaine Type par défaut', dateDebut: `${baseYear}-09-01`, statut: 'brouillon', typeModele: 'standard', rythme: 'toutes', events: [], besoins: [] }]);
+          setTemplateVersions([{ id: 1, nom: 'Semaine Type par défaut', dateDebut: `${baseYear}-09-01`, statut: 'brouillon', typeModele: 'standard', rythme: 'toutes', events: [], besoins: [], objectifsHebdo: {} }]);
         }
       } else {
-        setTemplateVersions([{ id: 1, nom: 'Semaine Type par défaut', dateDebut: `${baseYear}-09-01`, statut: 'brouillon', typeModele: 'standard', rythme: 'toutes', events: [], besoins: [] }]);
+        setTemplateVersions([{ id: 1, nom: 'Semaine Type par défaut', dateDebut: `${baseYear}-09-01`, statut: 'brouillon', typeModele: 'standard', rythme: 'toutes', events: [], besoins: [], objectifsHebdo: {} }]);
         setSonneriesText(sonneries.join(', '));
       }
       setIsDataLoaded(true); 
     };
     initData();
-  }, []);
+  }, [baseYear, sonneries]);
 
   // =========================================================================
   // SAUVEGARDE SILENCIEUSE (DEBOUNCED)
@@ -185,17 +187,18 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const ouvrirCreationPoste = () => {
     setModalPoste({
       isOpen: true, id: null, nom: '', couleur: '#8B5CF6', qte: 1, 
-      slots: [] // ✅ La grille de besoins est désormais vide par défaut
+      slots: [] 
     });
   };
 
   const ouvrirEditionPoste = (poste) => {
-    const defaultSlots = poste.slots || []; // ✅ On ne force plus de créneau 8h-12h si le poste est vide
+    const defaultSlots = poste.slots || []; 
     setModalPoste({ isOpen: true, id: poste.id, nom: poste.nom, couleur: poste.couleur || '#8B5CF6', qte: poste.qte || 1, slots: defaultSlots });
   };
 
   const generateBesoinsFromSlots = (posteId, posteNom, qte, slots, templateDateStr) => {
-    const baseMonday = new Date(getMondayStr(templateDateStr || fallbackTemplateDate));    const newBesoins = [];
+    const baseMonday = new Date(getMondayStr(templateDateStr || fallbackTemplateDate));
+    const newBesoins = [];
     slots.forEach(slot => {
       if (slot.start && slot.end) {
         [1, 2, 3, 4, 5].forEach(dayIndex => {
@@ -286,7 +289,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     agentIds: [], type: 'retard',  journeeComplete: false, dateDebut: new Date().toISOString().split('T')[0],
     dateFin: '', dureeSaisie: '', impact: 'local', motif: ''
   });
-  
   const [filtreAgentAbsence, setFiltreAgentAbsence] = useState(null);
 
   const [modalBesoinMulti, setModalBesoinMulti] = useState({ isOpen: false, posteId: '', qte: 1, slots: [] });
@@ -316,7 +318,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
 
-  const currentTemplate = templateVersions.find(v => v.id === activeTemplateId) || templateVersions[0] || { id: 1, nom: 'Chargement...', dateDebut: `${baseYear}-09-01`, statut: 'brouillon', events: [], besoins: [] }; 
+  const currentTemplate = templateVersions.find(v => v.id === activeTemplateId) || templateVersions[0] || { id: 1, nom: 'Chargement...', dateDebut: `${baseYear}-09-01`, statut: 'brouillon', events: [], besoins: [], objectifsHebdo: {} }; 
 
   const gabarits = useMemo(() => {
     const g = {};
@@ -369,7 +371,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return null;
   };
 
-  const getHeuresTheoriquesJour = (agentId, dateStr) => {
+  const getHeuresTheoriquesJourRaw = (agentId, dateStr) => {
     const dateObj = new Date(dateStr);
     const mondayStr = getMondayStr(dateObj);
     const dayOfWeek = dateObj.getDay();
@@ -397,6 +399,17 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         if (customWeeks[mondayStr]) hJour = 0; 
         else if (!estWeekEnd) hJour = gabarits[applicableTemplate?.id]?.[agentId]?.[dayOfWeek] || 0;
       }
+    }
+    return hJour;
+  };
+
+  const getHeuresTheoriquesJour = (agentId, dateStr) => {
+    let hJour = getHeuresTheoriquesJourRaw(agentId, dateStr);
+    const agent = agents.find(a => a.id === agentId);
+    if (agent?.remplacement?.agentId && agent.remplacement.start && agent.remplacement.end) {
+        if (dateStr >= agent.remplacement.start && dateStr <= agent.remplacement.end) {
+            hJour += getHeuresTheoriquesJourRaw(Number(agent.remplacement.agentId), dateStr);
+        }
     }
     return hJour;
   };
@@ -431,13 +444,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       const applicableTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0];
       const hHebdoType = gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0;
 
-      // 1. Calcul du solde en minutes
       let soldeMins = (agent.hContrat - heuresConsommees) * 60;
-      
-      // 2. Arrondi mathématique strict au palier de 5 minutes le plus proche
       soldeMins = Math.round(soldeMins / 5) * 5;
-      
-      // 3. Reconversion en heures décimales
       const soldeGlobal = soldeMins / 60;
 
       return { ...agent, heuresConsommees, soldeGlobal, hHebdoType };
@@ -477,8 +485,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   }, [customWeeks, templateVersions, getApplicableTemplate, periodesFeriees]);
 
   const targetMonday = (vueActive === 'template') 
-      ? (currentTemplate?.dateDebut || fallbackTemplateDate) 
-      : (currentViewMonday || getMondayStr(new Date()));
+    ? (currentTemplate?.dateDebut || fallbackTemplateDate) 
+    : (currentViewMonday || getMondayStr(new Date()));
     
   let currentRealEvents = [];
   let currentBesoins = [];
@@ -532,7 +540,34 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return { ...b, backgroundColor: isSousEffectif ? '#fee2e2' : '#dcfce7', borderColor: isSousEffectif ? '#ef4444' : '#22c55e', extendedProps: { ...b.extendedProps, isBesoin: true, isSousEffectif, minCount } };
   });
 
-  const allCalendarEvents = modeEdition === 'besoins' ? besoinsEvents : currentRealEvents;
+  const applyReplacements = useCallback((eventsList) => {
+    if (!eventsList) return [];
+    return eventsList.map(evt => {
+      if (evt.extendedProps?.isAbsence || evt.extendedProps?.isBesoin) return evt;
+      const dateStr = evt.start.split('T')[0];
+      const origAgentId = evt.extendedProps?.agentId;
+      
+      const replacer = agents.find(a => 
+        a.remplacement && 
+        Number(a.remplacement.agentId) === Number(origAgentId) &&
+        dateStr >= a.remplacement.start && 
+        dateStr <= a.remplacement.end
+      );
+
+      if (replacer) {
+        return {
+          ...evt,
+          title: `${evt.extendedProps.posteNom} - ${replacer.nom}`,
+          backgroundColor: replacer.couleurFond,
+          borderColor: replacer.couleurFond,
+          extendedProps: { ...evt.extendedProps, originalAgentId: origAgentId, agentId: replacer.id, agentNom: replacer.nom }
+        };
+      }
+      return evt;
+    });
+  }, [agents]);
+
+  const allCalendarEvents = modeEdition === 'besoins' ? besoinsEvents : applyReplacements(currentRealEvents);
 
   const conflitsIds = useMemo(() => {
     return detecterChevauchements(allCalendarEvents);
@@ -602,19 +637,16 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     e.preventDefault();
     if (!modalTemplate.nom.trim()) return;
     
-    // Si ponctuel (modèle de réserve), il n'y a pas de date. On met une chaîne vide.
     const isPonctuel = modalTemplate.typeModele === 'ponctuel';
     const mondayDateStr = isPonctuel ? '' : getMondayStr(modalTemplate.dateDebut);
 
     let newArr;
     if (modalTemplate.id) {
-      // Mode édition
       newArr = templateVersions.map(tv => tv.id === modalTemplate.id ? { 
         ...tv, nom: modalTemplate.nom.trim(), dateDebut: mondayDateStr,
         typeModele: modalTemplate.typeModele, rythme: modalTemplate.rythme
       } : tv);
     } else {
-      // Mode Création avec copie (ou non)
       let baseEvts = [];
       let baseBesoins = [];
       if (modalTemplate.baseTemplateId && modalTemplate.baseTemplateId !== 'vierge') {
@@ -628,7 +660,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       const newVersion = { 
         id: Date.now(), nom: modalTemplate.nom.trim(), dateDebut: mondayDateStr, 
         statut: 'brouillon', typeModele: modalTemplate.typeModele, rythme: modalTemplate.rythme,
-        events: baseEvts, besoins: baseBesoins 
+        events: baseEvts, besoins: baseBesoins, objectifsHebdo: {} 
       };
       newArr = [...templateVersions, newVersion];
     }
@@ -638,7 +670,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     if (!modalTemplate.id) setActiveTemplateId(newArr.find(t => t.nom === modalTemplate.nom.trim()).id);
     setModalTemplate({ isOpen: false, id: null, nom: '', dateDebut: '', typeModele: 'standard', rythme: 'toutes', baseTemplateId: null });
   };
-
+  
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && copiedEvents.length > 0) {
@@ -893,21 +925,34 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const applyAction = (action, info) => {
     const cleanId = String(info.id).split('_')[0]; 
+    
+    let infoToSave = { ...info };
+    if (infoToSave.extendedProps?.originalAgentId) {
+      const origA = agents.find(a => a.id === infoToSave.extendedProps.originalAgentId);
+      if (origA) {
+          infoToSave.extendedProps = { ...infoToSave.extendedProps, agentId: origA.id, agentNom: origA.nom };
+          delete infoToSave.extendedProps.originalAgentId;
+          infoToSave.backgroundColor = origA.couleurFond;
+          infoToSave.borderColor = origA.couleurFond;
+          infoToSave.title = `${infoToSave.extendedProps.posteNom || 'Poste'} - ${origA.nom}`;
+      }
+    }
+
     if (vueActive === 'template') {
       let mod = [...currentTemplate.events];
-      if (action === 'add') mod.push({ ...info, id: cleanId });
-      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: info.start, end: info.end } : e);
-      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...info } : e);
+      if (action === 'add') mod.push({ ...infoToSave, id: cleanId });
+      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: infoToSave.start, end: infoToSave.end } : e);
+      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...infoToSave } : e);
       if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
       updateCurrentTemplate(mod, null);
     } 
     else if (vueActive === 'planning' || vueActive === 'journee') {
-      const monStr = info.start ? getMondayStr(info.start) : (currentViewMonday || getMondayStr(jourConsulte));
+      const monStr = infoToSave.start ? getMondayStr(infoToSave.start) : (currentViewMonday || getMondayStr(jourConsulte));
       const currentWeek = customWeeks[monStr] ? [...customWeeks[monStr]] : getEventsForWeek(monStr);
       let mod = currentWeek;
-      if (action === 'add') mod.push(info);
-      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: info.start, end: info.end } : e);
-      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...info } : e);
+      if (action === 'add') mod.push(infoToSave);
+      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: infoToSave.start, end: infoToSave.end } : e);
+      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...infoToSave } : e);
       if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
       setCustomWeeks({ ...customWeeks, [monStr]: mod });
     }
@@ -916,10 +961,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const validerModele = () => {
     setTemplateVersions(templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, statut: 'valide' } : tv));
     
-    const sorted = [...templateVersions].sort((a,b) => a.dateDebut.localeCompare(b.dateDebut));
+    const sorted = [...templateVersions].sort((a,b) => (b.dateDebut || '').localeCompare(a.dateDebut || ''));
     const currentIndex = sorted.findIndex(t => t.id === activeTemplateId);
     const nextTemplate = sorted[currentIndex + 1];
-    const dateFin = nextTemplate ? nextTemplate.dateDebut : '9999-12-31';
+    const dateFin = nextTemplate ? (nextTemplate.dateDebut || '9999-12-31') : '9999-12-31';
 
     const affectedWeeks = Object.keys(customWeeks).filter(m => m >= currentTemplate.dateDebut && m < dateFin);
     
@@ -969,6 +1014,204 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       
       setCustomWeeks({ ...customWeeks, [currentViewMonday]: [...manualEvents, ...shiftedEvents] });
     }
+  };
+
+  const ajouterAbsenceRetard = (e) => {
+    e.preventDefault();
+    sauvegarderEtatPrecedent();
+    if (!formAbsence.agentIds || formAbsence.agentIds.length === 0 || !formAbsence.dateDebut) return alert("Sélectionnez au moins un agent et une date.");
+
+    let datesToProcess = [];
+    const startD = new Date(formAbsence.dateDebut);
+    
+    if (formAbsence.type === 'absence' && formAbsence.journeeComplete && formAbsence.dateFin) {
+      const endD = new Date(formAbsence.dateFin);
+      if (endD < startD) return alert("La date de fin doit être après la date de début.");
+      for (let dt = new Date(startD); dt <= endD; dt.setDate(dt.getDate() + 1)) {
+        const pad = n => String(n).padStart(2, '0');
+        datesToProcess.push(`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`);
+      }
+    } else {
+      datesToProcess.push(formAbsence.dateDebut);
+    }
+    
+    let dureeDecimal = 0;
+    if (!formAbsence.journeeComplete || ['retard', 'heures_supp'].includes(formAbsence.type)) {
+      dureeDecimal = parseHeureSaisie(formAbsence.dureeSaisie || '0');
+      if (dureeDecimal <= 0) return alert("Indiquez une durée valide (ex: 0h45).");
+    }
+
+    let newAbs = [...absences];
+
+    formAbsence.agentIds.forEach(agentId => {
+      const groupId = `grp_${Date.now()}_${Math.random()}`; 
+      let chunksForAgent = [];
+
+      datesToProcess.forEach(dateStr => {
+        let hMissed = 0;
+        
+        if (formAbsence.journeeComplete && formAbsence.type === 'absence') {
+           hMissed = getHeuresTheoriquesJour(Number(agentId), dateStr);
+        } else {
+           hMissed = dureeDecimal;
+        }
+
+        const isStartBoundary = dateStr === formAbsence.dateDebut;
+        const isEndBoundary = dateStr === (formAbsence.dateFin || formAbsence.dateDebut);
+
+        if (hMissed > 0 || isStartBoundary || isEndBoundary) {
+          const pad = n => String(n).padStart(2, '0');
+          const startT = new Date(`${dateStr}T08:00:00`);
+          const endT = new Date(startT.getTime() + hMissed * 3600000);
+
+          chunksForAgent.push({
+            id: Date.now() + Math.random(),
+            groupId: groupId, 
+            agentId: Number(agentId), 
+            type: formAbsence.type, 
+            start: `${dateStr}T08:00:00`, 
+            end: `${dateStr}T${pad(endT.getHours())}:${pad(endT.getMinutes())}:00`,
+            motif: formAbsence.motif, 
+            impact: formAbsence.impact, 
+            journeeComplete: formAbsence.journeeComplete && formAbsence.type === 'absence',
+            dateFinReelle: formAbsence.dateFin || formAbsence.dateDebut
+          });
+        }
+      });
+
+      if (chunksForAgent.length === 0 && formAbsence.journeeComplete) {
+         const ag = agents.find(a => String(a.id) === String(agentId));
+         if (!window.confirm(`${ag?.nom || 'L\'agent'} n'a aucune heure de travail prévue sur cette période. Continuer ?`)) return;
+      }
+
+      newAbs = [...newAbs, ...chunksForAgent];
+    });
+
+    setAbsences(newAbs);
+    alert(`${formAbsence.agentIds.length} opération(s) enregistrée(s) avec succès !`);
+    setFormAbsence({ agentIds: [], type: 'absence', journeeComplete: true, dateDebut: new Date().toISOString().split('T')[0], dateFin: '', dureeSaisie: '', impact: 'global', motif: '' });
+  };
+  
+  const supprimerAbsence = (idOrGroupId) => {
+    const cible = absences.find(a => String(a.id) === String(idOrGroupId) || String(a.groupId) === String(idOrGroupId));
+    if (!cible) return;
+    const gid = cible.groupId || cible.id;
+    const newAbs = absences.filter(a => String(a.groupId) !== String(gid) && String(a.id) !== String(gid));
+    setAbsences(newAbs);
+    sauvegarderVersStorage('absences', newAbs);
+  };
+
+  const ouvrirEditionAbsenceTableau = (a) => {
+    const gid = a.groupId || a.id;
+    const chunks = absences.filter(x => String(x.groupId) === String(gid) || String(x.id) === String(gid));
+    
+    const dates = chunks.map(x => x.start.split('T')[0]).sort();
+    const dDebut = dates[0];
+    const dFin = chunks[0].dateFinReelle || dates[dates.length - 1];
+
+    const dureeTotaleDec = chunks.reduce((acc, curr) => acc + ((new Date(curr.end) - new Date(curr.start)) / 3600000), 0);
+    const heures = Math.floor(dureeTotaleDec);
+    const minutes = Math.round((dureeTotaleDec - heures) * 60);
+    const dureeStr = `${heures}h${String(minutes).padStart(2, '0')}`;
+
+    setFormTypeEvent('absence');
+    setFormTypeAbsence(a.type || 'absence');
+    setFormAbsImpact(a.impact || 'local');
+    setFormAgent(String(a.agentId));
+    setFormNote(a.motif || '');
+    setModalCreation({ 
+      isOpen: true, 
+      eventId: String(gid), 
+      date: dDebut, 
+      dateFin: dFin,
+      journeeEntiere: a.journeeEntiere !== false,
+      duree: dureeStr,
+      start: '08:00', end: '18:00'
+    });
+  };
+
+  const bilanAbsences = agents.map(ag => {
+    const agAbs = absences.filter(a => a.agentId === ag.id);
+    const abs = agAbs.filter(a => a.type === 'absence');
+    const ret = agAbs.filter(a => a.type === 'retard');
+    const supp = agAbs.filter(a => a.type === 'heures_supp');
+    
+    const hAbs = abs.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+    const hRet = ret.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+    const hSupp = supp.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+    
+    const hDetteLocale = agAbs.filter(a => ['absence', 'retard'].includes(a.type) && a.impact === 'local').reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+    const hCreditLocal = supp.filter(a => a.impact === 'local').reduce((sum, a) => sum + getHeuresAbsence(a), 0);
+
+    const balanceLocale = hCreditLocal - hDetteLocale;
+    const hDetteRestante = Math.max(0, -balanceLocale);
+    const hAvance = Math.max(0, balanceLocale);
+
+    return {
+      id: ag.id, nom: ag.nom, couleur: ag.couleurFond, 
+      nbAbs: abs.length, hAbs, nbRet: ret.length, hRet, nbSupp: supp.length, hSupp,
+      hDetteRestante, hAvance
+    };
+  });
+
+  const validerBesoinMultiModal = (e) => {
+    e.preventDefault();
+    if (!modalBesoinMulti.posteId) return alert("Sélectionnez un poste.");
+    const poste = postes.find(p => p.id === Number(modalBesoinMulti.posteId));
+    const generatedBesoins = generateBesoinsFromSlots(poste.id, poste.nom, modalBesoinMulti.qte, modalBesoinMulti.slots);
+    updateCurrentTemplate(null, [...currentTemplate.besoins, ...generatedBesoins]);
+    setModalBesoinMulti({ isOpen: false, posteId: '', qte: 1, slots: [] });
+  };
+
+  const validerEditBesoin = (e) => {
+    e.preventDefault();
+    if (modalEditBesoin.qte <= 0) {
+      updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id).split('_')[0] !== modalEditBesoin.id));
+    } else {
+      const templateDateStr = currentTemplate.dateDebut || fallbackTemplateDate;
+      const newStart = `${templateDateStr}T${modalEditBesoin.start}:00`;
+      const newEnd = `${templateDateStr}T${modalEditBesoin.end}:00`;
+      updateCurrentTemplate(null, currentTemplate.besoins.map(b => String(b.id).split('_')[0] === modalEditBesoin.id ? { 
+        ...b, start: newStart, end: newEnd, extendedProps: { ...b.extendedProps, qte: Number(modalEditBesoin.qte) } 
+      } : b));
+    }
+    setModalEditBesoin({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' });
+  };
+
+  const ouvrirEditionBesoin = (evt) => {
+    if (vueActive !== 'template') return alert("Passez en vue 'Modèle' pour modifier les besoins structurels.");
+    setModalEditBesoin({ isOpen: true, id: String(evt.id).split('_')[0], posteId: evt.extendedProps.posteId, qte: evt.extendedProps.qte, start: extractTimeStr(evt.start), end: extractTimeStr(evt.end) });
+  };
+
+  const ouvrirEdition = (evt) => {
+    const isAbs = evt.extendedProps ? evt.extendedProps.isAbsence : false;
+    let dateJour = evt.startStr || evt.start;
+    if (dateJour && dateJour.includes('T')) {
+      dateJour = dateJour.split('T')[0];
+    }
+    const extProps = evt.extendedProps || {};
+
+    const dStart = new Date(evt.startStr || evt.start);
+    const dEnd = new Date(evt.endStr || evt.end);
+    const dureeDecimal = (dEnd - dStart) / 3600000;
+    const heures = Math.floor(dureeDecimal);
+    const minutes = Math.round((dureeDecimal - heures) * 60);
+    const dureeStr = `${heures}h${String(minutes).padStart(2, '0')}`;
+
+    setFormTypeEvent(isAbs ? 'absence' : 'affectation');
+    setFormTypeAbsence(extProps.typeAbsence || 'absence');
+    setFormAbsImpact(extProps.impact || 'local');
+    setFormAgent(extProps.agentId || '');
+    setFormPoste(extProps.posteId || postes.find(p => p.nom === extProps.posteNom)?.id || '');
+    setFormNote(extProps.motif || extProps.note || '');
+    setModalCreation({ 
+      isOpen: true, 
+      eventId: evt.id, 
+      date: dateJour,
+      start: extractTimeStr(evt.startStr || evt.start), 
+      end: extractTimeStr(evt.endStr || evt.end),
+      duree: dureeStr 
+    });
   };
 
   const calculerHeuresAbsence = (agentId, dateDebutStr, dateFinStr) => {
@@ -1126,66 +1369,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' });
   };
 
-  const ouvrirEditionAbsenceTableau = (a) => {
-    const gid = a.groupId || a.id;
-    const chunks = absences.filter(x => String(x.groupId) === String(gid) || String(x.id) === String(gid));
-    
-    const dates = chunks.map(x => x.start.split('T')[0]).sort();
-    const dDebut = dates[0];
-    const dFin = chunks[0].dateFinReelle || dates[dates.length - 1];
-
-    const dureeTotaleDec = chunks.reduce((acc, curr) => acc + ((new Date(curr.end) - new Date(curr.start)) / 3600000), 0);
-    const heures = Math.floor(dureeTotaleDec);
-    const minutes = Math.round((dureeTotaleDec - heures) * 60);
-    const dureeStr = `${heures}h${String(minutes).padStart(2, '0')}`;
-
-    setFormTypeEvent('absence');
-    setFormTypeAbsence(a.type || 'absence');
-    setFormAbsImpact(a.impact || 'local');
-    setFormAgent(String(a.agentId));
-    setFormNote(a.motif || '');
-    setModalCreation({ 
-      isOpen: true, 
-      eventId: String(gid), 
-      date: dDebut, 
-      dateFin: dFin,
-      journeeEntiere: a.journeeEntiere !== false,
-      duree: dureeStr,
-      start: '08:00', end: '18:00'
-    });
-  };
-
-  const ouvrirEdition = (evt) => {
-    const isAbs = evt.extendedProps ? evt.extendedProps.isAbsence : false;
-    let dateJour = evt.startStr || evt.start;
-    if (dateJour && dateJour.includes('T')) {
-      dateJour = dateJour.split('T')[0];
-    }
-    const extProps = evt.extendedProps || {};
-
-    const dStart = new Date(evt.startStr || evt.start);
-    const dEnd = new Date(evt.endStr || evt.end);
-    const dureeDecimal = (dEnd - dStart) / 3600000;
-    const heures = Math.floor(dureeDecimal);
-    const minutes = Math.round((dureeDecimal - heures) * 60);
-    const dureeStr = `${heures}h${String(minutes).padStart(2, '0')}`;
-
-    setFormTypeEvent(isAbs ? 'absence' : 'affectation');
-    setFormTypeAbsence(extProps.typeAbsence || 'absence');
-    setFormAbsImpact(extProps.impact || 'local');
-    setFormAgent(extProps.agentId || '');
-    setFormPoste(extProps.posteId || postes.find(p => p.nom === extProps.posteNom)?.id || '');
-    setFormNote(extProps.motif || extProps.note || '');
-    setModalCreation({ 
-      isOpen: true, 
-      eventId: evt.id, 
-      date: dateJour,
-      start: extractTimeStr(evt.startStr || evt.start), 
-      end: extractTimeStr(evt.endStr || evt.end),
-      duree: dureeStr 
-    });
-  };
-
   const handleEditAgentChange = (champ, valeur) => {
     const newAgent = { ...modalAgent, [champ]: valeur };
     if (champ === 'quotite' || champ === 'estEtudiant') {
@@ -1201,10 +1384,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const hC = typeof modalAgent.hContrat === 'string' ? parseHeureSaisie(modalAgent.hContrat) : modalAgent.hContrat;
     
     if (modalAgent.id) {
-      setAgents(agents.map(a => a.id === modalAgent.id ? { ...a, nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours, avenants: modalAgent.avenants } : a));
+      setAgents(agents.map(a => a.id === modalAgent.id ? { ...a, nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours, avenants: modalAgent.avenants, remplacement: modalAgent.remplacement } : a));
       updateCurrentTemplate(currentTemplate.events.map(evt => evt.extendedProps?.agentId === modalAgent.id ? { ...evt, extendedProps: { ...evt.extendedProps, agentNom: modalAgent.nom }, backgroundColor: modalAgent.couleurFond, borderColor: modalAgent.couleurFond } : evt), null);
     } else {
-      setAgents([...agents, { id: Date.now(), nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours, avenants: modalAgent.avenants || [] }]);
+      setAgents([...agents, { id: Date.now(), nom: modalAgent.nom, quotite: q, estEtudiant: modalAgent.estEtudiant, hContrat: hC, couleurFond: modalAgent.couleurFond, jours: modalAgent.jours, avenants: modalAgent.avenants || [], remplacement: modalAgent.remplacement }]);
     }
     setModalAgent({ ...modalAgent, isOpen: false });
   };
@@ -1243,6 +1426,14 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setModalException({ isOpen: false, agentId: null, dateStr: null, h: '0h00', note: '' });
   };
 
+  const reinitialiserSemaineReelle = () => {
+    if(confirm('Annuler toutes les modifications de cette semaine ?')) {
+      const newCustom = {...customWeeks};
+      delete newCustom[currentViewMonday];
+      setCustomWeeks(newCustom);
+    }
+  };
+
   const ajouterPeriodeFeriee = (e) => {
     e.preventDefault();
     if (!formPeriode.nom || !formPeriode.debut) return;
@@ -1260,158 +1451,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setJourConsulte(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`);
   };
 
-  const reinitialiserSemaineReelle = () => {
-    if(confirm('Annuler toutes les modifications de cette semaine ?')) {
-      const newCustom = {...customWeeks};
-      delete newCustom[currentViewMonday];
-      setCustomWeeks(newCustom);
-    }
-  };
-
-  const ajouterAbsenceRetard = (e) => {
-    e.preventDefault();
-    sauvegarderEtatPrecedent();
-    if (!formAbsence.agentIds || formAbsence.agentIds.length === 0 || !formAbsence.dateDebut) return alert("Sélectionnez au moins un agent et une date.");
-
-    let datesToProcess = [];
-    const startD = new Date(formAbsence.dateDebut);
-    
-    if (formAbsence.type === 'absence' && formAbsence.journeeComplete && formAbsence.dateFin) {
-      const endD = new Date(formAbsence.dateFin);
-      if (endD < startD) return alert("La date de fin doit être après la date de début.");
-      for (let dt = new Date(startD); dt <= endD; dt.setDate(dt.getDate() + 1)) {
-        const pad = n => String(n).padStart(2, '0');
-        datesToProcess.push(`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`);
-      }
-    } else {
-      datesToProcess.push(formAbsence.dateDebut);
-    }
-    
-    let dureeDecimal = 0;
-    if (!formAbsence.journeeComplete || ['retard', 'heures_supp'].includes(formAbsence.type)) {
-      dureeDecimal = parseHeureSaisie(formAbsence.dureeSaisie || '0');
-      if (dureeDecimal <= 0) return alert("Indiquez une durée valide (ex: 0h45).");
-    }
-
-    let newAbs = [...absences];
-
-    formAbsence.agentIds.forEach(agentId => {
-      const groupId = `grp_${Date.now()}_${Math.random()}`; 
-      let chunksForAgent = [];
-
-      datesToProcess.forEach(dateStr => {
-        let hMissed = 0;
-        
-        if (formAbsence.journeeComplete && formAbsence.type === 'absence') {
-           hMissed = getHeuresTheoriquesJour(Number(agentId), dateStr);
-        } else {
-           hMissed = dureeDecimal;
-        }
-
-        const isStartBoundary = dateStr === formAbsence.dateDebut;
-        const isEndBoundary = dateStr === (formAbsence.dateFin || formAbsence.dateDebut);
-
-        if (hMissed > 0 || isStartBoundary || isEndBoundary) {
-          const pad = n => String(n).padStart(2, '0');
-          const startT = new Date(`${dateStr}T08:00:00`);
-          const endT = new Date(startT.getTime() + hMissed * 3600000);
-
-          chunksForAgent.push({
-            id: Date.now() + Math.random(),
-            groupId: groupId, 
-            agentId: Number(agentId), 
-            type: formAbsence.type, 
-            start: `${dateStr}T08:00:00`, 
-            end: `${dateStr}T${pad(endT.getHours())}:${pad(endT.getMinutes())}:00`,
-            motif: formAbsence.motif, 
-            impact: formAbsence.impact, 
-            journeeComplete: formAbsence.journeeComplete && formAbsence.type === 'absence',
-            dateFinReelle: formAbsence.dateFin || formAbsence.dateDebut
-          });
-        }
-      });
-
-      if (chunksForAgent.length === 0 && formAbsence.journeeComplete) {
-         const ag = agents.find(a => String(a.id) === String(agentId));
-         if (!window.confirm(`${ag?.nom || 'L\'agent'} n'a aucune heure de travail prévue sur cette période. Continuer ?`)) return;
-      }
-
-      newAbs = [...newAbs, ...chunksForAgent];
-    });
-
-    setAbsences(newAbs);
-    alert(`${formAbsence.agentIds.length} opération(s) enregistrée(s) avec succès !`);
-    setFormAbsence({ agentIds: [], type: 'absence', journeeComplete: true, dateDebut: new Date().toISOString().split('T')[0], dateFin: '', dureeSaisie: '', impact: 'global', motif: '' });
-  };
-
-  const supprimerAbsence = (idOrGroupId) => {
-    // Cherche l'absence ou le groupe concerné
-    const cible = absences.find(a => String(a.id) === String(idOrGroupId) || String(a.groupId) === String(idOrGroupId));
-    if (!cible) return;
-    
-    // Identifie l'ID du groupe
-    const gid = cible.groupId || cible.id;
-    
-    // Filtre pour enlever tous les morceaux de cette absence
-    const newAbs = absences.filter(a => String(a.groupId) !== String(gid) && String(a.id) !== String(gid));
-    
-    // Met à jour l'état (la sauvegarde est gérée automatiquement par le useEffect)
-    setAbsences(newAbs);
-  };
-
-  const validerBesoinMultiModal = (e) => {
-    e.preventDefault();
-    if (!modalBesoinMulti.posteId) return alert("Sélectionnez un poste.");
-    const poste = postes.find(p => p.id === Number(modalBesoinMulti.posteId));
-    const generatedBesoins = generateBesoinsFromSlots(poste.id, poste.nom, modalBesoinMulti.qte, modalBesoinMulti.slots);
-    updateCurrentTemplate(null, [...currentTemplate.besoins, ...generatedBesoins]);
-    setModalBesoinMulti({ isOpen: false, posteId: '', qte: 1, slots: [] });
-  };
-
-  const validerEditBesoin = (e) => {
-    e.preventDefault();
-    if (modalEditBesoin.qte <= 0) {
-      updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id).split('_')[0] !== modalEditBesoin.id));
-    } else {
-      const templateDateStr = currentTemplate.dateDebut || fallbackTemplateDate;
-      const newStart = `${templateDateStr}T${modalEditBesoin.start}:00`;
-      const newEnd = `${templateDateStr}T${modalEditBesoin.end}:00`;
-      updateCurrentTemplate(null, currentTemplate.besoins.map(b => String(b.id).split('_')[0] === modalEditBesoin.id ? { 
-        ...b, start: newStart, end: newEnd, extendedProps: { ...b.extendedProps, qte: Number(modalEditBesoin.qte) } 
-      } : b));
-    }
-    setModalEditBesoin({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' });
-  };
-
-  const ouvrirEditionBesoin = (evt) => {
-    if (vueActive !== 'template') return alert("Passez en vue 'Modèle' pour modifier les besoins structurels.");
-    setModalEditBesoin({ isOpen: true, id: String(evt.id).split('_')[0], posteId: evt.extendedProps.posteId, qte: evt.extendedProps.qte, start: extractTimeStr(evt.start), end: extractTimeStr(evt.end) });
-  };
-
-  const bilanAbsences = agents.map(ag => {
-    const agAbs = absences.filter(a => a.agentId === ag.id);
-    const abs = agAbs.filter(a => a.type === 'absence');
-    const ret = agAbs.filter(a => a.type === 'retard');
-    const supp = agAbs.filter(a => a.type === 'heures_supp');
-    
-    const hAbs = abs.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
-    const hRet = ret.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
-    const hSupp = supp.reduce((sum, a) => sum + getHeuresAbsence(a), 0);
-    
-    const hDetteLocale = agAbs.filter(a => ['absence', 'retard'].includes(a.type) && a.impact === 'local').reduce((sum, a) => sum + getHeuresAbsence(a), 0);
-    const hCreditLocal = supp.filter(a => a.impact === 'local').reduce((sum, a) => sum + getHeuresAbsence(a), 0);
-
-    const balanceLocale = hCreditLocal - hDetteLocale;
-    const hDetteRestante = Math.max(0, -balanceLocale);
-    const hAvance = Math.max(0, balanceLocale);
-
-    return {
-      id: ag.id, nom: ag.nom, couleur: ag.couleurFond, 
-      nbAbs: abs.length, hAbs, nbRet: ret.length, hRet, nbSupp: supp.length, hSupp,
-      hDetteRestante, hAvance
-    };
-  });
-
   if (!isDataLoaded) {
     return (
       <div className={`flex h-screen w-screen items-center justify-center ${t.bgMain} ${t.headerText}`}>
@@ -1427,25 +1466,60 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
       {/* -------------------- MODALES -------------------- */}
       <ModalConfirm dialog={confirmDialog} closeDialog={closeConfirm} t={t} />
+
       <ModalPrint modalPrint={modalPrint} setModalPrint={setModalPrint} modeImpression={modeImpression} setModeImpression={setModeImpression} setIsPrinting={setIsPrinting} t={t} />
-      <ModalTemplateProps modalTemplate={modalTemplate} setModalTemplate={setModalTemplate} validerTemplateModal={validerTemplateModal} templateVersions={templateVersions} t={t} />      <ModalPoste modalPoste={modalPoste} setModalPoste={setModalPoste} validerPosteModal={validerPosteModal} t={t} />
+      
+      <ModalTemplateProps modalTemplate={modalTemplate} setModalTemplate={setModalTemplate} validerTemplateModal={validerTemplateModal} templateVersions={templateVersions} t={t} />
+      
+      <ModalPoste modalPoste={modalPoste} setModalPoste={setModalPoste} validerPosteModal={validerPosteModal} t={t} />
+      
       <ModalException modalException={modalException} setModalException={setModalException} validerExceptionJourModal={validerExceptionJourModal} supprimerExceptionJour={supprimerExceptionJour} t={t} />
       
       <ModalParametres 
-        modalParametres={modalParametres} setModalParametres={setModalParametres} setModalBasculement={setModalBasculement}
-        amplitude={amplitude} setAmplitude={setAmplitude} sonneriesText={sonneriesText} setSonneriesText={setSonneriesText} 
-        handleSonneriesBlur={handleSonneriesBlur} formPeriode={formPeriode} setFormPeriode={setFormPeriode} 
-        ajouterPeriodeFeriee={ajouterPeriodeFeriee} periodesFeriees={periodesFeriees} supprimerPeriodeFeriee={supprimerPeriodeFeriee} 
-        isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} themeId={themeId} changeTheme={changeTheme} customColors={customColors} 
-        updateCustomColor={updateCustomColor} handleExport={handleExport} handleImport={handleImport} setPeriodesFeriees={setPeriodesFeriees}
-        baseYear={baseYear} t={t} 
+        modalParametres={modalParametres} 
+        setModalParametres={setModalParametres} 
+        setModalBasculement={setModalBasculement}
+        amplitude={amplitude} 
+        setAmplitude={setAmplitude} 
+        sonneriesText={sonneriesText} 
+        setSonneriesText={setSonneriesText} 
+        handleSonneriesBlur={handleSonneriesBlur} 
+        formPeriode={formPeriode} 
+        setFormPeriode={setFormPeriode} 
+        ajouterPeriodeFeriee={ajouterPeriodeFeriee} 
+        periodesFeriees={periodesFeriees} 
+        supprimerPeriodeFeriee={supprimerPeriodeFeriee} 
+        isDarkMode={isDarkMode} 
+        toggleDarkMode={toggleDarkMode} 
+        themeId={themeId} 
+        changeTheme={changeTheme} 
+        customColors={customColors} 
+        updateCustomColor={updateCustomColor} 
+        handleExport={handleExport} 
+        handleImport={handleImport} 
+        setPeriodesFeriees={setPeriodesFeriees}
+        baseYear={baseYear}
+        t={t} 
       />
 
-      <ModalBasculement modalBasculement={modalBasculement} setModalBasculement={setModalBasculement} baseYear={baseYear} postes={postes} agents={agents} currentTemplate={currentTemplate} t={t} onComplete={() => window.location.reload()} />
+      <ModalBasculement 
+        modalBasculement={modalBasculement} 
+        setModalBasculement={setModalBasculement} 
+        baseYear={baseYear} 
+        postes={postes} 
+        agents={agents} 
+        currentTemplate={currentTemplate}
+        t={t} 
+        onComplete={() => window.location.reload()} 
+      />
+
       <ModalCreation modalCreation={modalCreation} setModalCreation={setModalCreation} validerCreationModal={validerCreationModal} formTypeEvent={formTypeEvent} setFormTypeEvent={setFormTypeEvent} formTypeAbsence={formTypeAbsence} setFormTypeAbsence={setFormTypeAbsence} formAbsImpact={formAbsImpact} setFormAbsImpact={setFormAbsImpact} formAgent={formAgent} setFormAgent={setFormAgent} formPoste={formPoste} setFormPoste={setFormPoste} formNote={formNote} setFormNote={setFormNote} agents={agents} postes={postes} posteActif={posteActif} t={t} vueActive={vueActive} supprimerAbsence={supprimerAbsence} applyAction={applyAction} />
+      
       <ModalBesoinMulti modalBesoinMulti={modalBesoinMulti} setModalBesoinMulti={setModalBesoinMulti} validerBesoinMultiModal={validerBesoinMultiModal} postes={postes} t={t} />
+      
       <ModalEditBesoin modalEditBesoin={modalEditBesoin} setModalEditBesoin={setModalEditBesoin} validerEditBesoin={validerEditBesoin} updateCurrentTemplate={updateCurrentTemplate} currentTemplate={currentTemplate} t={t} />
-      <ModalAgent modalAgent={modalAgent} setModalAgent={setModalAgent} validerAgentModal={validerAgentModal} handleEditAgentChange={handleEditAgentChange} baseYear={baseYear} t={t} />
+      
+      <ModalAgent modalAgent={modalAgent} setModalAgent={setModalAgent} validerAgentModal={validerAgentModal} handleEditAgentChange={handleEditAgentChange} baseYear={baseYear} agents={agents} t={t} />
 
       {/* -------------------- PANEAU LATÉRAL -------------------- */}
       <div className={`${isSidebarOpen ? 'w-80' : 'w-0'} ${t.sidebar} shadow-lg flex flex-col z-20 border-r ${isSidebarOpen ? t.borderLight : 'border-transparent'} no-print shrink-0 transition-all duration-300 ease-in-out`}>
@@ -1515,7 +1589,18 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               <button onClick={() => setVueActive('aide')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'aide' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📖 Mode d'emploi</button>
             </div>
 
-
+            {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
+              <div className={`mt-3 p-3 rounded-xl border ${t.borderLight} ${t.bgLight} text-xs shadow-sm`}>
+                <p className={`font-black mb-1.5 flex items-center gap-1.5 text-[11px] uppercase tracking-wider ${t.header}`}>💡 Raccourcis Clavier</p>
+                <ul className={`space-y-1.5 ${t.header} opacity-90 leading-tight`}>
+                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Ctrl</kbd> + <strong className={t.header}>Clic</strong> : Sélectionner 1 créneau</li>
+                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Ctrl</kbd> + <strong className={t.header}>Glisser</strong> : Lasso multiple</li>
+                  <li className={`pt-1 mt-1 border-t ${t.borderLight}`}><strong className={t.header}>Clic</strong> (sur la grille) : Coller la sélection</li>
+                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Suppr</kbd> : <strong className={t.header}>Supprimer</strong> la sélection</li>
+                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Échap</kbd> : <strong className={t.header}>Vider</strong> la sélection (Annuler)</li>
+                </ul>
+              </div>
+            )}
           </div>
 
           {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
@@ -1532,17 +1617,18 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   <span className="text-2xl block mb-1">🔒</span>
                   <p className={`text-sm font-bold ${t.header}`}>Modèle Validé</p>
                   <p className="text-xs text-gray-500 mt-1">Structure verrouillée pour protéger le compte d'heures passé.</p>
-                  <button onClick={() => setModalTemplate({ isOpen: true, id: null, dateDebut: getMondayStr(new Date()), nom: 'Nouveau Modèle', typeModele: 'standard', rythme: 'toutes', baseTemplateId: activeTemplateId })} className={`mt-3 ${t.btnPrimary} text-xs font-bold px-3 py-2 rounded shadow w-full flex items-center justify-center gap-1`}>➕ Créer une évolution</button>                  <button onClick={deverrouillerModele} className="mt-2 text-xs text-gray-500 hover:text-gray-800 underline">🔓 Déverrouiller (Corriger erreur)</button>
+                  <button onClick={() => setModalTemplate({ isOpen: true, id: null, dateDebut: getMondayStr(new Date()), nom: 'Nouveau Modèle', typeModele: 'standard', rythme: 'toutes', baseTemplateId: activeTemplateId })} className={`mt-3 ${t.btnPrimary} text-xs font-bold px-3 py-2 rounded shadow w-full flex items-center justify-center gap-1`}>➕ Créer une évolution</button>
+                  <button onClick={deverrouillerModele} className="mt-2 text-xs text-gray-500 hover:text-gray-800 underline">🔓 Déverrouiller (Corriger erreur)</button>
                 </div>
               )}
 
-            {modeEdition === 'agents' && (
+              {modeEdition === 'agents' && (
                 <div className="animate-in fade-in">
                   <div>
                     <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600 flex items-center justify-center">+</button></div>
                     <ul className="space-y-1">
                       {statsAgents.map((agent) => {
-                        const weekEvents = vueActive === 'template' ? (currentTemplate?.events || []) : getEventsForWeek(targetMonday);
+                        const weekEvents = applyReplacements(vueActive === 'template' ? (currentTemplate?.events || []) : getEventsForWeek(targetMonday));
                         const agentWeekMins = weekEvents.filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                         const agentWeekHours = agentWeekMins / 60;
                         const activeContract = getActiveContract(agent, targetMonday);
@@ -1620,7 +1706,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   </div>
                 </div>
               )}
-                            
               {vueActive === 'template' && currentTemplate?.statut === 'brouillon' && modeEdition === 'besoins' && (
                 <div className="space-y-4 animate-in fade-in duration-200">
                   <div className="bg-red-900/10 border border-red-500/30 p-3 rounded text-sm text-red-500">
@@ -1679,7 +1764,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               
               <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
                 {isPrinting ? (
-                  <PrintDailyView agents={agents} jourConsulte={jourConsulte} getEventsForWeek={getEventsForWeek} absences={absences} sonneries={sonneries} limitesHeures={limitesHeures} postes={postes} getMondayStr={getMondayStr} amplitude={amplitude} />
+                  <PrintDailyView agents={agents} jourConsulte={jourConsulte} getEventsForWeek={(mStr) => applyReplacements(getEventsForWeek(mStr))} absences={absences} sonneries={sonneries} limitesHeures={limitesHeures} postes={postes} getMondayStr={getMondayStr} amplitude={amplitude} />
                 ) : (
                   <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
                     <div className={`flex flex-wrap gap-2 p-3 border-b ${t.borderLight} ${t.bgLight} justify-center items-center shrink-0`}>
@@ -1742,7 +1827,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
                           {agents.map(agent => {
                             const mondayStr = getMondayStr(jourConsulte);
-                            const allEvents = getEventsForWeek(mondayStr);
+                            const allEvents = applyReplacements(getEventsForWeek(mondayStr));
                             const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
 
                             const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => {
@@ -1916,10 +2001,11 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                         </option>
                       ))}
                     </select>
-<button type="button" onClick={() => {
+                    <button type="button" onClick={() => {
                         const tpl = templateVersions.find(v => v.id === activeTemplateId);
                         if (tpl) setModalTemplate({ isOpen: true, id: tpl.id, nom: tpl.nom, dateDebut: tpl.dateDebut || '', typeModele: tpl.typeModele || 'standard', rythme: tpl.rythme || 'toutes', baseTemplateId: null });
-                                      }} className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 px-2 py-1.5 rounded text-xs font-bold transition-colors shadow-sm" title="Propriétés du modèle">⚙️</button>                    {templateVersions.length > 1 && (
+                    }} className="bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 px-2 py-1.5 rounded text-xs font-bold transition-colors shadow-sm" title="Propriétés du modèle">⚙️</button>
+                    {templateVersions.length > 1 && (
                       <button 
                         type="button" 
                         onClick={() => supprimerModele(activeTemplateId)} 
@@ -2085,8 +2171,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                     const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
                                     const isLocked = currentTemplate?.statut === 'valide';
                                     
-                                      let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo;
-                                      const posteCouleur = evt.extendedProps?.posteCouleur || '#3b82f6';                                    if (isBesoinsMode) {
+                                    let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo;
+                                    if (isBesoinsMode) {
                                       const isSous = evt.extendedProps?.isSousEffectif;
                                       evtBgColor = isSous ? '#dc2626' : '#16a34a'; evtBorderColor = isSous ? '#991b1b' : '#166534'; evtTextColor = '#ffffff';
                                       evtTitle = `${evt.extendedProps?.minCount} / ${evt.extendedProps?.qte} pers.`;
@@ -2342,8 +2428,9 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                           const startD = new Date(evt.start); const endD = new Date(evt.end);
                                           const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
                                           
-                                            let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo; 
-                                            const posteCouleur = evt.extendedProps?.posteCouleur || '#3b82f6';                                          if (evt.extendedProps?.isAbsence) {
+                                          let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo;
+                                          const posteCouleur = evt.extendedProps?.posteCouleur || '#3b82f6';
+                                          if (evt.extendedProps?.isAbsence) {
                                             const typeAbs = evt.extendedProps.typeAbsence;
                                             evtBgColor = typeAbs === 'absence' ? '#ef4444' : typeAbs === 'retard' ? '#f59e0b' : '#10b981';
                                             evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = '#ffffff';
@@ -2506,7 +2593,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               <div className={`lg:col-span-1 ${t.cardBg} p-6 rounded-xl shadow border ${t.borderLight} h-fit`}>
                 <h3 className={`font-bold text-md ${t.header} mb-4 pb-2 border-b ${t.borderLight}`}>Déclarer un événement</h3>
                 <form onSubmit={ajouterAbsenceRetard} className="space-y-4">
-                  {/* 1. SELECTION DES AGENTS */}
                   <div>
                     <div className={`flex justify-between items-center mb-1`}>
                       <label className={`block text-sm font-semibold ${t.header}`}>Agent(s) concerné(s)</label>
@@ -2536,7 +2622,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                     </div>
                   </div>
 
-                  {/* 2. NATURE DE L'EVENEMENT */}
                   <div>
                     <label className={`block text-sm font-semibold mb-1 mt-3 ${t.header}`}>Type d'événement</label>
                     <select value={formAbsence.type} onChange={e => setFormAbsence({...formAbsence, type: e.target.value, journeeComplete: e.target.value === 'absence', impact: e.target.value === 'heures_supp' && formAbsence.impact === 'neutre' ? 'local' : formAbsence.impact})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm font-bold ${t.header}`}>
@@ -2969,7 +3054,7 @@ export default function App() {
           .custom-bg-main { background-color: rgba(var(--c-prim-rgb), 0.05) !important; }
           .custom-bg-light { background-color: rgba(var(--c-prim-rgb), 0.15) !important; }
           .custom-border { border-color: rgba(var(--c-prim-rgb), 0.2) !important; }
-          .custom-card { background-color: ${isDarkMode ? '#1f2937' : '#ffffff'}
+          .custom-card { background-color: ${isDarkMode ? '#1f2937' : '#ffffff'} !important; }
           .custom-sidebar-dark { background-color: rgba(var(--c-prim-rgb), 0.15) !important; }
           .custom-border-dark { border-color: rgba(var(--c-prim-rgb), 0.2) !important; }
         ` : ''}

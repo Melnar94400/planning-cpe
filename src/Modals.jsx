@@ -798,75 +798,81 @@ export const ModalEditBesoin = ({ modalEditBesoin, setModalEditBesoin, validerEd
     </div>
   );
 };
-
-export const ModalAgent = ({ modalAgent, setModalAgent, validerAgentModal, handleEditAgentChange, baseYear, t }) => {
+  export const ModalAgent = ({ modalAgent, setModalAgent, validerAgentModal, handleEditAgentChange, baseYear, agents, t }) => {
   if (!modalAgent.isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
-      <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-md overflow-hidden border ${t.borderLight}`}>
-        <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">{modalAgent.id ? 'Modifier un agent' : 'Nouvel agent'}</h3></div>
+      <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
+        <div className={`${t.headerBg} ${t.headerText} p-4`}><h3 className="font-bold text-lg">{modalAgent.id ? '⚙️ Modifier l\'agent' : '➕ Nouvel agent'}</h3></div>
         <form onSubmit={validerAgentModal}>
-          <div className="p-5 space-y-4">
-            <div><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nom complet</label><input type="text" required value={modalAgent.nom} onChange={e => setModalAgent({...modalAgent, nom: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent`} autoFocus /></div>
-            <div className="flex gap-4">
-              <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Quotité (%)</label><input type="number" step="0.1" required value={modalAgent.quotite} onChange={e => handleEditAgentChange('quotite', e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 font-bold text-center bg-transparent`} /></div>
-              <div className="flex-1 flex flex-col justify-end"><label className={`flex items-center gap-2 p-2 border ${t.borderLight} ${t.bgLight} rounded cursor-pointer font-bold text-sm ${t.header}`}><input type="checkbox" checked={modalAgent.estEtudiant} onChange={e => handleEditAgentChange('estEtudiant', e.target.checked)} className="w-4 h-4" />🎓 Statut Étudiant</label></div>
-            </div>
-            <div className="flex gap-4">
+          <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+            <div className="flex gap-4 items-end">
               <div className="flex-1">
-                <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Contrat (Calculé)</label>
-                <input type="text" required value={typeof modalAgent.hContrat === 'number' ? formatHeureMinutes(modalAgent.hContrat) : modalAgent.hContrat} onChange={e => setModalAgent({...modalAgent, hContrat: e.target.value})} onBlur={e => setModalAgent({...modalAgent, hContrat: parseHeureSaisie(e.target.value)})} className={`w-full border ${t.borderLight} rounded p-2 font-mono text-center bg-transparent`} />
+                <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nom de l'agent</label>
+                <input type="text" required value={modalAgent.nom} onChange={e => handleEditAgentChange('nom', e.target.value)} placeholder="Ex: Jean Dupont" className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold`} />
               </div>
-              <div className="flex-1"><label className={`block text-sm font-semibold mb-1 ${t.header}`}>Couleur</label><div className="flex items-center gap-3"><input type="color" value={modalAgent.couleurFond} onChange={e => setModalAgent({...modalAgent, couleurFond: e.target.value})} className={`w-10 h-10 p-1 border ${t.borderLight} rounded cursor-pointer bg-transparent`} /><span className={`text-sm uppercase ${t.header}`}>{modalAgent.couleurFond}</span></div></div>
+              <div className="w-20">
+                <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Couleur</label>
+                <input type="color" value={modalAgent.couleurFond} onChange={e => handleEditAgentChange('couleurFond', e.target.value)} className="w-full h-9 rounded cursor-pointer border-0 p-0" />
+              </div>
             </div>
-            
+            <div className="flex gap-4 items-center">
+              <div className="flex-1">
+                <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Quotité (%)</label>
+                <input type="number" required min="1" max="100" value={modalAgent.quotite} onChange={e => handleEditAgentChange('quotite', e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold`} />
+              </div>
+              <div className="flex-1 flex items-center gap-2 mt-5">
+                <input type="checkbox" id="estEtudiant" checked={modalAgent.estEtudiant} onChange={e => handleEditAgentChange('estEtudiant', e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                <label htmlFor="estEtudiant" className={`text-sm font-semibold cursor-pointer ${t.header}`}>🎓 Étudiant (Crédit d'heures)</label>
+              </div>
+            </div>
+            <div>
+              <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Heures annuelles (Contrat cible)</label>
+              <div className="flex items-center gap-2">
+                <input type="text" required value={modalAgent.hContrat} onChange={e => handleEditAgentChange('hContrat', e.target.value)} className={`w-32 border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold font-mono`} />
+                <span className="text-xs text-gray-500 italic">Format: décimal (ex: 803.5) ou heures (ex: 803h30)</span>
+              </div>
+            </div>
 
-            <div className="flex flex-col mt-4 pt-4 border-t border-black/10 dark:border-white/10">
-              <div className="flex justify-between items-center mb-2">
-                <label className={`text-sm font-semibold ${t.header}`}>Avenants (Changement en cours d'année)</label>
-                <button type="button" onClick={() => {
-                  const newAv = [...(modalAgent.avenants || []), { date: '', quotite: 100, estEtudiant: false }];
-                  setModalAgent({...modalAgent, avenants: newAv});
-                }} className={`text-xs ${t.bgLight} hover:opacity-80 px-2 py-1 rounded font-bold transition-colors`}>➕ Ajouter</button>
-              </div>
-              {(modalAgent.avenants || []).map((av, idx) => (
-                <div key={idx} className="flex gap-2 items-center mb-2 bg-black/5 dark:bg-white/5 p-2 rounded shadow-inner">
-                  <input type="date" required value={av.date} onChange={e => {
-                    const newAv = [...modalAgent.avenants]; newAv[idx].date = e.target.value;
-                    const newAgent = {...modalAgent, avenants: newAv};
-                    newAgent.hContrat = calculerContratProratise(newAgent, baseYear, calculerContratBetty);
-                    setModalAgent(newAgent);
-                  }} className="flex-1 border border-black/20 dark:border-white/20 rounded p-1 text-xs bg-transparent" />
-                  <input type="number" step="0.1" required value={av.quotite} onChange={e => {
-                    const newAv = [...modalAgent.avenants]; newAv[idx].quotite = e.target.value;
-                    const newAgent = {...modalAgent, avenants: newAv};
-                    newAgent.hContrat = calculerContratProratise(newAgent, baseYear, calculerContratBetty);
-                    setModalAgent(newAgent);
-                  }} className="w-16 border border-black/20 dark:border-white/20 rounded p-1 text-xs text-center bg-transparent font-bold" placeholder="%" />
-                  <label className="flex items-center gap-1 text-[10px] font-bold cursor-pointer">
-                    <input type="checkbox" checked={av.estEtudiant} onChange={e => {
-                      const newAv = [...modalAgent.avenants]; newAv[idx].estEtudiant = e.target.checked;
-                      const newAgent = {...modalAgent, avenants: newAv};
-                      newAgent.hContrat = calculerContratProratise(newAgent, baseYear, calculerContratBetty);
-                      setModalAgent(newAgent);
-                    }} /> Étud.
-                  </label>
-                  <button type="button" onClick={() => {
-                    const newAv = [...modalAgent.avenants]; newAv.splice(idx, 1);
-                    const newAgent = {...modalAgent, avenants: newAv};
-                    newAgent.hContrat = calculerContratProratise(newAgent, baseYear, calculerContratBetty);
-                    setModalAgent(newAgent);
-                  }} className="text-red-500 hover:text-red-700 px-1 font-black transition-colors" title="Supprimer cet avenant">✖</button>
-                </div>
-              ))}
-              {(modalAgent.avenants || []).length > 0 && (
-                <p className="text-[10px] text-gray-500 italic leading-tight mt-1">Le contrat global est recalculé automatiquement au prorata exact des jours de l'année scolaire (1er Sept. au 31 Août).</p>
-              )}
+            {/* --- NOUVEAU : SECTION REMPLACEMENT --- */}
+            <div className={`mt-4 p-3 border rounded-lg ${t.bgLight} ${t.borderLight}`}>
+               <label className={`flex items-center gap-2 text-sm font-bold cursor-pointer ${t.header}`}>
+                  <input type="checkbox" checked={!!modalAgent.remplacement} onChange={e => {
+                     if (e.target.checked) setModalAgent({...modalAgent, remplacement: { agentId: '', start: '', end: '' }});
+                     else setModalAgent({...modalAgent, remplacement: null});
+                  }} className="accent-blue-600" />
+                  Cet agent est un remplaçant (CDD, etc.)
+               </label>
+               {modalAgent.remplacement && (
+                  <div className="mt-3 space-y-3 pl-6 border-l-2 border-blue-500">
+                     <div>
+                        <label className={`block text-xs font-bold mb-1 ${t.header}`}>Agent remplacé</label>
+                        <select required value={modalAgent.remplacement.agentId} onChange={e => setModalAgent({...modalAgent, remplacement: {...modalAgent.remplacement, agentId: e.target.value}})} className={`w-full border ${t.borderLight} p-1.5 rounded text-sm bg-transparent`}>
+                           <option value="">-- Choisir l'agent absent --</option>
+                           {agents && agents.filter(a => a.id !== modalAgent.id).map(a => (
+                              <option key={a.id} value={a.id}>{a.nom}</option>
+                           ))}
+                        </select>
+                     </div>
+                     <div className="flex gap-2">
+                        <div className="flex-1">
+                           <label className={`block text-xs font-bold mb-1 ${t.header}`}>Du</label>
+                           <input type="date" required value={modalAgent.remplacement.start} onChange={e => setModalAgent({...modalAgent, remplacement: {...modalAgent.remplacement, start: e.target.value}})} className={`w-full border ${t.borderLight} p-1.5 rounded text-sm bg-transparent`} />
+                        </div>
+                        <div className="flex-1">
+                           <label className={`block text-xs font-bold mb-1 ${t.header}`}>Au</label>
+                           <input type="date" required value={modalAgent.remplacement.end} onChange={e => setModalAgent({...modalAgent, remplacement: {...modalAgent.remplacement, end: e.target.value}})} className={`w-full border ${t.borderLight} p-1.5 rounded text-sm bg-transparent`} />
+                        </div>
+                     </div>
+                     <p className="text-[10px] text-gray-500 italic mt-1 leading-tight">La vue planning attribuera visuellement les horaires de l'agent remplacé à ce remplaçant. Le compte d'heures de l'agent absent restera intact.</p>
+                  </div>
+               )}
             </div>
+
           </div>
           <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
-            <button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded">Annuler</button>
-            <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-bold`}>{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button>
+            <button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium">Annuler</button>
+            <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-medium`}>{modalAgent.id ? 'Enregistrer' : 'Créer'}</button>
           </div>
         </form>
       </div>
