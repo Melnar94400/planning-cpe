@@ -56,7 +56,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return () => clearInterval(timer);
   }, []);
 
-  const [vueActive, setVueActive] = useState('template'); 
+  const [vueActive, setVueActive] = useState('journee'); 
   const [agentConsulte, setAgentConsulte] = useState(null); 
   const [jourConsulte, setJourConsulte] = useState(() => {
     const d = new Date();
@@ -168,7 +168,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       setIsDataLoaded(true); 
     };
     initData();
-  }, [baseYear, sonneries]);
+  }, []);
 
   // =========================================================================
   // SAUVEGARDE SILENCIEUSE (DEBOUNCED)
