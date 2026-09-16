@@ -879,12 +879,13 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setTimeout(() => { window.print(); setIsPrinting(false); }, 800);
   };
 
-  const updateCurrentTemplate = (newEvents, newBesoins) => {
+  const updateCurrentTemplate = (newEvents, newBesoins, newObjectifs) => {
     const newVersions = templateVersions.map(tv => 
       String(tv.id) === String(activeTemplateId) ? { 
         ...tv, 
         events: newEvents !== null && newEvents !== undefined ? newEvents : tv.events, 
-        besoins: newBesoins !== null && newBesoins !== undefined ? newBesoins : tv.besoins 
+        besoins: newBesoins !== null && newBesoins !== undefined ? newBesoins : tv.besoins,
+        objectifsHebdo: newObjectifs !== null && newObjectifs !== undefined ? newObjectifs : (tv.objectifsHebdo || {})
       } : tv
     );
     setTemplateVersions(newVersions);
@@ -1514,18 +1515,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               <button onClick={() => setVueActive('aide')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'aide' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📖 Mode d'emploi</button>
             </div>
 
-            {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
-              <div className={`mt-3 p-3 rounded-xl border ${t.borderLight} ${t.bgLight} text-xs shadow-sm`}>
-                <p className={`font-black mb-1.5 flex items-center gap-1.5 text-[11px] uppercase tracking-wider ${t.header}`}>💡 Raccourcis Clavier</p>
-                <ul className={`space-y-1.5 ${t.header} opacity-90 leading-tight`}>
-                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Ctrl</kbd> + <strong className={t.header}>Clic</strong> : Sélectionner 1 créneau</li>
-                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Ctrl</kbd> + <strong className={t.header}>Glisser</strong> : Lasso multiple</li>
-                  <li className={`pt-1 mt-1 border-t ${t.borderLight}`}><strong className={t.header}>Clic</strong> (sur la grille) : Coller la sélection</li>
-                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Suppr</kbd> : <strong className={t.header}>Supprimer</strong> la sélection</li>
-                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Échap</kbd> : <strong className={t.header}>Vider</strong> la sélection (Annuler)</li>
-                </ul>
-              </div>
-            )}
+
           </div>
 
           {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
@@ -1546,10 +1536,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                 </div>
               )}
 
-              {modeEdition === 'agents' && (
+            {modeEdition === 'agents' && (
                 <div className="animate-in fade-in">
                   <div>
-                    <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600">+</button></div>
+                    <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600 flex items-center justify-center">+</button></div>
                     <ul className="space-y-1">
                       {statsAgents.map((agent) => {
                         const weekEvents = vueActive === 'template' ? (currentTemplate?.events || []) : getEventsForWeek(targetMonday);
@@ -1558,20 +1548,54 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                         const activeContract = getActiveContract(agent, targetMonday);
                         const hContratVirtuelActif = calculerContratBetty(activeContract.quotite, activeContract.estEtudiant);                        
                         
-                        const objectifHebdoAgent = Math.floor(((hContratVirtuelActif / 39) * 60) / 5) * 5 / 60;
+                        // 1. Calcul de l'objectif par défaut et vérification s'il est personnalisé
+                        const defaultObjectif = Math.floor(((hContratVirtuelActif / 39) * 60) / 5) * 5 / 60;
+                        const hasCustomObjectif = currentTemplate?.objectifsHebdo?.[agent.id] !== undefined;
+                        const objectifHebdoAgent = hasCustomObjectif ? currentTemplate.objectifsHebdo[agent.id] : defaultObjectif;
+
+                        // 2. Calcul de l'écart avec sécurité
                         let diffAgentHebdo = agentWeekHours - objectifHebdoAgent;
                         if (Math.abs(diffAgentHebdo) < 0.01) diffAgentHebdo = 0;                        
                         return (
                           <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-3 rounded border-l-4 cursor-pointer ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ${t.borderLight}/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
-                            <div className="flex flex-col leading-tight">
+                            <div className="flex flex-col leading-tight w-full">
                               <span className={`text-base font-bold ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</span>
-                              <div className="flex gap-2 mt-1">
+                              <div className="flex gap-2 mt-1.5 items-center flex-wrap">
                                 <span className="text-xs font-mono text-gray-500 font-semibold" title="Total planifié cette semaine">Sem: {formatHeureTableau(agentWeekHours, true)}</span>
-                                <span className={`text-xs font-mono font-bold ${diffAgentHebdo >= 0 ? 'text-emerald-600' : 'text-orange-500'}`} title="Écart par rapport à l'objectif hebdo théorique">({diffAgentHebdo > 0 ? '+' : ''}{formatHeureTableau(diffAgentHebdo, true)})</span>
+                                
+                                {/* LE BOUTON D'ÉDITION D'OBJECTIF DEVIENT VISIBLE */}
+                                <button 
+                                   onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      if (vueActive === 'template' && currentTemplate?.statut === 'brouillon') {
+                                         const rep = window.prompt(`Objectif hebdo de ${agent.nom} pour ce modèle.\n\nLaissez vide pour revenir au calcul auto (${formatHeureTableau(defaultObjectif, true)}).`, hasCustomObjectif ? formatHeureTableau(objectifHebdoAgent, true) : '');
+                                         if (rep !== null) {
+                                            const newObj = { ...(currentTemplate.objectifsHebdo || {}) };
+                                            if (rep.trim() === '') {
+                                               delete newObj[agent.id];
+                                            } else {
+                                               const val = parseHeureSaisie(rep);
+                                               if (val > 0) newObj[agent.id] = val;
+                                            }
+                                            updateCurrentTemplate(null, null, newObj);
+                                         }
+                                      } else {
+                                         alert("Déverrouillez ce modèle (ou passez en mode brouillon) pour modifier l'objectif.");
+                                      }
+                                   }}
+                                   className={`text-xs font-mono font-bold flex items-center gap-1 border ${t.borderLight} bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-1.5 py-0.5 rounded shadow-sm transition-colors ${diffAgentHebdo >= 0 ? 'text-emerald-600 border-emerald-500/30' : 'text-orange-500 border-orange-500/30'}`} 
+                                   title="Cliquez pour forcer un objectif différent sur ce modèle"
+                                >
+                                   Obj: {formatHeureTableau(objectifHebdoAgent, true)} {hasCustomObjectif ? '📌' : '✏️'}
+                                </button>
+
+                                <span className={`text-xs font-mono font-bold ${diffAgentHebdo >= 0 ? 'text-emerald-600' : 'text-orange-500'}`}>
+                                  ({diffAgentHebdo > 0 ? '+' : ''}{formatHeureTableau(diffAgentHebdo, true)})
+                                </span>
                               </div>
-                              <span className={`text-xs font-mono mt-1 ${agent.soldeGlobal > 0 ? 'text-green-600' : (agent.soldeGlobal < 0 ? 'text-red-500' : 'text-gray-500')}`}>Solde global: {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</span>
+                              <span className={`text-xs font-mono mt-1.5 ${agent.soldeGlobal > 0 ? 'text-green-600' : (agent.soldeGlobal < 0 ? 'text-red-500' : 'text-gray-500')}`}>Solde global: {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</span>
                             </div>
-                            <div className="flex gap-1.5 items-center shrink-0">
+                            <div className="flex gap-1.5 items-center shrink-0 ml-2">
                               <button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className={`text-gray-400 hover:opacity-75 text-sm px-1 ${t.headerText}`}>⚙️</button>
                               <button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-sm px-1">✖</button>
                             </div>
@@ -1596,6 +1620,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                   </div>
                 </div>
               )}
+                            
               {vueActive === 'template' && currentTemplate?.statut === 'brouillon' && modeEdition === 'besoins' && (
                 <div className="space-y-4 animate-in fade-in duration-200">
                   <div className="bg-red-900/10 border border-red-500/30 p-3 rounded text-sm text-red-500">
