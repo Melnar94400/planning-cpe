@@ -370,7 +370,20 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     if (ferie) return { type: 'ferie', nom: ferie.nom };
     return null;
   };
+                          // À coller juste sous la fin de la fonction getInfosPeriode
+  const isSemaineVacances = (dateStr) => {
+    if (!dateStr || !periodesFeriees || periodesFeriees.length === 0) return false;
+    
+    // On avance au mardi pour éviter les bugs de fuseau horaire ou les lundis fériés isolés
+    const dateCible = new Date(dateStr);
+    dateCible.setDate(dateCible.getDate() + 1);
+    const pad = n => String(n).padStart(2, '0');
+    const dateCibleStr = `${dateCible.getFullYear()}-${pad(dateCible.getMonth()+1)}-${pad(dateCible.getDate())}`;
 
+    return periodesFeriees.some(p => {
+      return p.type === 'vacances' && dateCibleStr >= p.debut && dateCibleStr <= p.fin;
+    });
+  };
   const getHeuresTheoriquesJourRaw = (agentId, dateStr) => {
     const dateObj = new Date(dateStr);
     const mondayStr = getMondayStr(dateObj);
@@ -483,7 +496,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       return !info || info.type !== 'vacances';
     }); 
   }, [customWeeks, templateVersions, getApplicableTemplate, periodesFeriees]);
-
+  
   const targetMonday = (vueActive === 'template') 
     ? (currentTemplate?.dateDebut || fallbackTemplateDate) 
     : (currentViewMonday || getMondayStr(new Date()));
@@ -1621,8 +1634,9 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                         const activeContract = getActiveContract(agent, targetMonday);
                         const hContratVirtuelActif = calculerContratBetty(activeContract.quotite, activeContract.estEtudiant);                        
                         
-                        // 1. Calcul de l'objectif par défaut et vérification s'il est personnalisé
-                        const defaultObjectif = Math.floor(((hContratVirtuelActif / 39) * 60) / 5) * 5 / 60;
+// 1. Calcul de l'objectif par défaut (force à 0 pendant les vacances) et vérification s'il est personnalisé
+                        const estEnVacances = isSemaineVacances(targetMonday);
+                        const defaultObjectif = estEnVacances ? 0 : Math.floor(((hContratVirtuelActif / 39) * 60) / 5) * 5 / 60;
                         const hasCustomObjectif = currentTemplate?.objectifsHebdo?.[agent.id] !== undefined;
                         const objectifHebdoAgent = hasCustomObjectif ? currentTemplate.objectifsHebdo[agent.id] : defaultObjectif;
 
@@ -2813,6 +2827,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                         const dayOfWeek = dateObj.getDay();
                         const nomJour = nomsJours[dayOfWeek];
                         const infoPeriode = getInfosPeriode(dateObj);
+
+
 
                         const exc = exceptions[`${agentConsulte}_${dateStr}`];
                         
