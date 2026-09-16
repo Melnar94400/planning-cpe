@@ -173,82 +173,111 @@ export const ModalTemplateProps = ({ modalTemplate, setModalTemplate, validerTem
 
 export const ModalPoste = ({ modalPoste, setModalPoste, validerPosteModal, t }) => {
   if (!modalPoste.isOpen) return null;
+
+  const addSlot = () => {
+    const newSlots = [...(modalPoste.slots || []), { id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }];
+    setModalPoste({ ...modalPoste, slots: newSlots });
+  };
+
+  const updateSlot = (id, field, value) => {
+    const newSlots = modalPoste.slots.map(s => s.id === id ? { ...s, [field]: value } : s);
+    setModalPoste({ ...modalPoste, slots: newSlots });
+  };
+
+  const updateSlotDay = (id, dayIndex, value) => {
+    const newSlots = modalPoste.slots.map(s => s.id === id ? { ...s, days: { ...s.days, [dayIndex]: value } } : s);
+    setModalPoste({ ...modalPoste, slots: newSlots });
+  };
+
+  const removeSlot = (id) => {
+    const newSlots = modalPoste.slots.filter(s => s.id !== id);
+    setModalPoste({ ...modalPoste, slots: newSlots });
+  };
+
+  const hasSlots = modalPoste.slots && modalPoste.slots.length > 0;
+
   return (
-    <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-4 no-print">
-      <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
-        <div className={`${t.headerBg} ${t.headerText} p-4 shrink-0 flex justify-between items-center`}>
-          <h3 className="font-bold text-lg">{modalPoste.id ? 'Modifier le poste' : 'Nouveau poste & Grille de besoins'}</h3>
-          <button type="button" onClick={() => setModalPoste({...modalPoste, isOpen: false})} className="hover:opacity-75 font-bold text-lg">✖</button>
+    <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
+      <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200 border ${t.borderLight}`}>
+        <div className={`${t.headerBg} ${t.headerText} p-4`}>
+          <h3 className="font-bold text-lg">{modalPoste.id ? '⚙️ Modifier le poste' : '➕ Nouveau poste'}</h3>
         </div>
-        <form onSubmit={validerPosteModal} className="flex flex-col overflow-hidden">
-          <div className="p-5 space-y-4 overflow-y-auto">
-            <div className="flex gap-4">
-              <div className="flex-[2]">
-                <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Nom du poste</label>
-                <input type="text" required value={modalPoste.nom} onChange={e => setModalPoste({...modalPoste, nom: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold`} placeholder="Ex: Loge, Cantine..." autoFocus />
-              </div>
+        <form onSubmit={validerPosteModal}>
+          <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto">
+            
+            {/* Ligne 1 : Nom et Couleur */}
+            <div className="flex gap-4 items-end">
               <div className="flex-1">
-                <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Effectif (Qte)</label>
-                <input type="number" min="1" required value={modalPoste.qte} onChange={e => setModalPoste({...modalPoste, qte: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 text-sm text-center font-bold bg-transparent`} />
+                <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Nom du poste</label>
+                <input type="text" required value={modalPoste.nom} onChange={e => setModalPoste({...modalPoste, nom: e.target.value})} placeholder="Ex: Grille, Permanence..." className={`w-full border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold`} />
               </div>
-              <div>
-                <label className={`block text-xs font-bold uppercase mb-1 ${t.header}`}>Couleur</label>
-                <input type="color" value={modalPoste.couleur} onChange={e => setModalPoste({...modalPoste, couleur: e.target.value})} className="w-10 h-10 rounded cursor-pointer p-0 border-0" />
+              <div className="w-24">
+                <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Couleur</label>
+                <input type="color" value={modalPoste.couleur} onChange={e => setModalPoste({...modalPoste, couleur: e.target.value})} className="w-full h-9 rounded cursor-pointer border-0 p-0" />
               </div>
             </div>
             
-            <div className={`border ${t.borderLight} rounded-xl p-4 ${t.bgLight}`}>
-              <div className="flex justify-between items-center mb-3">
-                <div>
-                  <h4 className={`font-bold text-sm ${t.header}`}>Grille horaire des besoins</h4>
-                  <p className="text-[11px] text-gray-500">Définissez les créneaux récurrents de ce poste pour la semaine type.</p>
-                </div>
-                <button type="button" onClick={() => setModalPoste({...modalPoste, slots: [...modalPoste.slots, { id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]})} className={`text-xs ${t.btnPrimary} px-2.5 py-1.5 rounded font-bold shadow-sm`}>➕ Ajouter une plage</button>
+            {/* Ligne 2 : Effectif */}
+            <div>
+              <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Effectif requis par défaut</label>
+              <div className="flex items-center gap-2">
+                <input type="number" min="1" required value={modalPoste.qte} onChange={e => setModalPoste({...modalPoste, qte: Number(e.target.value)})} className={`w-24 border ${t.borderLight} rounded p-2 text-sm bg-transparent font-bold text-center`} />
+                <span className="text-gray-500 text-sm font-medium">agent(s)</span>
               </div>
+            </div>
+
+            {/* Section : Grille des besoins */}
+            <div className={`p-4 rounded-xl border ${t.borderLight} ${t.bgLight}`}>
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h4 className={`font-bold ${t.header} text-base`}>Grille horaire des besoins</h4>
+                  <p className="text-xs text-gray-500 mt-0.5 leading-tight">Définissez les créneaux récurrents de ce poste pour la semaine type.</p>
+                </div>
+                <button type="button" onClick={addSlot} className={`px-3 py-1.5 rounded text-xs font-bold ${t.btnPrimary} shadow-sm shrink-0 flex items-center gap-1 hover:scale-105 transition-transform`}>
+                  ➕ Ajouter une plage
+                </button>
+              </div>
+
               <div className="space-y-3">
-                {modalPoste.slots.map((slot, idx) => (
-                  <div key={idx} className={`p-3 rounded-lg border ${t.borderLight} ${t.cardBg} flex flex-col gap-2 shadow-xs`}>
-                    <div className="flex items-center gap-2">
-                      <input type="time" required value={slot.start} onChange={e => {
-                        const ns = [...modalPoste.slots]; ns[idx].start = e.target.value; setModalPoste({...modalPoste, slots: ns});
-                      }} className={`border ${t.borderLight} p-1.5 text-xs rounded bg-transparent w-28 text-center font-bold ${t.header}`} />
-                      <span className="text-gray-400 text-xs font-bold">à</span>
-                      <input type="time" required value={slot.end} onChange={e => {
-                        const ns = [...modalPoste.slots]; ns[idx].end = e.target.value; setModalPoste({...modalPoste, slots: ns});
-                      }} className={`border ${t.borderLight} p-1.5 text-xs rounded bg-transparent w-28 text-center font-bold ${t.header}`} />
-                      
-                      <button type="button" onClick={() => {
-                        const ns = [...modalPoste.slots]; ns.splice(idx, 1); setModalPoste({...modalPoste, slots: ns});
-                      }} className="text-red-500 hover:text-red-700 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ml-auto" title="Retirer cette plage">✖</button>
-                    </div>
-                    <div className="flex gap-1.5 mt-1">
-                      {[1, 2, 3, 4, 5].map(day => (
-                        <label key={day} className={`flex-1 flex items-center justify-center py-1 rounded border text-[11px] font-bold cursor-pointer transition-colors ${slot.days[day] ? `${t.btnPrimary} border-transparent shadow-xs` : `bg-transparent text-gray-500 border-black/10 hover:bg-black/5`}`}>
-                          <input type="checkbox" className="hidden" checked={slot.days[day]} onChange={e => {
-                            const ns = [...modalPoste.slots]; ns[idx].days[day] = e.target.checked; setModalPoste({...modalPoste, slots: ns});
-                          }} />
-                          {nomsJours[day]}
-                        </label>
-                      ))}
-                    </div>
+                {!hasSlots ? (
+                  <div className="text-center text-gray-500 italic py-6 text-sm">
+                    Aucune plage horaire définie. Cliquez sur "Ajouter une plage".
                   </div>
-                ))}
-                {modalPoste.slots.length === 0 && (
-                  <p className="text-xs italic text-gray-500 text-center py-2">Aucune plage horaire définie. Cliquez sur "Ajouter une plage".</p>
+                ) : (
+                  modalPoste.slots.map(slot => (
+                    <div key={slot.id} className={`${t.cardBg} border ${t.borderLight} p-3 rounded-lg shadow-sm`}>
+                      <div className="flex items-center gap-3 mb-3">
+                        <input type="time" required value={slot.start} onChange={e => updateSlot(slot.id, 'start', e.target.value)} className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold bg-transparent`} />
+                        <span className="text-gray-500 font-bold text-sm">à</span>
+                        <input type="time" required value={slot.end} onChange={e => updateSlot(slot.id, 'end', e.target.value)} className={`border ${t.borderLight} rounded p-1.5 text-sm font-bold bg-transparent`} />
+                        <button type="button" onClick={() => removeSlot(slot.id)} className="ml-auto text-red-400 hover:text-red-600 font-black px-2 transition-colors text-lg" title="Supprimer ce créneau">✖</button>
+                      </div>
+                      <div className="flex gap-1.5 justify-between">
+                        {[1, 2, 3, 4, 5].map(d => {
+                          const isActive = slot.days[d];
+                          return (
+                            <label key={d} className={`flex-1 flex justify-center items-center py-1.5 rounded text-xs font-bold cursor-pointer transition-colors ${isActive ? 'bg-[#dfab46] text-white shadow-inner' : `bg-black/5 dark:bg-white/5 text-gray-400 hover:bg-black/10 dark:hover:bg-white/10`}`}>
+                              <input type="checkbox" className="hidden" checked={isActive} onChange={e => updateSlotDay(slot.id, d, e.target.checked)} />
+                              {['LUN', 'MAR', 'MER', 'JEU', 'VEN'][d-1]}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             </div>
           </div>
-          <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} shrink-0 flex justify-end gap-3`}>
-            <button type="button" onClick={() => setModalPoste({...modalPoste, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded font-medium text-sm">Annuler</button>
-            <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-bold text-sm shadow`}>{modalPoste.id ? 'Mettre à jour' : 'Créer le poste'}</button>
+          <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
+            <button type="button" onClick={() => setModalPoste({...modalPoste, isOpen: false})} className="px-4 py-2 text-gray-500 hover:text-gray-800 dark:hover:text-white rounded font-medium text-sm transition-colors">Annuler</button>
+            <button type="submit" className={`px-6 py-2 ${t.btnPrimary} rounded font-bold text-sm shadow hover:scale-105 transition-transform`}>{modalPoste.id ? 'Enregistrer' : 'Créer le poste'}</button>
           </div>
         </form>
       </div>
     </div>
   );
 };
-
 export const ModalException = ({ modalException, setModalException, validerExceptionJourModal, supprimerExceptionJour, t }) => {
   if (!modalException.isOpen) return null;
   return (

@@ -185,12 +185,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const ouvrirCreationPoste = () => {
     setModalPoste({
       isOpen: true, id: null, nom: '', couleur: '#8B5CF6', qte: 1, 
-      slots: [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]
+      slots: [] // ✅ La grille de besoins est désormais vide par défaut
     });
   };
 
   const ouvrirEditionPoste = (poste) => {
-    const defaultSlots = poste.slots && poste.slots.length > 0 ? poste.slots : [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }];
+    const defaultSlots = poste.slots || []; // ✅ On ne force plus de créneau 8h-12h si le poste est vide
     setModalPoste({ isOpen: true, id: poste.id, nom: poste.nom, couleur: poste.couleur || '#8B5CF6', qte: poste.qte || 1, slots: defaultSlots });
   };
 
@@ -1372,7 +1372,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     if (modalEditBesoin.qte <= 0) {
       updateCurrentTemplate(null, currentTemplate.besoins.filter(b => String(b.id).split('_')[0] !== modalEditBesoin.id));
     } else {
-      const templateDateStr = currentTemplate.dateDebut;
+      const templateDateStr = currentTemplate.dateDebut || fallbackTemplateDate;
       const newStart = `${templateDateStr}T${modalEditBesoin.start}:00`;
       const newEnd = `${templateDateStr}T${modalEditBesoin.end}:00`;
       updateCurrentTemplate(null, currentTemplate.besoins.map(b => String(b.id).split('_')[0] === modalEditBesoin.id ? { 
@@ -1864,7 +1864,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
           }
           const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
           const templateDateObj = (() => {
-            const dStr = currentTemplate?.dateDebut || `${baseYear}-09-01`;
+            const dStr = targetMonday;
             const [y, m, d] = dStr.split('T')[0].split('-').map(Number);
             const dateObj = new Date(y, m - 1, d);
             dateObj.setDate(dateObj.getDate() + (jourTemplate - 1));
