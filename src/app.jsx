@@ -2888,7 +2888,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
             </div>
           </div>
         )}
-{/* 7. VUE MODE D'EMPLOI */}
+
+        {/* 7. VUE MODE D'EMPLOI */}
         {vueActive === 'aide' && (
           <div className={`flex-1 overflow-y-auto ${t.bgMain} p-4 md:p-8`}>
             <div className={`max-w-5xl mx-auto ${t.cardBg} rounded-xl shadow-lg border ${t.borderLight} overflow-hidden mb-8`}>
@@ -2904,49 +2905,65 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                 </div>
 
                 <div>
-                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>Étape 1 : Préparer le terrain (Les fondations)</h3>
-                  <p className="opacity-80 mb-2">Avant de placer des créneaux, il faut définir vos besoins et vos ressources.</p>
+                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>1️⃣ Étape 1 : Préparer le terrain (Les fondations)</h3>
+                  <p className="mb-3 opacity-90">Avant de placer des créneaux, il faut définir vos besoins et vos ressources.</p>
                   <ul className="list-disc pl-5 space-y-3 opacity-90">
-                    <li><strong>Créer les Postes :</strong> Définissez les lieux ou missions (ex: <em>Grille, Permanence, Bureau CPE</em>). Pour chaque poste, indiquez vos besoins structurels.</li>
-                    <li>
-                      <strong>Créer les Agents :</strong> Ajoutez vos AED. Indiquez leur quotité (ex: 50%, 100%) et s'ils sont étudiants. L'application calculera automatiquement leur contrat annuel.
-                      <div className="mt-1 p-2 rounded bg-black/5 dark:bg-white/5 text-sm border-l-2 border-orange-500">
-                        <strong>📝 Changement de contrat (Avenant) :</strong> Si la quotité d'un agent évolue en cours d'année, ouvrez ses paramètres (⚙️) et ajoutez un <strong>Avenant</strong>. L'application ajustera intelligemment son temps de travail exigé à partir de la date indiquée.
-                      </div>
-                    </li>
+                    <li><strong>Créer les Postes :</strong> Définissez les lieux ou missions (ex: Grille, Permanence, Bureau CPE). Pour chaque poste, indiquez vos besoins structurels.</li>
+                    <li><strong>Créer les Agents :</strong> Ajoutez vos AED. Indiquez leur quotité (ex: 50%, 100%) et s'ils sont étudiants. L'application calculera automatiquement leur contrat annuel.</li>
+                    <li><strong>📝 Changement de contrat (Avenant) :</strong> Si la quotité d'un agent évolue en cours d'année, ouvrez ses paramètres (⚙️) et ajoutez un Avenant. L'application ajustera intelligemment son temps de travail exigé à partir de la date indiquée.</li>
                   </ul>
                 </div>
 
                 <div>
-                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>Étape 2 : Dessiner la "Semaine Type" (Le Modèle)</h3>
-                  <p className="opacity-80 mb-2">C'est le cœur du réacteur. C'est ici que vous construisez l'emploi du temps théorique "parfait".</p>
+                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>2️⃣ Étape 2 : Dessiner la "Semaine Type" (Le Modèle)</h3>
+                  <p className="mb-3 opacity-90">C'est le cœur du réacteur. C'est ici que vous construisez l'emploi du temps théorique "parfait".</p>
                   <ul className="list-disc pl-5 space-y-3 opacity-90">
                     <li>Placez vos agents sur les différents postes (ligne par ligne).</li>
-                    <li>L'application surveille <strong>les sous-effectifs</strong> (alerte rouge si un poste manque de personnel) et <strong>les heures</strong> (calculées en temps réel par rapport au contrat).</li>
-                    <li>Une fois équilibré, <strong>validez le modèle</strong>. Il sera alors verrouillé et déployé sur l'ensemble du calendrier scolaire.</li>
-                    <li>
-                      <strong>Créer une Évolution du modèle :</strong> Les plannings changent souvent (ex: 2ème semestre). Sur un modèle validé, cliquez sur "➕ Créer une évolution". L'application copiera votre modèle actuel et vous permettra de l'ajuster pour qu'il prenne le relais à partir de la nouvelle date que vous choisirez.
-                    </li>
+                    <li>L'application surveille les sous-effectifs (alerte rouge si un poste manque de personnel) et les heures (calculées en temps réel par rapport au contrat).</li>
+                    <li>Une fois équilibré, validez le modèle. Il sera alors verrouillé et déployé sur l'ensemble du calendrier scolaire.</li>
+                    <li><strong>Créer une Évolution du modèle :</strong> Les plannings changent souvent (ex: 2ème semestre). Sur un modèle validé, cliquez sur "➕ Créer une évolution". L'application copiera votre modèle actuel et vous permettra de l'ajuster pour qu'il prenne le relais à partir de la nouvelle date que vous choisirez.</li>
                   </ul>
                 </div>
 
                 <div>
-                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>Étape 3 : Le Quotidien (Planning Réel & Vue Quotidienne)</h3>
-                  <p className="opacity-80 mb-2">Une fois le modèle validé, vous n'y touchez plus. Vous basculez sur les vues réelles :</p>
-                  <ul className="list-disc pl-5 space-y-2 opacity-90">
+                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>3️⃣ Étape 3 : Le Quotidien (Planning Réel & Vue Quotidienne)</h3>
+                  <p className="mb-3 opacity-90">Une fois le modèle validé, vous n'y touchez plus. Vous basculez sur les vues réelles :</p>
+                  <ul className="list-disc pl-5 space-y-3 opacity-90">
                     <li><strong>Vue Quotidienne :</strong> Idéale pour le matin même, elle montre la journée heure par heure.</li>
                     <li><strong>Planning Hebdo (Réel) :</strong> Permet d'ajuster la semaine en cours.</li>
+                    <li><strong>Exemple :</strong> Un agent est absent mardi ? Allez sur la Vue Quotidienne du mardi, supprimez son créneau et affectez un collègue en remplacement. Cela ne modifiera que ce mardi précis, sans casser votre Semaine Type théorique.</li>
                   </ul>
-                  <p className={`mt-3 text-xs ${t.bgLight} p-3 rounded italic opacity-80 border ${t.borderLight}`}><strong>Exemple :</strong> Un agent est absent mardi ? Allez sur la Vue Quotidienne du mardi, supprimez son créneau et affectez un collègue en remplacement. Cela ne modifiera que ce mardi précis, sans casser votre Semaine Type théorique.</p>
                 </div>
 
                 <div>
-                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>Étape 4 : Les Absences et les Compteurs</h3>
-                  <ul className="list-disc pl-5 space-y-2 opacity-90">
-                    <li>La vue <strong>Absences & Retards</strong> permet de gérer les imprévus.</li>
-                    <li><strong>Impact Global :</strong> Impacte le bilan annuel de l'agent.</li>
+                  <h3 className={`font-bold text-lg mb-3 pb-2 border-b ${t.borderLight}`}>4️⃣ Étape 4 : Les Absences et les Compteurs</h3>
+                  <p className="mb-3 opacity-90">La vue Absences & Retards permet de gérer les imprévus.</p>
+                  <ul className="list-disc pl-5 space-y-3 opacity-90">
+                    <li><strong>Impact Global :</strong> Impacte le bilan annuel de l'agent. (Ex: maladie). Les heures perdues sont retirées de son contrat annuel de façon définitive, il n'a pas à les rattraper.</li>
                     <li><strong>Impact Local :</strong> Impacte un compteur interne à compenser entre collègues (ex: un retard de 15 min à rattraper la semaine suivante).</li>
                   </ul>
+                </div>
+
+                <div className={`p-6 rounded-xl border-2 border-purple-500/30 bg-purple-500/5`}>
+                  <h3 className={`font-bold text-xl mb-4 text-purple-600 dark:text-purple-400 flex items-center gap-2`}>🚀 Fonctionnalités Avancées</h3>
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="font-bold flex items-center gap-2"><span className="text-lg">🤝</span> Gérer un Remplaçant (CDD)</h4>
+                      <p className="text-sm opacity-90 mt-1">Créez un nouvel agent et cochez <strong>"Cet agent est un remplaçant"</strong>. Choisissez qui il remplace et les dates. L'application lui donnera automatiquement l'emploi du temps de l'absent pour l'affichage du planning, sans fausser les compteurs d'heures de l'agent d'origine !</p>
+                    </div>
+                    <div>
+                      <h4 className="font-bold flex items-center gap-2"><span className="text-lg">📦</span> Les Modèles "Volants" (Ex: Semaine de stage, examens...)</h4>
+                      <p className="text-sm opacity-90 mt-1">Créez un nouveau modèle de type <strong>"Volant / Réserve"</strong>. Ce modèle n'a pas de date de début : il reste sagement de côté. Pour l'utiliser, allez sur votre "Planning Réel" à la semaine voulue, et sélectionnez-le dans la liste déroulante "📥 Appliquer un modèle".</p>
+                    </div>
+                    <div>
+                      <h4 className="font-bold flex items-center gap-2"><span className="text-lg">👯</span> Dupliquer un Modèle</h4>
+                      <p className="text-sm opacity-90 mt-1">Quand vous créez un nouveau modèle, utilisez le menu <strong>"Copier depuis"</strong> pour cloner la grille d'un modèle existant. Idéal pour faire une "Semaine B" très similaire à la "Semaine A".</p>
+                    </div>
+                    <div>
+                      <h4 className="font-bold flex items-center gap-2"><span className="text-lg">🎯</span> Ajuster l'objectif horaire</h4>
+                      <p className="text-sm opacity-90 mt-1">Si un agent fait 41h en semaine A et 37h en semaine B : dans l'onglet de gestion des modèles (en mode brouillon), cliquez sur le bouton <strong>"Obj: 39h00 ✏️"</strong> sous le nom de l'agent pour lui fixer son objectif précis pour ce modèle. Une punaise 📌 confirmera la personnalisation.</p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2955,15 +2972,15 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                     <ul className="space-y-1.5 text-xs opacity-90">
                       <li><kbd className={`border ${t.borderLight} ${t.cardBg} px-1.5 py-0.5 rounded shadow-sm font-mono`}>Ctrl</kbd> + <strong>Clic</strong> : Sélectionner</li>
                       <li><kbd className={`border ${t.borderLight} ${t.cardBg} px-1.5 py-0.5 rounded shadow-sm font-mono`}>Ctrl</kbd> + <strong>Glisser</strong> : Lasso multiple</li>
-                      <li><strong>Clic (grille)</strong> : Coller la sélection</li>
+                      <li><strong>Clic (sur la grille)</strong> : Coller la sélection</li>
                       <li><kbd className={`border ${t.borderLight} ${t.cardBg} px-1.5 py-0.5 rounded shadow-sm font-mono`}>Suppr</kbd> : Supprimer créneau</li>
-                      <li><kbd className={`border ${t.borderLight} ${t.cardBg} px-1.5 py-0.5 rounded shadow-sm font-mono`}>Ctrl+Z</kbd> : Annuler action</li>
+                      <li><kbd className={`border ${t.borderLight} ${t.cardBg} px-1.5 py-0.5 rounded shadow-sm font-mono`}>Ctrl</kbd> + <kbd className={`border ${t.borderLight} ${t.cardBg} px-1.5 py-0.5 rounded shadow-sm font-mono`}>Z</kbd> : Annuler action</li>
                     </ul>
                   </div>
                   <div className={`p-4 rounded-xl border ${t.borderLight} ${t.bgLight}`}>
                     <h3 className="font-bold mb-2 flex items-center gap-2">💾 Sauvegarde & Année Suivante</h3>
-                    <p className="text-xs opacity-90 mb-2">L'application fonctionne hors-ligne. Pensez à aller dans les <strong>Paramètres</strong> pour télécharger régulièrement une sauvegarde (fichier JSON).</p>
-                    <p className="text-xs opacity-90">En fin d'année, l'<strong>Assistant de Bascule d'Année</strong> vous permet de préparer la rentrée suivante sans tout retaper.</p>
+                    <p className="text-xs opacity-90 mb-2">L'application fonctionne hors-ligne. Pensez à aller dans les Paramètres pour télécharger régulièrement une sauvegarde (fichier JSON).</p>
+                    <p className="text-xs opacity-90">En fin d'année, l'Assistant de Bascule d'Année vous permet de préparer la rentrée suivante sans tout retaper.</p>
                   </div>
                 </div>
 
