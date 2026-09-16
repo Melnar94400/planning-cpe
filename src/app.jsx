@@ -55,7 +55,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const timer = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
-  
+
   const [vueActive, setVueActive] = useState('journee'); 
   const [agentConsulte, setAgentConsulte] = useState(null); 
   const [jourConsulte, setJourConsulte] = useState(() => {
@@ -813,75 +813,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setNeedsBackup(false); 
   };
 
-    // Moteur d'analyse de conformité légale (Amplitude max & Continuité)
-  const checkLegalRules = (eventsList, agentsList) => {
-    const alerts = [];
-    if (!eventsList || eventsList.length === 0) return alerts;
-
-    const agentDays = {};
-    eventsList.forEach(evt => {
-      if (evt.extendedProps?.isAbsence || evt.extendedProps?.isBesoin) return;
-      const agentId = evt.extendedProps?.agentId;
-      const dateStr = evt.start.split('T')[0];
-      if (!agentId) return;
-
-      const key = `${agentId}_${dateStr}`;
-      if (!agentDays[key]) agentDays[key] = [];
-      agentDays[key].push({
-        start: new Date(evt.start),
-        end: new Date(evt.end),
-        agentNom: evt.extendedProps?.agentNom || 'Agent'
-      });
-    });
-
-    Object.keys(agentDays).forEach(key => {
-      const dayEvents = agentDays[key].sort((a, b) => a.start - b.start);
-      if (dayEvents.length === 0) return;
-
-      const agentNom = dayEvents[0].agentNom;
-      const dateStr = key.split('_')[1];
-      const formattedDate = dateStr.split('-').reverse().join('/');
-
-      // Règle 1 : Amplitude journalière (> 10h entre début et fin de service)
-      const firstStart = dayEvents[0].start;
-      const lastEnd = dayEvents[dayEvents.length - 1].end;
-      const amplitudeHours = (lastEnd - firstStart) / 3600000;
-
-      if (amplitudeHours > 10) {
-        alerts.push({
-          id: `amp_${key}`,
-          type: 'legal_danger',
-          titre: '⚖️ Amplitude excessive',
-          message: `${agentNom} le ${formattedDate} : Amplitude de ${amplitudeHours.toFixed(1)}h (max conseillé : 10h).`
-        });
-      }
-
-      // Règle 2 : Plus de 6h de travail d'affilée en un seul bloc sans coupure
-      let totalWorkMins = 0;
-      dayEvents.forEach(e => {
-        totalWorkMins += (e.end - e.start) / 60000;
-      });
-      if (totalWorkMins > 360 && dayEvents.length === 1) {
-        alerts.push({
-          id: `pause_${key}`,
-          type: 'legal_warning',
-          titre: '⚖️ Temps de pause insuffisant',
-          message: `${agentNom} le ${formattedDate} : Plus de 6h de travail continu sans coupure enregistrée.`
-        });
-      }
-    });
-
-    return alerts;
-  };
-
-  // Calcul automatique des alertes légales sur la vue en cours
-  const legalAlerts = useMemo(() => {
-    const activeEvents = vueActive === 'template' 
-      ? (currentTemplate?.events || []) 
-      : (customWeeks[targetMonday] || getEventsForWeek(targetMonday));
-    return checkLegalRules(activeEvents, agents);
-  }, [vueActive, currentTemplate, customWeeks, targetMonday, agents]);
-
   const handleImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -1605,67 +1536,46 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               <button onClick={handleExport} className={`relative p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105 ${needsBackup ? 'bg-orange-600 hover:bg-orange-500 border-orange-500 text-white' : t.sidebarIconBtn}`} title="Sauvegarder les données (Fichier JSON)">
                 ⬇️{needsBackup && <span className="absolute -top-1 -right-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
               </button>
-        {/* Conteneur global de la barre d'outils avec position relative pour la fenêtre d'alerte */}
-            <div className="relative w-full">
-              <div className="flex items-center justify-between bg-black/10 p-1.5 rounded-lg gap-1">
-                <input type="file" id="import-file" accept=".json" onChange={handleImport} className="hidden" />
-                
-                {/* Bouton cloche */}
-                {(() => {
-                  const allAlerts = [
-                    ...(activeAlerts || []),
-                    ...(legalAlerts || []).map(l => ({ title: l.titre, message: l.message }))
-                  ];
-                  return (
-                    <button onClick={() => setShowNotificationMenu(!showNotificationMenu)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center relative hover:scale-105`} title="Centre de notifications">
-                      🔔
-                      {allAlerts.length > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-sm animate-pulse">
-                          {allAlerts.length}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })()}
 
-                <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
-                <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Paramètres">⚙️</button>
-                <button onClick={() => setModalPrint({ isOpen: true, type: vueActive, jours: [1, 2, 3, 4, 5], format: 'A4' })} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Imprimer le planning">🖨️</button>
-                <button onClick={handleResetAll} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm hover:scale-105 transition-transform" title="Tout réinitialiser">🗑️</button>
-              </div>
+              <div className="relative flex-1 flex justify-center">
+                <button onClick={() => setShowNotificationMenu(!showNotificationMenu)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors w-full flex items-center justify-center relative hover:scale-105`} title="Centre de notifications">
+                  🔔
+                  {activeAlerts.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-sm">
+                      {activeAlerts.length}
+                    </span>
+                  )}
+                </button>
 
-              {/* Fenêtre d'alertes : prend toute la largeur de la sidebar et s'ouvre sous la barre d'outils */}
-{showNotificationMenu && (() => {
-                const allAlerts = [
-                  ...(activeAlerts || []),
-                  ...(legalAlerts || []).map(l => ({ title: l.titre, message: l.message }))
-                ];
-                return (
-                  <div className={`absolute -left-22 w-[calc(100%+100px)] top-full mt-2 rounded-xl shadow-2xl border ${t.borderLight} ${t.cardBg} z-[99999] overflow-hidden animate-in fade-in zoom-in-95 duration-150`}>
+                {showNotificationMenu && (
+                  <div className={`absolute left-0 mt-9 w-72 rounded-xl shadow-2xl border ${t.borderLight} ${t.cardBg} z-[99999] overflow-hidden animate-in fade-in zoom-in-95 duration-150`}>
                     <div className={`${t.headerBg} p-3 flex justify-between items-center border-b ${t.borderLight}`}>
-                      <h3 className={`font-bold text-xs uppercase tracking-wider ${t.headerText}`}>Centre d'alertes ({allAlerts.length})</h3>
+                      <h3 className={`font-bold text-xs uppercase tracking-wider ${t.headerText}`}>Centre d'alertes</h3>
                       <button onClick={() => setShowNotificationMenu(false)} className="text-xs font-bold opacity-70 hover:opacity-100">✖</button>
                     </div>
-                    <div className="max-h-72 overflow-y-auto p-2 space-y-2">
-                      {allAlerts.length === 0 ? (
+                    <div className="max-h-64 overflow-y-auto p-2 space-y-2">
+                      {activeAlerts.length === 0 ? (
                         <div className="text-center py-6 text-gray-400 text-xs italic">Aucun problème détecté tout est en ordre 👍</div>
                       ) : (
-                        allAlerts.map((alert, idx) => (
-                          <div key={idx} className="p-2.5 rounded-lg border border-orange-500/30 bg-white dark:bg-zinc-900 text-xs flex gap-2 items-start shadow-sm">
-                            <span className="text-base leading-none shrink-0">⚠️</span>
-                            <div className="flex-1 leading-snug">
-                              <p className="font-bold text-orange-800 dark:text-orange-300">{alert.title}</p>
-                              <p className="text-gray-900 dark:text-gray-100 text-[11px] mt-1 font-semibold leading-relaxed">{alert.message}</p>
+                        activeAlerts.map((alert, idx) => (
+                          <div key={idx} className={`p-2.5 rounded-lg border ${t.borderLight} ${t.bgLight} text-xs flex gap-2 items-start shadow-xs`}>
+                            <span className="text-base leading-none">⚠️</span>
+                            <div className="flex-1">
+                              <p className={`font-bold ${t.header}`}>{alert.title}</p>
+                              <p className="text-gray-500 text-[11px] mt-0.5">{alert.message}</p>
                             </div>
                           </div>
                         ))
                       )}
                     </div>
                   </div>
-                );
-              })()}
-                          </div>
+                )}
+              </div>
 
+              <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
+              <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Paramètres">⚙️</button>
+              <button onClick={() => setModalPrint({ isOpen: true, type: vueActive, jours: [1, 2, 3, 4, 5], format: 'A4' })} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Imprimer le planning">🖨️</button>
+              <button onClick={handleResetAll} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm hover:scale-105 transition-transform" title="Tout réinitialiser">🗑️</button>
             </div>
 
             <div className="flex flex-col bg-black/10 rounded p-2 shadow-inner gap-1 mt-2">
@@ -1678,19 +1588,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               <div className="h-px bg-black/10 dark:bg-white/10 my-1"></div>
               <button onClick={() => setVueActive('aide')} className={`text-base font-medium py-2 rounded transition ${vueActive === 'aide' ? t.activeTab : `${t.textMenuMuted} hover:opacity-75`}`}>📖 Mode d'emploi</button>
             </div>
-
-            {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
-              <div className={`mt-3 p-3 rounded-xl border ${t.borderLight} ${t.bgLight} text-xs shadow-sm`}>
-                <p className={`font-black mb-1.5 flex items-center gap-1.5 text-[11px] uppercase tracking-wider ${t.header}`}>💡 Raccourcis Clavier</p>
-                <ul className={`space-y-1.5 ${t.header} opacity-90 leading-tight`}>
-                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Ctrl</kbd> + <strong className={t.header}>Clic</strong> : Sélectionner 1 créneau</li>
-                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Ctrl</kbd> + <strong className={t.header}>Glisser</strong> : Lasso multiple</li>
-                  <li className={`pt-1 mt-1 border-t ${t.borderLight}`}><strong className={t.header}>Clic</strong> (sur la grille) : Coller la sélection</li>
-                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Suppr</kbd> : <strong className={t.header}>Supprimer</strong> la sélection</li>
-                  <li><kbd className={`px-1 py-0.5 rounded shadow-inner font-mono text-[10px] font-bold border ${t.borderLight} ${t.cardBg} ${t.header}`}>Échap</kbd> : <strong className={t.header}>Vider</strong> la sélection (Annuler)</li>
-                </ul>
-              </div>
-            )}
           </div>
 
           {(vueActive === 'template' || vueActive === 'planning' || vueActive === 'journee') && (
