@@ -438,13 +438,40 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const statsAgents = useMemo(() => {
     return agents.map(agent => {
       let heuresConsommees = 0;
+      let heuresTheoriquesCDD = 0; 
+      
+      const isRemplacant = !!agent.remplacement?.agentId;
+      // On calcule sa cible par jour ouvré (LUN-VEN)
+      const hHebdoBase = (agent.hContrat || 1607) / 39; 
+      const hJourCible = hHebdoBase / 5;
+
       for (let m = 8; m < 20; m++) {
         const year = baseYear + Math.floor(m / 12);
         const month = m % 12;
         const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
         for (let d = 1; d <= daysInMonth; d++) {
           const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+          const dateObj = new Date(year, month, d); // Nécessaire pour obtenir le jour de la semaine
+          
+          // --- NOUVEAU BLOC : Proratisation journalière du contrat CDD ---
+          if (isRemplacant && agent.remplacement?.start && agent.remplacement?.end) {
+            if (dateStr >= agent.remplacement.start && dateStr <= agent.remplacement.end) {
+              const dayOfWeek = dateObj.getDay();
+              // On ne compte que les jours ouvrés du Lundi (1) au Vendredi (5)
+              if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                const targetMon = getMondayStr(dateObj);
+                // On ajoute l'objectif journalier uniquement si ce n'est pas les vacances
+                if (!isSemaineVacances(targetMon)) {
+                  heuresTheoriquesCDD += hJourCible;
+                }
+              }
+            }
+          }
+          // ---------------------------------------------------------------
+
           const hJour = getHeuresTheoriquesJour(agent.id, dateStr);
+          
           const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr));
           
           const hDeductGlobal = absDuJour.filter(a => ['absence', 'retard'].includes(a.type) && a.impact === 'global').reduce((tot, a) => tot + getHeuresAbsence(a), 0);
@@ -455,13 +482,19 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       }
       
       const applicableTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0];
-      const hHebdoType = gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0;
+      
+      // MODIFIÉ : Si c'est un CDD, son H. Type Hebdo est son obligation contractuelle (ex: 40h50) 
+      // Sinon, on prend son volume prévu dans le modèle de roulement.
+      const hHebdoType = isRemplacant ? hHebdoBase : (gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0);
 
-      let soldeMins = (agent.hContrat - heuresConsommees) * 60;
+      // Le contrat effectif devient la somme des jours ouvrés de son CDD
+      const hContratEffectif = isRemplacant ? heuresTheoriquesCDD : (agent.hContratProratise || agent.hContrat);
+
+      let soldeMins = (hContratEffectif - heuresConsommees) * 60;
       soldeMins = Math.round(soldeMins / 5) * 5;
       const soldeGlobal = soldeMins / 60;
 
-      return { ...agent, heuresConsommees, soldeGlobal, hHebdoType };
+      return { ...agent, heuresConsommees, soldeGlobal, hHebdoType, hContratEffectif, isRemplacant };
     });
   }, [agents, baseYear, absences, exceptions, customWeeks, templateVersions, activeTemplateId, gabarits, getApplicableTemplate]);
 
@@ -2568,8 +2601,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         {/* 4. VUE BILAN EQUIPE */}
         {vueActive === 'dashboard' && (() => {
           const todayStr = new Date().toISOString().split('T')[0];
-          const totalETP = Math.round(agents.reduce((sum, a) => sum + Number(getActiveContract(a, todayStr).quotite), 0)) / 100;
-          return (
+          const totalETP = Math.round(agents.filter(a => !a.remplacement?.agentId).reduce((sum, a) => sum + Number(getActiveContract(a, todayStr).quotite), 0)) / 100;          return (
             <div className={`flex-1 p-8 overflow-auto ${t.bgMain} print-dashboard-table`}>
               <div className="flex justify-between items-end mb-6">
                 <h2 className={`text-2xl font-bold ${t.header}`}>Bilan Annuel Global ({baseYear}-{baseYear+1})</h2>
@@ -2586,25 +2618,40 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                 </div>
               </div>
               <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden`}>
-                <table className="w-full text-sm text-left">
+            <table className="w-full text-sm text-left">
                   <thead className={`${t.headerBg} ${t.headerText} font-medium uppercase text-xs`}>
-                    <tr><th className={`p-4 border-r ${t.borderLight}`}>Agent</th><th className={`p-4 border-r ${t.borderLight} text-center`}>%</th><th className={`p-4 border-r ${t.borderLight} text-center bg-black/10 dark:bg-white/5`}>H. Contrat</th><th className={`p-4 border-r ${t.borderLight} text-center`}>H. Type Hebdo</th><th className={`p-4 border-r ${t.borderLight} text-center bg-black/10 dark:bg-white/5`}>H. Consommées</th><th className="p-4 text-center">Solde Final</th></tr>
+                    <tr>
+                      <th className={`p-4 border-r ${t.borderLight}`}>Agent</th>
+                      <th className={`p-4 border-r ${t.borderLight} text-center`}>%</th>
+                      <th className={`p-4 border-r ${t.borderLight} text-center bg-black/10 dark:bg-white/5`}>H. Contrat</th>
+                      <th className={`p-4 border-r ${t.borderLight} text-center`}>H. Type Hebdo</th>
+                      <th className={`p-4 border-r ${t.borderLight} text-center bg-black/10 dark:bg-white/5`}>H. Consommées</th>
+                      <th className="p-4 text-center">Solde Final</th>
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-black/5 dark:divide-white/5">
                     {statsAgents.map(agent => (
                       <tr key={agent.id} className={`hover:${t.bgLight} transition-colors`}>
-                        <td className={`p-4 font-bold border-r ${t.borderLight} ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</td>
+                        <td className={`p-4 font-bold border-r ${t.borderLight} ${t.header}`}>
+                          {agent.nom} {agent.estEtudiant && '🎓'}
+                        </td>
                         <td className={`p-4 text-center border-r ${t.borderLight}`}>
                           <span className="px-2 py-1 rounded-full text-xs font-bold shadow-sm" style={{ backgroundColor: agent.couleurFond, color: getContrastYIQ(agent.couleurFond) }}>
-                            {getActiveContract(agent, todayStr).quotite}% {(agent.avenants?.length > 0) && <span title="Des avenants modifient son temps de travail en cours d'année" className="ml-1 cursor-help">📝</span>}
+                            {agent.isRemplacant ? `CDD ${getActiveContract(agent, todayStr).quotite}%` : `${getActiveContract(agent, todayStr).quotite}%`} {(agent.avenants?.length > 0) && <span title="Des avenants modifient son temps de travail en cours d'année" className="ml-1 cursor-help">📝</span>}
                           </span>
                         </td>
                         <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.header}`}>
-                          {formatHeureTableau(agent.hContratProratise, true)}
-                        </td>                        
-                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono text-gray-500`}>{formatHeureTableau(agent.hHebdoType, true)}</td>
-                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.bgLight} ${t.header}`}>{formatHeureTableau(agent.heuresConsommees, true)}</td>
-                        <td className={`p-4 text-center font-mono font-black text-lg ${agent.soldeGlobal > 0 ? 'bg-green-500/20 text-green-600' : (agent.soldeGlobal < 0 ? 'bg-red-500/20 text-red-500' : 'bg-emerald-500/10 text-emerald-500')}`}>{agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</td>
+                          {formatHeureTableau(agent.hContratEffectif, true)}
+                        </td>
+                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono text-gray-500`}>
+                          {formatHeureTableau(agent.hHebdoType, true)}
+                        </td>
+                        <td className={`p-4 text-center border-r ${t.borderLight} font-mono font-bold ${t.bgLight} ${t.header}`}>
+                          {formatHeureTableau(agent.heuresConsommees, true)}
+                        </td>
+                        <td className={`p-4 text-center font-mono font-black text-lg ${agent.soldeGlobal > 0 ? 'bg-green-500/20 text-green-600' : (agent.soldeGlobal < 0 ? 'bg-red-500/20 text-red-500' : 'bg-emerald-500/10 text-emerald-500')}`}>
+                          {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2827,10 +2874,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               <div className={`hidden print:block text-xl font-bold ${t.headerText}`}>Bilan Annuel : {agents.find(a=>a.id===agentConsulte)?.nom} ({baseYear}-{baseYear+1})</div>
               <div className={`flex gap-6 ${t.bgLight} p-2 rounded border ${t.borderLight} print:border-none`}>
                 
-                <div className="flex flex-col items-center">
-                  <span className={`text-xs ${t.textMenuMuted} print:text-black`}>H. Contrat</span>
+<div className="flex flex-col items-center">
+                  <span className={`text-xs ${t.textMenuMuted} print:text-black`}>H. Contrat {statsAgents.find(a=>a.id===agentConsulte)?.isRemplacant ? '(CDD)' : ''}</span>
                   <span className={`font-mono font-bold ${t.header}`}>
-                    {formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.hContratProratise ?? statsAgents.find(a=>a.id===agentConsulte)?.hContrat, true)}
+                    {formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.hContratEffectif, true)}
                   </span>
                 </div>
                 
