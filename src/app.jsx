@@ -497,7 +497,30 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       return { ...agent, heuresConsommees, soldeGlobal, hHebdoType, hContratEffectif, isRemplacant };
     });
   }, [agents, baseYear, absences, exceptions, customWeeks, templateVersions, activeTemplateId, gabarits, getApplicableTemplate]);
+  // À PLACER AVANT LE RETURN PRINCIPAL DU COMPOSANT
+  const calculerObjectifHebdo = useCallback((agent, targetMon) => {
+    if (isSemaineVacances(targetMon)) return 0;
 
+    if (agent.remplacement?.agentId && agent.remplacement?.start && agent.remplacement?.end) {
+      let joursPresents = 0;
+      const [y, m, d] = targetMon.split('-').map(Number);
+      
+      for (let i = 0; i < 5; i++) {
+        const currentDay = new Date(y, m - 1, d + i);
+        const currentDayStr = `${currentDay.getFullYear()}-${String(currentDay.getMonth() + 1).padStart(2, '0')}-${String(currentDay.getDate()).padStart(2, '0')}`;
+        
+        if (currentDayStr >= agent.remplacement.start && currentDayStr <= agent.remplacement.end) {
+          joursPresents++;
+        }
+      }
+      const hHebdoBase = (agent.hContrat || 1607) / 39;
+      const hJourCible = hHebdoBase / 5;
+      return joursPresents * hJourCible;
+    }
+
+    const applicableTemplate = getApplicableTemplate(targetMon, templateVersions);
+    return gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0;
+  }, [isSemaineVacances, getApplicableTemplate, templateVersions, gabarits]);
   const shiftEventToWeek = (evt, targetMondayStr) => {
     const origMondayStr = getMondayStr(evt.start);
     if (origMondayStr === targetMondayStr) return { ...evt, id: String(evt.id).includes('_') ? evt.id : evt.id + '_' + targetMondayStr };
@@ -1741,10 +1764,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                         const agentWeekHours = agentWeekMins / 60;
                         const activeContract = getActiveContract(agent, targetMonday);
                         const hContratVirtuelActif = calculerContratBetty(activeContract.quotite, activeContract.estEtudiant);                        
-                        
+                        // ON APPELLE LA FONCTION ICI
+    const targetMon = currentViewMonday || getMondayStr(new Date()); 
+    const defaultObjectif = calculerObjectifHebdo(agent, targetMon);
 // 1. Calcul de l'objectif par défaut (force à 0 pendant les vacances) et vérification s'il est personnalisé
                         const estEnVacances = isSemaineVacances(targetMonday);
-                        const defaultObjectif = estEnVacances ? 0 : Math.floor(((hContratVirtuelActif / 39) * 60) / 5) * 5 / 60;
+                        
                         const hasCustomObjectif = currentTemplate?.objectifsHebdo?.[agent.id] !== undefined;
                         const objectifHebdoAgent = hasCustomObjectif ? currentTemplate.objectifsHebdo[agent.id] : defaultObjectif;
 
