@@ -646,25 +646,50 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const activeAlerts = useMemo(() => {
     const alerts = [];
-    const nomsJoursAlert = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM']; 
+    const nomsJoursAlert = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
+    const nomsJoursComplets = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']; 
     
     const targetMon = (vueActive === 'template') 
       ? getMondayStr(currentTemplate?.dateDebut || new Date())
       : (currentViewMonday || getMondayStr(new Date()));
 
     const applicableT = getApplicableTemplate(targetMon, templateVersions);
-    const realEvts = customWeeks[targetMon] ? customWeeks[targetMon] : (applicableT?.events.map(e => shiftEventToWeek(e, targetMon)) || []);
+    
+    // On sépare le modèle de base (théorique) de la semaine réelle
+    const baseTplEvts = applicableT ? applicableT.events.map(e => shiftEventToWeek(e, targetMon)) : [];
+    const realEvts = customWeeks[targetMon] ? customWeeks[targetMon] : baseTplEvts;
     const besoins = applicableT ? (applicableT.besoins || []).map(b => shiftEventToWeek(b, targetMon)) : [];
 
     besoins.forEach(b => {
+      // Test 1 : La réalité (avec les absences de la semaine)
       const { isSousEffectif, minCount, missingAgents } = checkCoverage(b, realEvts, absences);
+      
       if (isSousEffectif) {
         const dStart = new Date(b.start);
         const dEnd = new Date(b.end);
-        const rmp = missingAgents?.length > 0 ? ` (Manque : ${missingAgents.join(', ')})` : '';
+        const hStart = `${dStart.getHours()}h${String(dStart.getMinutes()).padStart(2,'0')}`;
+        const hEnd = `${dEnd.getHours()}h${String(dEnd.getMinutes()).padStart(2,'0')}`;
+        const pad = n => String(n).padStart(2, '0');
+        
+        const rmp = missingAgents?.length > 0 ? ` (Absent(s) : ${missingAgents.join(', ')})` : '';
+        
+        // Test 2 : Théorique (sans absence, sur le modèle pur)
+        const checkStructurel = checkCoverage(b, baseTplEvts, []);
+        const estStructurel = checkStructurel.isSousEffectif;
+
+        let messageAlerte = '';
+        if (estStructurel || vueActive === 'template') {
+          // L'alerte est un problème de conception du modèle (récurrent)
+          messageAlerte = `Tous les ${nomsJoursComplets[dStart.getDay()]}s de ${hStart} à ${hEnd} (${minCount} / ${b.extendedProps?.qte} pers.)${rmp}`;
+        } else {
+          // L'alerte est ponctuelle (absence ou modif manuelle de cette semaine précise)
+          const dateStr = `${pad(dStart.getDate())}/${pad(dStart.getMonth() + 1)}`;
+          messageAlerte = `Le ${nomsJoursComplets[dStart.getDay()]} ${dateStr} de ${hStart} à ${hEnd} (${minCount} / ${b.extendedProps?.qte} pers.)${rmp}`;
+        }
+
         alerts.push({
           title: `Sous-effectif : ${b.extendedProps?.posteNom || 'Poste'}`,
-          message: `${nomsJoursAlert[dStart.getDay()]} de ${dStart.getHours()}h${String(dStart.getMinutes()).padStart(2,'0')} à ${dEnd.getHours()}h${String(dEnd.getMinutes()).padStart(2,'0')} (${minCount} / ${b.extendedProps?.qte} pers.)${rmp}`
+          message: messageAlerte
         });
       }
     });
@@ -683,9 +708,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
           if (start1 < end2 && start2 < end1) {
             const agentNom = e1.extendedProps.agentNom || 'Agent';
             const d = new Date(e1.start);
+            const pad = n => String(n).padStart(2, '0');
+            const dateStr = vueActive === 'template' ? '' : ` ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+            
             alerts.push({
               title: `Double affectation : ${agentNom}`,
-              message: `${agentNom} est affecté(e) sur 2 postes en même temps le ${nomsJoursAlert[d.getDay()]} !`
+              message: `${agentNom} est affecté(e) sur 2 postes en même temps le ${nomsJoursComplets[d.getDay()]}${dateStr} !`
             });
           }
         }
@@ -694,7 +722,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
     return alerts;
   }, [currentTemplate, currentViewMonday, customWeeks, absences, templateVersions, vueActive, getApplicableTemplate]);
-
+  
   const validerTemplateModal = (e) => {
     e.preventDefault();
     if (!modalTemplate.nom.trim()) return;
