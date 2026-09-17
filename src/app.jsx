@@ -566,8 +566,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const applyReplacements = useCallback((eventsList) => {
     if (!eventsList) return [];
-    return eventsList.map(evt => {
-      if (evt.extendedProps?.isAbsence || evt.extendedProps?.isBesoin) return evt;
+    
+    // On utilise flatMap au lieu de map pour pouvoir dédoubler l'événement
+    return eventsList.flatMap(evt => {
+      if (evt.extendedProps?.isAbsence || evt.extendedProps?.isBesoin) return [evt];
       const dateStr = evt.start.split('T')[0];
       const origAgentId = evt.extendedProps?.agentId;
       
@@ -579,15 +581,21 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       );
 
       if (replacer) {
-        return {
+        // On crée la copie parfaite pour le remplaçant
+        const evtRemplacant = {
           ...evt,
+          id: String(evt.id) + '_remp', // ID unique pour la copie
           title: `${evt.extendedProps.posteNom} - ${replacer.nom}`,
           backgroundColor: replacer.couleurFond,
           borderColor: replacer.couleurFond,
           extendedProps: { ...evt.extendedProps, originalAgentId: origAgentId, agentId: replacer.id, agentNom: replacer.nom }
         };
+        // La magie opère ici : on retourne l'original ET la copie !
+        return [evt, evtRemplacant];
       }
-      return evt;
+      
+      // S'il n'y a pas de remplaçant, on retourne juste le créneau normal
+      return [evt];
     });
   }, [agents]);
 
@@ -722,7 +730,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
     return alerts;
   }, [currentTemplate, currentViewMonday, customWeeks, absences, templateVersions, vueActive, getApplicableTemplate]);
-  
+
   const validerTemplateModal = (e) => {
     e.preventDefault();
     if (!modalTemplate.nom.trim()) return;
