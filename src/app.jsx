@@ -867,16 +867,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     }
   }, [agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, isDataLoaded]);
 
-  useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      if (needsBackup) {
-        e.preventDefault();
-        e.returnValue = ''; 
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [needsBackup]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
