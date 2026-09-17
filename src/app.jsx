@@ -580,8 +580,46 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     });
   }, [agents]);
 
-  const allCalendarEvents = modeEdition === 'besoins' ? besoinsEvents : applyReplacements(currentRealEvents);
 
+  // --- NOUVEAU : CRÉATION DES BLOCS VISUELS POUR LES ABSENCES ---
+  const absencesVisuelles = useMemo(() => {
+    return absences.filter(a => a.type === 'absence').map(a => {
+      // On récupère la date du bloc d'absence
+      const dateAbs = a.start.split('T')[0];
+      
+      // Par défaut, on garde les heures de l'absence telles qu'elles sont enregistrées
+      let startStr = a.start;
+      let endStr = a.end;
+
+      // Si c'est une journée complète, on force l'affichage de l'ouverture à la fermeture
+      if (a.journeeEntiere !== false) {
+        startStr = `${dateAbs}T${amplitude.start || '07:30'}:00`;
+        endStr = `${dateAbs}T${amplitude.end || '18:00'}:00`;
+      }
+
+      return {
+        id: `abs_visuel_${a.id}`,
+        start: startStr,
+        end: endStr,
+        title: "🚫 Absent(e)",
+        backgroundColor: "#ef4444", 
+        borderColor: "#b91c1c",
+        extendedProps: {
+          isAbsence: true,
+          agentId: a.agentId,
+          agentNom: agents.find(ag => String(ag.id) === String(a.agentId))?.nom || '',
+          posteId: 'abs',
+          posteNom: "Absent(e)",
+          posteCouleur: "#ef4444",
+          typeAbsence: a.type,
+          motif: a.motif
+        }
+      };
+    });
+  }, [absences, agents, amplitude]);
+
+  // On injecte les absences dans tous les événements du calendrier
+  const allCalendarEvents = modeEdition === 'besoins' ? besoinsEvents : [...applyReplacements(currentRealEvents), ...absencesVisuelles];
   const conflitsIds = useMemo(() => {
     return detecterChevauchements(allCalendarEvents);
   }, [allCalendarEvents]);
@@ -1764,10 +1802,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
               </div>
               
               <div className="flex-1 overflow-hidden px-4 pb-4 flex flex-col">
-                {isPrinting ? (
-                  <PrintDailyView agents={agents} jourConsulte={jourConsulte} getEventsForWeek={(mStr) => applyReplacements(getEventsForWeek(mStr))} absences={absences} sonneries={sonneries} limitesHeures={limitesHeures} postes={postes} getMondayStr={getMondayStr} amplitude={amplitude} />
+{isPrinting ? (
+                  <PrintDailyView agents={agents} jourConsulte={jourConsulte} getEventsForWeek={(mStr) => [...applyReplacements(getEventsForWeek(mStr)), ...absencesVisuelles]} absences={absences} sonneries={sonneries} limitesHeures={limitesHeures} postes={postes} getMondayStr={getMondayStr} amplitude={amplitude} />
                 ) : (
-                  <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
+                                    <div className={`${t.cardBg} rounded-xl shadow border ${t.borderLight} flex-1 flex flex-col overflow-hidden`}>
                     <div className={`flex flex-wrap gap-2 p-3 border-b ${t.borderLight} ${t.bgLight} justify-center items-center shrink-0`}>
                       <span className="text-xs font-bold text-gray-500 mr-2 uppercase tracking-wider">Légende & Postes :</span>
                       {postes.map(p => (
@@ -1828,9 +1866,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
                           {agents.map(agent => {
                             const mondayStr = getMondayStr(jourConsulte);
-                            const allEvents = applyReplacements(getEventsForWeek(mondayStr));
+                            const allEvents = [...applyReplacements(getEventsForWeek(mondayStr)), ...absencesVisuelles];
                             const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
-
                             const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => {
                               return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
                             }, 0);
