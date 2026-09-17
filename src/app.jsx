@@ -531,15 +531,26 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     for (let t = tStart; t < tEnd; t += step) {
       const shiftsAtT = posteShifts.filter(e => new Date(e.start).getTime() <= t && new Date(e.end).getTime() > t);
       let presentCount = 0;
+      
       shiftsAtT.forEach(shift => {
-        const isAbsentAtT = weekAbsences.some(abs => 
-          abs.agentId === shift.extendedProps.agentId && 
-          new Date(abs.start).getTime() <= t && 
-          new Date(abs.end).getTime() > t
-        );
+        const isAbsentAtT = weekAbsences.some(abs => {
+          if (Number(abs.agentId) !== Number(shift.extendedProps.agentId)) return false;
+          
+          // Si c'est une absence journée complète, il est déduit de l'effectif toute la journée
+          if ((abs.journeeComplete === true || abs.journeeEntiere === true) && abs.type === 'absence') {
+            const dateAbs = abs.start.split('T')[0];
+            const dateShift = shift.start.split('T')[0];
+            if (dateAbs === dateShift) return true;
+          }
+          
+          // Sinon (retards, absences de 2h), on vérifie s'il est absent à la minute T exacte
+          return new Date(abs.start).getTime() <= t && new Date(abs.end).getTime() > t;
+        });
+
         if (!isAbsentAtT) presentCount++;
         else missingAgents.add(shift.extendedProps.agentNom);
       });
+      
       if (presentCount < minCount) minCount = presentCount;
     }
     if (minCount === Infinity) minCount = 0;
