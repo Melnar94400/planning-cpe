@@ -18,7 +18,7 @@ export const SetupWizard = ({ onComplete, t }) => {
   const [formAgent, setFormAgent] = useState({ nom: '', quotite: '100', estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6', jours: {1:true,2:true,3:true,4:true,5:true} });
   
   const [formPoste, setFormPoste] = useState({
-    nom: '', couleur: '#8B5CF6', qte: 1, slots: [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]
+    nom: '', couleur: '#8B5CF6', qte: 1, slots: []
   });
 
   const handleAgentChange = (champ, valeur) => {
@@ -56,8 +56,6 @@ export const SetupWizard = ({ onComplete, t }) => {
         .filter(r => r.description && r.description.toLowerCase().includes("vacances"))
         .map(r => {
            const startD = new Date(r.start_date);
-           // FIX : L'Éducation Nationale fixe le début au vendredi soir après les cours.
-           // On décale le début officiel au samedi pour ne pas amputer les heures du vendredi !
            if (startD.getDay() === 5) {
              startD.setDate(startD.getDate() + 1);
            }
@@ -135,7 +133,6 @@ export const SetupWizard = ({ onComplete, t }) => {
 
     const templateVersions = [{ id: 1, nom: "Modèle Initial", dateDebut: startStr, events: [], besoins: initialBesoins, statut: 'brouillon' }];
 
-    // Sauvegarde officielle dans IndexedDB
     await saveAppData({
       agents,
       postes,
@@ -145,6 +142,138 @@ export const SetupWizard = ({ onComplete, t }) => {
       customWeeks: {},
       exceptions: {},
       absences: [],
+      amplitude: { start: '07:30', end: '18:00' },
+      sonneries: ['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40']
+    });
+
+    localStorage.setItem('edt-setup-done', 'true');
+    onComplete();
+  };
+
+// --- NOUVELLE FONCTION : Charge le jeu d'essai (Semaine complète + Vacances légales) ---
+  const loadDemoData = async () => {
+    const today = new Date();
+    const day = today.getDay() || 7;
+    
+    // Ancrage sur la semaine en cours
+    const baseDate = new Date(today);
+    baseDate.setDate(today.getDate() - (day - 1));
+    const pad = n => String(n).padStart(2, '0');
+    const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    const currentMon = fmt(baseDate);
+
+    // --- CALCUL INTELLIGENT DES VACANCES ---
+    const currentMonth = today.getMonth(); // 0 = Janvier, 8 = Septembre
+    const y1 = currentMonth >= 7 ? today.getFullYear() : today.getFullYear() - 1;
+    const y2 = y1 + 1;
+
+    // Calcul de l'été : On repère le 1er samedi de juillet
+    const july1 = new Date(y2, 6, 1);
+    const firstSaturday = new Date(july1);
+    while (firstSaturday.getDay() !== 6) {
+      firstSaturday.setDate(firstSaturday.getDate() + 1);
+    }
+    // Les vacances commencent après la 1ère semaine administrative
+    const debutVacancesEte = new Date(firstSaturday);
+    debutVacancesEte.setDate(debutVacancesEte.getDate() + 7); 
+    // Elles finissent pour laisser la dernière semaine d'août (pré-rentrée)
+    const finVacancesEte = new Date(y2, 7, 22); 
+
+    const demoPeriodes = [
+      { id: 'vac_toussaint', nom: "Vacances de la Toussaint", debut: `${y1}-10-17`, fin: `${y1}-11-01`, type: 'vacances' },
+      { id: 'vac_noel', nom: "Vacances de Noël", debut: `${y1}-12-19`, fin: `${y2}-01-03`, type: 'vacances' },
+      { id: 'vac_hiver', nom: "Vacances d'Hiver", debut: `${y2}-02-20`, fin: `${y2}-03-07`, type: 'vacances' },
+      { id: 'vac_printemps', nom: "Vacances de Printemps", debut: `${y2}-04-24`, fin: `${y2}-05-09`, type: 'vacances' },
+      { id: 'vac_ete', nom: "Vacances d'Été (hors sem. admin)", debut: fmt(debutVacancesEte), fin: fmt(finVacancesEte), type: 'vacances' }
+    ];
+    // ----------------------------------------
+
+    // IDs et couleurs stricts
+    const idDaniel = 1788778888886, colorDaniel = '#3B82F6'; 
+    const idTaoufik = 1788778901756, colorTaoufik = '#f7b23b'; 
+    const idYasmine = 1788778916021, colorYasmine = '#fbd5f4'; 
+    
+    const idBureau = 1788779346328, colBureau = '#578a24';
+    const idGrille = 1788779357960, colGrille = '#aa1d7d';
+    const idCour = 1788779388148, colCour = '#7174c6';
+    const idPerm = 1788779698483, colPerm = '#7d3a0d';
+    const idCouloirs = 1788780189530, colCouloirs = '#7b4c6a';
+
+    const demoAgents = [
+      { id: idDaniel, nom: 'Daniel (100%)', quotite: 100, estEtudiant: false, hContrat: 1593, couleurFond: colorDaniel },
+      { id: idTaoufik, nom: 'Taoufik (100% Étud.)', quotite: 100, estEtudiant: true, hContrat: 1393, couleurFond: colorTaoufik },
+      { id: idYasmine, nom: 'Yasmine (50% Étud.)', quotite: 50, estEtudiant: true, hContrat: 696.5, couleurFond: colorYasmine }
+    ];
+
+    const demoPostes = [
+      { id: idBureau, nom: 'Bureau', couleur: colBureau, qte: 1 },
+      { id: idGrille, nom: 'Grille', couleur: colGrille, qte: 1 },
+      { id: idCour, nom: 'Cour', couleur: colCour, qte: 1 },
+      { id: idPerm, nom: 'Permanence', couleur: colPerm, qte: 1 },
+      { id: idCouloirs, nom: 'Couloirs', couleur: colCouloirs, qte: 1 }
+    ];
+
+    const events = [];
+    const besoins = [];
+
+    const addSlot = (agentNom, agentId, agentCol, posteNom, posteId, posteCol, dateStr, startT, endT) => {
+      const uniqueId = String(Date.now() + Math.random());
+      events.push({
+        id: `evt_${uniqueId}`, start: `${dateStr}T${startT}:00`, end: `${dateStr}T${endT}:00`, title: `${posteNom} - ${agentNom}`,
+        backgroundColor: agentCol, borderColor: agentCol,
+        extendedProps: { agentId, agentNom, posteId, posteNom, posteCouleur: posteCol, note: '' }
+      });
+      besoins.push({
+        id: `bes_${uniqueId}`, start: `${dateStr}T${startT}:00`, end: `${dateStr}T${endT}:00`,
+        extendedProps: { posteId, posteNom, qte: 1 }
+      });
+    };
+
+    // On boucle du Lundi (0) au Vendredi (4)
+    for (let offset = 0; offset < 5; offset++) {
+      const d = new Date(baseDate);
+      d.setDate(d.getDate() + offset);
+      const dateStr = fmt(d);
+
+      // Daniel (100% - Objectif: ~40h50) -> Fait 8h10 par jour
+      addSlot('Daniel', idDaniel, colorDaniel, 'Bureau', idBureau, colBureau, dateStr, '08:00', '12:30');
+      addSlot('Daniel', idDaniel, colorDaniel, 'Grille', idGrille, colGrille, dateStr, '13:10', '16:50');
+
+      // Taoufik (100% Étudiant - Objectif: ~35h45) -> Fait 7h09 par jour
+      addSlot('Taoufik', idTaoufik, colorTaoufik, 'Cour', idCour, colCour, dateStr, '10:00', '13:30');
+      addSlot('Taoufik', idTaoufik, colorTaoufik, 'Permanence', idPerm, colPerm, dateStr, '14:00', '17:39');
+
+      // Yasmine (50% Étudiante - Objectif: ~17h50) -> Ne travaille que Lundi et Mardi
+      if (offset === 0 || offset === 1) {
+        addSlot('Yasmine', idYasmine, colorYasmine, 'Couloirs', idCouloirs, colCouloirs, dateStr, '08:00', '12:30');
+        addSlot('Yasmine', idYasmine, colorYasmine, 'Cour', idCour, colCour, dateStr, '13:00', '17:25');
+      }
+    }
+
+    const demoTemplates = [{
+      id: 1, nom: "Semaine Démo Légale", dateDebut: currentMon,
+      events: events, besoins: besoins, statut: "valide", typeModele: "standard", rythme: "pair", objectifsHebdo: {}
+    }];
+
+    // Absence de Taoufik le Jeudi après-midi (offset 3) pour montrer l'alerte
+    const jeuDate = new Date(baseDate);
+    jeuDate.setDate(jeuDate.getDate() + 3);
+    const jeuStr = fmt(jeuDate);
+
+    const demoAbsences = [
+      { id: 'abs_demo', agentId: idTaoufik, type: 'absence', start: `${jeuStr}T14:00:00`, end: `${jeuStr}T17:39:00`, motif: 'RDV Médical', impact: 'global', journeeComplete: false }
+    ];
+
+    await saveAppData({
+      agents: demoAgents,
+      postes: demoPostes,
+      periodesFeriees: demoPeriodes, // Intégration des vacances calculées !
+      dotation: 2.5, 
+      templateVersions: demoTemplates,
+      gabarits: { 1: { [idDaniel]: { totalHebdo: 40.833 }, [idTaoufik]: { totalHebdo: 35.717 }, [idYasmine]: { totalHebdo: 17.858 } } },
+      customWeeks: {},
+      exceptions: {},
+      absences: demoAbsences,
       amplitude: { start: '07:30', end: '18:00' },
       sonneries: ['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40']
     });
@@ -185,7 +314,6 @@ export const SetupWizard = ({ onComplete, t }) => {
             dotation: parseFloat(extractData('dotation', 'edt-dotation')) || 0
           };
 
-          // On pousse les données dans IndexedDB !
           await saveAppData(importedData);
           localStorage.setItem('edt-setup-done', 'true');
           alert("Sauvegarde restaurée avec succès !");
@@ -202,7 +330,7 @@ export const SetupWizard = ({ onComplete, t }) => {
 
   return (
     <div className={`min-h-screen ${t.bgMain} flex flex-col items-center py-12 px-4 transition-colors`}>
-      <div className={`w-full max-w-2xl ${t.cardBg} rounded-xl shadow-xl overflow-hidden border border-black/5`}>
+      <div className={`w-full max-w-3xl ${t.cardBg} rounded-xl shadow-xl overflow-hidden border border-black/5`}>
         <div className={`${t.headerBg} p-6 ${t.headerText} text-center`}>
           <h1 className="text-3xl font-black tracking-wider">Planning CPE</h1><p className="opacity-80 mt-1">Configuration Initiale ({step}/4)</p>
         </div>
@@ -210,12 +338,28 @@ export const SetupWizard = ({ onComplete, t }) => {
           {step === 1 && (
             <div className="text-center space-y-6">
               <h2 className={`text-2xl font-bold ${t.header}`}>Bienvenue !</h2>
-              <p className="text-gray-500">Souhaitez-vous importer une sauvegarde existante ou paramétrer une nouvelle année scolaire ?</p>
-              <div className="grid grid-cols-2 gap-4 mt-8">
-                <button onClick={() => document.getElementById('import-init').click()} className="p-6 border-2 border-dashed border-emerald-500 rounded-xl hover:bg-emerald-500/10 transition group"><div className="text-4xl mb-2 group-hover:scale-110 transition">⬆️</div><div className="font-bold text-emerald-600">Importer JSON</div></button>
+              <p className="text-gray-500">Souhaitez-vous importer une sauvegarde existante, paramétrer une nouvelle année ou simplement découvrir l'outil ?</p>
+              
+              {/* --- MODIFICATION ICI : Grille de 3 boutons au lieu de 2 --- */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+                <button onClick={() => document.getElementById('import-init').click()} className="p-6 border-2 border-dashed border-emerald-500 rounded-xl hover:bg-emerald-500/10 transition group flex flex-col items-center justify-center">
+                  <div className="text-4xl mb-2 group-hover:scale-110 transition">⬆️</div>
+                  <div className="font-bold text-emerald-600">Importer JSON</div>
+                </button>
                 <input type="file" id="import-init" accept=".json" onChange={handleWizardImport} className="hidden" />
-                <button onClick={() => setStep(2)} className={`p-6 border-2 border-transparent ${t.bgLight} transition group hover:brightness-95 rounded-xl`}><div className="text-4xl mb-2 group-hover:scale-110 transition">✨</div><div className={`font-bold ${t.header}`}>Nouvelle Année</div></button>
+                
+                <button onClick={() => setStep(2)} className={`p-6 border-2 border-transparent ${t.bgLight} transition group hover:brightness-95 rounded-xl flex flex-col items-center justify-center`}>
+                  <div className="text-4xl mb-2 group-hover:scale-110 transition">✨</div>
+                  <div className={`font-bold ${t.header}`}>Nouvelle Année</div>
+                </button>
+
+                <button onClick={loadDemoData} className="p-6 border-2 border-transparent bg-blue-600/10 hover:bg-blue-600/20 transition group rounded-xl flex flex-col items-center justify-center">
+                  <div className="text-4xl mb-2 group-hover:scale-110 transition">🧪</div>
+                  <div className="font-bold text-blue-600">Tester l'appli</div>
+                  <div className="text-xs text-blue-600/70 mt-1">Données fictives</div>
+                </button>
               </div>
+              {/* --------------------------------------------------------- */}
             </div>
           )}
 
@@ -270,7 +414,7 @@ export const SetupWizard = ({ onComplete, t }) => {
                 <h2 className={`text-xl font-bold ${t.header} border-b pb-2`}>2. Équipe AED & Dotation</h2>
                 <p className="text-sm text-gray-500">Saisissez la dotation globale de votre établissement, puis ajoutez les agents.</p>
                 
-                <div className={`p-5 rounded-xl border flex justify-between items-center transition-all ${isOverflow ? 'bg-red-900/10 border-red-500/50' : `${t.bgLight} ${t.borderLight} shadow-sm`}`}>
+                <div className={`p-5 rounded-xl border flex justify-between items-center transition-all ${isOverflow ? 'bg-red-900/10 border-red-500/50' : `${t.bgLight}${t.borderLight} shadow-sm`}`}>
                   <div>
                     <label className={`text-[10px] font-bold ${t.header} uppercase tracking-wider block mb-1`}>Dotation Globale (Budget)</label>
                     <div className="flex items-center gap-2">
@@ -337,48 +481,64 @@ export const SetupWizard = ({ onComplete, t }) => {
                   </div>
                 </div>
 
-                <div className="border-t border-black/10 pt-3">
+<div className="border-t border-black/10 pt-3">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-bold text-gray-500 uppercase">Plages horaires (Semaine type)</span>
-                    <button type="button" onClick={() => setFormPoste({...formPoste, slots: [...formPoste.slots, { id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]})} className="text-xs bg-black/10 hover:bg-black/20 px-2 py-1 rounded font-bold">➕ Plage</button>
+                    {/* On n'affiche le petit bouton "➕ Plage" que s'il y a déjà au moins une plage */}
+                    {formPoste.slots.length > 0 && (
+                      <button type="button" onClick={() => setFormPoste({...formPoste, slots: [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }, ...formPoste.slots]})} className="text-xs bg-black/10 hover:bg-black/20 px-2 py-1 rounded font-bold">➕ Plage</button>
+                    )}
                   </div>
-                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                    {formPoste.slots.map((slot, idx) => (
-                      <div key={idx} className={`p-2 rounded border ${t.borderLight} ${t.cardBg} flex flex-col gap-1.5`}>
-                        <div className="flex items-center gap-2">
-                          <input type="time" required value={slot.start} onChange={e => {
-                            const ns = [...formPoste.slots]; ns[idx].start = e.target.value; setFormPoste({...formPoste, slots: ns});
-                          }} className="border p-1 text-xs rounded bg-transparent w-24 text-center font-bold" />
-                          <span className="text-gray-400 text-xs">à</span>
-                          <input type="time" required value={slot.end} onChange={e => {
-                            const ns = [...formPoste.slots]; ns[idx].end = e.target.value; setFormPoste({...formPoste, slots: ns});
-                          }} className="border p-1 text-xs rounded bg-transparent w-24 text-center font-bold" />
-                          <button type="button" onClick={() => {
-                            const ns = [...formPoste.slots]; ns.splice(idx, 1); setFormPoste({...formPoste, slots: ns});
-                          }} className="text-red-500 font-bold text-xs ml-auto">✖</button>
+
+                  {formPoste.slots.length === 0 ? (
+                    <div className="flex justify-center py-4">
+                      <button 
+                        type="button" 
+                        onClick={() => setFormPoste({...formPoste, slots: [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }]})} 
+                        className={`px-5 py-3 border-2 border-dashed ${t.borderLight} text-gray-500 rounded-xl font-bold hover:${t.bgLight} transition-all active:scale-95 flex items-center gap-2 text-sm`}
+                      >
+                        ➕ Créer une plage horaire
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                      {formPoste.slots.map((slot, idx) => (
+                        <div key={idx} className={`p-2 rounded border ${t.borderLight} ${t.cardBg} flex flex-col gap-1.5`}>
+                          <div className="flex items-center gap-2">
+                            <input type="time" required value={slot.start} onChange={e => {
+                              const ns = [...formPoste.slots]; ns[idx].start = e.target.value; setFormPoste({...formPoste, slots: ns});
+                            }} className="border p-1 text-xs rounded bg-transparent w-24 text-center font-bold" />
+                            <span className="text-gray-400 text-xs">à</span>
+                            <input type="time" required value={slot.end} onChange={e => {
+                              const ns = [...formPoste.slots]; ns[idx].end = e.target.value; setFormPoste({...formPoste, slots: ns});
+                            }} className="border p-1 text-xs rounded bg-transparent w-24 text-center font-bold" />
+                            <button type="button" onClick={() => {
+                              const ns = [...formPoste.slots]; ns.splice(idx, 1); setFormPoste({...formPoste, slots: ns});
+                            }} className="text-red-500 font-bold text-xs ml-auto hover:scale-125 transition-transform">✖</button>
+                          </div>
+                          <div className="flex gap-1">
+                            {[1, 2, 3, 4, 5].map(day => (
+                              <label key={day} className={`flex-1 flex items-center justify-center py-0.5 rounded border text-[10px] font-bold cursor-pointer transition-colors ${slot.days[day] ? `${t.btnPrimary} border-transparent` : 'bg-transparent text-gray-500 border-black/10 hover:bg-black/5'}`}>
+                                <input type="checkbox" className="hidden" checked={slot.days[day]} onChange={e => {
+                                  const ns = [...formPoste.slots]; ns[idx].days[day] = e.target.checked; setFormPoste({...formPoste, slots: ns});
+                                }} />
+                                {nomsJours[day % 7]}
+                              </label>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex gap-1">
-                          {[1, 2, 3, 4, 5].map(day => (
-                            <label key={day} className={`flex-1 flex items-center justify-center py-0.5 rounded border text-[10px] font-bold cursor-pointer ${slot.days[day] ? `${t.btnPrimary} border-transparent` : 'bg-transparent text-gray-500 border-black/10'}`}>
-                              <input type="checkbox" className="hidden" checked={slot.days[day]} onChange={e => {
-                                const ns = [...formPoste.slots]; ns[idx].days[day] = e.target.checked; setFormPoste({...formPoste, slots: ns});
-                              }} />
-                              {nomsJours[day % 7]}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <button type="button" onClick={() => {
                   if(formPoste.nom) {
                     setPostes([...postes, { id: Date.now(), ...formPoste, qte: Number(formPoste.qte) || 1 }]);
-                    setFormPoste({ nom: '', couleur: '#8B5CF6', qte: 1, slots: [{ id: Date.now(), start: '08:00', end: '12:00', days: { 1: true, 2: true, 3: true, 4: true, 5: true } }] });
+                    // On vide bien les slots après l'ajout
+                    setFormPoste({ nom: '', couleur: '#8B5CF6', qte: 1, slots: [] });
                   }
-                }} className={`w-full ${t.btnPrimary} py-2 rounded text-sm font-bold shadow mt-2`}>Ajouter ce poste</button>
-              </div>
+                }} className={`w-full ${t.btnPrimary} py-2 rounded text-sm font-bold shadow mt-2`}>Ajouter ce poste</button>              </div>
 
               <div className="flex flex-wrap gap-2">
                 {postes.map(p => (

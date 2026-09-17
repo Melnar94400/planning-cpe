@@ -1595,6 +1595,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setJourConsulte(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`);
   };
 
+  
   if (!isDataLoaded) {
     return (
       <div className={`flex h-screen w-screen items-center justify-center ${t.bgMain} ${t.headerText}`}>
