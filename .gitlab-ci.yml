@@ -1,0 +1,12 @@
+image: node:lts
+pages:
+  stage: deploy
+  script:
+    - npm ci
+    - npm run build
+  publish: dist
+  artifacts:
+    paths:
+      - dist
+  rules:
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
