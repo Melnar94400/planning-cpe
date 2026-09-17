@@ -799,7 +799,7 @@ export const ModalEditBesoin = ({ modalEditBesoin, setModalEditBesoin, validerEd
   );
 };
 
-export const ModalAgent = ({ modalAgent, setModalAgent, validerAgentModal, handleEditAgentChange, baseYear, t }) => {
+export const ModalAgent = ({ modalAgent, setModalAgent, validerAgentModal, handleEditAgentChange, baseYear, agents, t }) => {
   if (!modalAgent.isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
@@ -864,6 +864,53 @@ export const ModalAgent = ({ modalAgent, setModalAgent, validerAgentModal, handl
               )}
             </div>
           </div>
+          {/* --- SECTION REMPLACEMENT --- */}
+        <div className={`mt-4 p-3 border ${t.borderLight} rounded-lg bg-black/5 dark:bg-white/5`}>
+          <label className="flex items-center gap-2 font-bold text-sm cursor-pointer">
+            <input 
+              type="checkbox" 
+              className="w-4 h-4 accent-blue-600 rounded"
+              checked={!!modalAgent.remplacement}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  handleEditAgentChange('remplacement', { agentId: '', start: '', end: '' });
+                } else {
+                  handleEditAgentChange('remplacement', null);
+                }
+              }}
+            />
+            Cet agent est un remplaçant (CDD)
+          </label>
+          
+          {modalAgent.remplacement && (
+            <div className="mt-3 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div>
+                <label className="block text-xs font-semibold mb-1 opacity-80">Agent remplacé</label>
+                <select 
+                  value={modalAgent.remplacement.agentId || ''} 
+                  onChange={(e) => handleEditAgentChange('remplacement', { ...modalAgent.remplacement, agentId: e.target.value })}
+                  className={`w-full p-2 border ${t.borderLight} rounded bg-transparent text-sm font-bold`}
+                >
+                  <option value="" className="text-black">-- Sélectionner un AED --</option>
+                  {agents.filter(a => a.id !== modalAgent.id).map(a => (
+                    <option key={a.id} value={a.id} className="text-black">{a.nom}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs font-semibold mb-1 opacity-80">Du</label>
+                  <input type="date" value={modalAgent.remplacement.start || ''} onChange={(e) => handleEditAgentChange('remplacement', { ...modalAgent.remplacement, start: e.target.value })} className={`w-full p-2 border ${t.borderLight} rounded bg-transparent text-sm font-bold`} />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-semibold mb-1 opacity-80">Au</label>
+                  <input type="date" value={modalAgent.remplacement.end || ''} onChange={(e) => handleEditAgentChange('remplacement', { ...modalAgent.remplacement, end: e.target.value })} className={`w-full p-2 border ${t.borderLight} rounded bg-transparent text-sm font-bold`} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        
           <div className={`p-4 ${t.bgLight} border-t ${t.borderLight} flex justify-end gap-3`}>
             <button type="button" onClick={() => setModalAgent({...modalAgent, isOpen: false})} className="px-4 py-2 text-gray-500 hover:opacity-75 rounded">Annuler</button>
             <button type="submit" className={`px-5 py-2 ${t.btnPrimary} rounded font-bold`}>{modalAgent.id ? 'Mettre à jour' : 'Créer'}</button>
