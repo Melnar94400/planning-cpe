@@ -1242,21 +1242,23 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const gid = cible.groupId || cible.id;
     const newAbs = absences.filter(a => String(a.groupId) !== String(gid) && String(a.id) !== String(gid));
     setAbsences(newAbs);
-    sauvegarderVersStorage('absences', newAbs);
   };
 
   const ouvrirEditionAbsenceTableau = (a) => {
     const gid = a.groupId || a.id;
-    const chunks = absences.filter(x => String(x.groupId) === String(gid) || String(x.id) === String(gid));
+    const chunks = absences.filter(x => String(x.groupId) === String(gid) || String(x.id) === String(gid)).sort((x, y) => new Date(x.start) - new Date(y.start));
     
-    const dates = chunks.map(x => x.start.split('T')[0]).sort();
-    const dDebut = dates[0];
-    const dFin = chunks[0].dateFinReelle || dates[dates.length - 1];
+    const dDebut = chunks[0].start.split('T')[0];
+    const dFin = chunks[0].dateFinReelle || chunks[chunks.length - 1].end.split('T')[0];
 
     const dureeTotaleDec = chunks.reduce((acc, curr) => acc + ((new Date(curr.end) - new Date(curr.start)) / 3600000), 0);
     const heures = Math.floor(dureeTotaleDec);
     const minutes = Math.round((dureeTotaleDec - heures) * 60);
     const dureeStr = `${heures}h${String(minutes).padStart(2, '0')}`;
+
+    // On récupère les vraies heures pour les retards/heures supp
+    const startT = chunks[0].start.includes('T') ? chunks[0].start.split('T')[1].substring(0, 5) : '08:00';
+    const endT = chunks[chunks.length - 1].end.includes('T') ? chunks[chunks.length - 1].end.split('T')[1].substring(0, 5) : '18:00';
 
     setFormTypeEvent('absence');
     setFormTypeAbsence(a.type || 'absence');
@@ -1268,9 +1270,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       eventId: String(gid), 
       date: dDebut, 
       dateFin: dFin,
-      journeeEntiere: a.journeeEntiere !== false,
+      journeeEntiere: a.journeeEntiere !== false && a.journeeComplete !== false,
       duree: dureeStr,
-      start: '08:00', end: '18:00'
+      start: startT, 
+      end: endT
     });
   };
 
@@ -1329,6 +1332,17 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const ouvrirEdition = (evt) => {
     const isAbs = evt.extendedProps ? evt.extendedProps.isAbsence : false;
+    
+    // NOUVEAU : Si c'est une absence, on redirige vers le moteur de groupe multi-jours !
+    if (isAbs) {
+      const rawId = String(evt.id).replace('abs_visuel_', '').split('_')[0];
+      const absenceOrig = absences.find(a => String(a.id) === rawId);
+      if (absenceOrig) {
+        ouvrirEditionAbsenceTableau(absenceOrig);
+        return;
+      }
+    }
+
     let dateJour = evt.startStr || evt.start;
     if (dateJour && dateJour.includes('T')) {
       dateJour = dateJour.split('T')[0];
@@ -1342,8 +1356,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const minutes = Math.round((dureeDecimal - heures) * 60);
     const dureeStr = `${heures}h${String(minutes).padStart(2, '0')}`;
 
-    setFormTypeEvent(isAbs ? 'absence' : 'affectation');
-    setFormTypeAbsence(extProps.typeAbsence || 'absence');
+    setFormTypeEvent('affectation');
+    setFormTypeAbsence('absence');
     setFormAbsImpact(extProps.impact || 'local');
     setFormAgent(extProps.agentId || '');
     setFormPoste(extProps.posteId || postes.find(p => p.nom === extProps.posteNom)?.id || '');
@@ -1406,43 +1420,43 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
     if (formTypeEvent === 'absence') {
       const isJourneeEntiere = modalCreation.journeeEntiere !== false;
-      const baseId = modalCreation.eventId ? String(modalCreation.eventId).replace('abs_','').split('_')[0] : Date.now();
-      
-      const absenceToEdit = absences.find(a => String(a.id) === String(baseId));
-      const groupId = (absenceToEdit && absenceToEdit.groupId) ? absenceToEdit.groupId : `grp_${baseId}`;
 
-      const existingAbs = absences.filter(a => String(a.groupId) !== String(groupId) && String(a.id) !== String(baseId));
+      // 1. On nettoie l'ID sans casser les identifiants de groupes
+      let rawId = String(modalCreation.eventId || '');
+      if (rawId.startsWith('abs_visuel_')) rawId = rawId.replace('abs_visuel_', '');
+      if (rawId.includes('_') && !rawId.startsWith('grp_')) {
+         rawId = rawId.split('_')[0];
+      }
+
+      const absenceToEdit = absences.find(a => String(a.id) === rawId || String(a.groupId) === rawId);
+      const groupId = (absenceToEdit && absenceToEdit.groupId) ? absenceToEdit.groupId : `grp_${Date.now()}`;
+
+      // 2. On filtre les vieux fragments de cette absence
+      const existingAbs = absences.filter(a => {
+         if (!absenceToEdit) return true;
+         const aGid = a.groupId || a.id;
+         const editGid = absenceToEdit.groupId || absenceToEdit.id;
+         return String(aGid) !== String(editGid);
+      });
+
       const newChunks = [];
 
       if (isJourneeEntiere) {
         let curr = new Date(modalCreation.date);
         const end = new Date(modalCreation.dateFin || modalCreation.date);
-        
+
         while (curr <= end) {
           const pad = n => String(n).padStart(2, '0');
           const dateLoc = `${curr.getFullYear()}-${pad(curr.getMonth() + 1)}-${pad(curr.getDate())}`;
-          
-          let missedDec = 0;
-          const mondayStrLocal = getMondayStr(curr);
-          let evts = customWeeks[mondayStrLocal];
-          
-          if (!evts) {
-            const applicableTemplate = getApplicableTemplate(mondayStrLocal, templateVersions);
-            evts = applicableTemplate ? applicableTemplate.events.map(ev => shiftEventToWeek(ev, mondayStrLocal)) : [];
-          }
-          
-          (evts || []).forEach(ev => {
-            if (String(ev.agentId) === String(formAgent) && ev.start.startsWith(dateLoc)) {
-              missedDec += (new Date(ev.end) - new Date(ev.start)) / 3600000;
-            }
-          });
 
+          const missedDec = getHeuresTheoriquesJour(Number(formAgent), dateLoc);
           const isStartBoundary = curr.getTime() === new Date(modalCreation.date).getTime();
           const isEndBoundary = curr.getTime() === end.getTime();
-          
+
+          // On génère le bloc si l'agent devait travailler OU si c'est le 1er/dernier jour
           if (missedDec > 0 || isStartBoundary || isEndBoundary) {
              const startT = new Date(`${dateLoc}T08:00:00`);
-             const endT = new Date(startT.getTime() + missedDec * 3600000);
+             const endT = new Date(startT.getTime() + (missedDec > 0 ? missedDec : 0) * 3600000);
              newChunks.push({
                 id: Date.now() + Math.random(),
                 groupId: groupId,
@@ -1453,6 +1467,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                 start: `${dateLoc}T08:00:00`,
                 end: `${dateLoc}T${pad(endT.getHours())}:${pad(endT.getMinutes())}:00`,
                 journeeEntiere: true,
+                journeeComplete: true, // Sécurité de rétro-compatibilité
                 dateFinReelle: modalCreation.dateFin || modalCreation.date
              });
           }
@@ -1461,20 +1476,23 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       } else {
          const dureeDec = parseHeureSaisie(modalCreation.duree || '0');
          if (dureeDec <= 0) return alert("Indiquez une durée valide (ex: 0h45).");
-         const startT = new Date(`${modalCreation.date}T${modalCreation.start || '08:00'}:00`);
+         const startTStr = modalCreation.start || '08:00';
+         const startT = new Date(`${modalCreation.date}T${startTStr}:00`);
          const endT = new Date(startT.getTime() + dureeDec * 3600000);
          const pad = n => String(n).padStart(2, '0');
-         
+
          newChunks.push({
-            id: baseId,
+            id: Date.now() + Math.random(),
             groupId: groupId,
             agentId: Number(formAgent),
             type: formTypeAbsence,
             impact: formAbsImpact,
             motif: formNote,
-            start: `${modalCreation.date}T${modalCreation.start || '08:00'}:00`,
+            start: `${modalCreation.date}T${startTStr}:00`,
             end: `${modalCreation.date}T${pad(endT.getHours())}:${pad(endT.getMinutes())}:00`,
-            journeeEntiere: false
+            journeeEntiere: false,
+            journeeComplete: false,
+            dateFinReelle: modalCreation.date
          });
       }
 
@@ -1482,9 +1500,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
          if (!window.confirm("Cet agent n'a aucune heure de travail prévue sur cette période. Continuer ?")) return;
       }
 
-      const mergedAbs = [...existingAbs, ...newChunks];
-      setAbsences(mergedAbs);
-      sauvegarderVersStorage('absences', mergedAbs);
+      setAbsences([...existingAbs, ...newChunks]);
       setModalCreation({ isOpen: false, eventId: null, date: null, start: '08:00', end: '09:00' });
       return;
     }
