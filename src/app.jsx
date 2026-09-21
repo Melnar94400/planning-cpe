@@ -678,7 +678,11 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       // Si c'est un rattrapage assigné à un poste
       if (a.type === 'heures_supp' && a.posteId) {
          const p = postes.find(pos => String(pos.id) === String(a.posteId));
-         if (p) titleBase = `🟢 ${p.nom}`;
+         if (p) {
+             titleBase = `🟢 ${p.nom}`;
+             // NOUVEAU : On crée le motif hachuré oblique (Vert / Couleur du poste)
+             bg = `repeating-linear-gradient(45deg, #10b981, #10b981 10px, ${p.couleur} 10px, ${p.couleur} 20px)`;
+         }
       }
 
       const titleAffichage = a.motif ? `${titleBase} - ${a.motif}` : titleBase;
@@ -848,11 +852,14 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         if (window.confirm(`Voulez-vous vraiment supprimer ces ${copiedEvents.length} créneau(x) ?`)) {
           sauvegarderEtatPrecedent();
           
-          const idsAbsToDelete = copiedEvents.filter(ev => ev.extendedProps?.isAbsence).map(ev => String(ev.id).replace('abs_', '').split('_')[0]);
+          // CORRECTION : On gère correctement le préfixe 'abs_visuel_'
+          const idsAbsToDelete = copiedEvents.filter(ev => ev.extendedProps?.isAbsence).map(ev => String(ev.id).replace('abs_visuel_', '').replace('abs_', '').split('_')[0]);
           const idsEvtToDelete = copiedEvents.filter(ev => !ev.extendedProps?.isAbsence).map(ev => String(ev.id).split('_')[0]);
 
           if (idsAbsToDelete.length > 0) {
-            setAbsences(prev => prev.filter(a => !idsAbsToDelete.includes(String(a.id))));
+            // On récupère les "groupId" pour que la suppression nettoie bien toutes les parties d'une absence de plusieurs jours
+            const gidsToDelete = absences.filter(a => idsAbsToDelete.includes(String(a.id))).map(a => String(a.groupId || a.id));
+            setAbsences(prev => prev.filter(a => !gidsToDelete.includes(String(a.groupId || a.id)) && !idsAbsToDelete.includes(String(a.id))));
           }
 
           if (idsEvtToDelete.length > 0) {
@@ -893,7 +900,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [copiedEvents, templateVersions, customWeeks, absences, vueActive, modeEdition, jourConsulte, currentViewMonday, activeTemplateId, getEventsForWeek]);
-
   useEffect(() => {
     let isModified = false;
     let newPeriodes = [...periodesFeriees];
@@ -1079,40 +1085,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setTemplateVersions(newVersions);
   };
 
-  const applyAction = (action, info) => {
-    const cleanId = String(info.id).split('_')[0]; 
-    
-    let infoToSave = { ...info };
-    if (infoToSave.extendedProps?.originalAgentId) {
-      const origA = agents.find(a => a.id === infoToSave.extendedProps.originalAgentId);
-      if (origA) {
-          infoToSave.extendedProps = { ...infoToSave.extendedProps, agentId: origA.id, agentNom: origA.nom };
-          delete infoToSave.extendedProps.originalAgentId;
-          infoToSave.backgroundColor = origA.couleurFond;
-          infoToSave.borderColor = origA.couleurFond;
-          infoToSave.title = `${infoToSave.extendedProps.posteNom || 'Poste'} - ${origA.nom}`;
-      }
-    }
-
-    if (vueActive === 'template') {
-      let mod = [...currentTemplate.events];
-      if (action === 'add') mod.push({ ...infoToSave, id: cleanId });
-      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: infoToSave.start, end: infoToSave.end } : e);
-      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...infoToSave } : e);
-      if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
-      updateCurrentTemplate(mod, null);
-    } 
-    else if (vueActive === 'planning' || vueActive === 'journee') {
-      const monStr = infoToSave.start ? getMondayStr(infoToSave.start) : (currentViewMonday || getMondayStr(jourConsulte));
-      const currentWeek = customWeeks[monStr] ? [...customWeeks[monStr]] : getEventsForWeek(monStr);
-      let mod = currentWeek;
-      if (action === 'add') mod.push(infoToSave);
-      if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: infoToSave.start, end: infoToSave.end } : e);
-      if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...infoToSave } : e);
-      if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
-      setCustomWeeks({ ...customWeeks, [monStr]: mod });
-    }
-  };
 
   const validerModele = () => {
     setTemplateVersions(templateVersions.map(tv => tv.id === activeTemplateId ? { ...tv, statut: 'valide' } : tv));
@@ -1248,12 +1220,97 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setFormAbsence({ agentIds: [], type: 'absence', journeeComplete: true, dateDebut: new Date().toISOString().split('T')[0], dateFin: '', dureeSaisie: '', impact: 'global', motif: '' });
   };
   
-  const supprimerAbsence = (idOrGroupId) => {
-    const cible = absences.find(a => String(a.id) === String(idOrGroupId) || String(a.groupId) === String(idOrGroupId));
-    if (!cible) return;
-    const gid = cible.groupId || cible.id;
-    const newAbs = absences.filter(a => String(a.groupId) !== String(gid) && String(a.id) !== String(gid));
-    setAbsences(newAbs);
+  const supprimerAbsence = (idFallback) => {
+    // FORCE BRUTE : On prend l'ID de la modale en priorité absolue.
+    // Cela court-circuite n'importe quel bug de clic ou d'objet transmis par erreur.
+    const targetId = modalCreation.eventId || idFallback;
+    if (!targetId) return;
+
+    // Nettoyage de sécurité
+    let idClean = String(targetId).replace('abs_visuel_', '').replace('abs_', '');
+    if (idClean.includes('_') && !idClean.startsWith('grp_')) {
+        idClean = idClean.split('_')[0];
+    }
+    
+    sauvegarderEtatPrecedent();
+
+    // Mise à jour instantanée (immunisée contre les décalages de mémoire React)
+    setAbsences(prevAbsences => {
+        const cible = prevAbsences.find(a => String(a.id) === idClean || String(a.groupId) === idClean);
+        
+        if (!cible) {
+            // Si le groupe officiel n'est pas trouvé, on nettoie par sécurité
+            return prevAbsences.filter(a => String(a.id) !== idClean && String(a.groupId) !== idClean);
+        }
+        
+        // Suppression de toutes les parties du groupe d'absence
+        const gid = cible.groupId || cible.id;
+        return prevAbsences.filter(a => String(a.groupId) !== String(gid) && String(a.id) !== String(gid));
+    });
+    
+    setModalCreation(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const applyAction = (action, info) => {
+    // MÊME FORCE BRUTE ICI POUR LES CRÉNEAUX CLASSIQUES
+    const rawInfoId = (action === 'delete' && modalCreation.eventId) 
+        ? modalCreation.eventId 
+        : ((info && typeof info === 'object') ? info.id : info);
+        
+    if (!rawInfoId) return;
+
+    let cleanId = String(rawInfoId);
+    if (cleanId.includes('_') && !cleanId.startsWith('grp_') && !cleanId.startsWith('abs_')) {
+        cleanId = cleanId.split('_')[0]; 
+    }
+    
+    // REDIRECTION AUTOMATIQUE (Retards, Absences, Supp)
+    if (action === 'delete' && (formTypeEvent === 'absence' || cleanId.startsWith('grp_') || cleanId.startsWith('abs_'))) {
+        supprimerAbsence(cleanId);
+        return;
+    }
+
+    let infoToSave = (info && typeof info === 'object') ? { ...info } : { id: cleanId };
+    
+    if (infoToSave.extendedProps?.originalAgentId) {
+        const origA = agents.find(a => a.id === infoToSave.extendedProps.originalAgentId);
+        if (origA) {
+            infoToSave.extendedProps = { ...infoToSave.extendedProps, agentId: origA.id, agentNom: origA.nom };
+            delete infoToSave.extendedProps.originalAgentId;
+            infoToSave.backgroundColor = origA.couleurFond;
+            infoToSave.borderColor = origA.couleurFond;
+            infoToSave.title = `${infoToSave.extendedProps.posteNom || 'Poste'} - ${origA.nom}`;
+        }
+    }
+
+    // MISE À JOUR SÉCURISÉE DES PLAGES CLASSIQUES
+    if (vueActive === 'template') {
+        setTemplateVersions(prevTemplates => prevTemplates.map(tv => {
+            if (tv.id !== activeTemplateId) return tv;
+            let mod = [...tv.events];
+            if (action === 'add') mod.push({ ...infoToSave, id: cleanId });
+            if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: infoToSave.start, end: infoToSave.end } : e);
+            if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...infoToSave } : e);
+            if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
+            return { ...tv, events: mod };
+        }));
+    } 
+    else if (vueActive === 'planning' || vueActive === 'journee') {
+        const monStr = infoToSave.start ? getMondayStr(infoToSave.start) : (currentViewMonday || getMondayStr(jourConsulte));
+        setCustomWeeks(prevWeeks => {
+            const currentWeek = prevWeeks[monStr] ? [...prevWeeks[monStr]] : getEventsForWeek(monStr);
+            let mod = currentWeek;
+            if (action === 'add') mod.push(infoToSave);
+            if (action === 'update') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, start: infoToSave.start, end: infoToSave.end } : e);
+            if (action === 'update_content') mod = mod.map(e => String(e.id).split('_')[0] === cleanId ? { ...e, ...infoToSave } : e);
+            if (action === 'delete') mod = mod.filter(e => String(e.id).split('_')[0] !== cleanId);
+            return { ...prevWeeks, [monStr]: mod };
+        });
+    }
+    
+    if (action === 'delete') {
+        setModalCreation(prev => ({ ...prev, isOpen: false }));
+    }
   };
 
   const ouvrirEditionAbsenceTableau = (a) => {
@@ -1276,6 +1333,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setFormTypeAbsence(a.type || 'absence');
     setFormAbsImpact(a.impact || 'local');
     setFormAgent(String(a.agentId));
+    setFormPoste(a.posteId || ''); // <--- AJOUTE CETTE LIGNE ICI
     setFormNote(a.motif || '');
     setModalCreation({ 
       isOpen: true, 
@@ -1789,70 +1847,107 @@ const validerCreationModal = (e) => {
                   <div>
                     <div className="flex justify-between items-center mb-2"><h2 className={`font-bold ${t.header} text-sm`}>Agents</h2><button onClick={() => setModalAgent({isOpen: true, nom: '', quotite: 100, estEtudiant: false, hContrat: calculerContratBetty(100, false), couleurFond: '#3B82F6'})} className="bg-black/10 w-5 h-5 rounded-full text-xs font-bold hover:bg-black/20 text-gray-600 flex items-center justify-center">+</button></div>
                     <ul className="space-y-1">
-                      {statsAgents.map((agent) => {
+                    {statsAgents.map((agent) => {
                         const weekEvents = applyReplacements(vueActive === 'template' ? (currentTemplate?.events || []) : getEventsForWeek(targetMonday));
                         const agentWeekMins = weekEvents.filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                         const agentWeekHours = agentWeekMins / 60;
                         const activeContract = getActiveContract(agent, targetMonday);
                         const hContratVirtuelActif = calculerContratBetty(activeContract.quotite, activeContract.estEtudiant);                        
-                        // ON APPELLE LA FONCTION ICI
-    const targetMon = currentViewMonday || getMondayStr(new Date()); 
-    const defaultObjectif = calculerObjectifHebdo(agent, targetMon);
-// 1. Calcul de l'objectif par défaut (force à 0 pendant les vacances) et vérification s'il est personnalisé
+                        
+                        const targetMon = currentViewMonday || getMondayStr(new Date()); 
+                        const defaultObjectif = calculerObjectifHebdo(agent, targetMon);
+                        
                         const estEnVacances = isSemaineVacances(targetMonday);
                         
                         const hasCustomObjectif = currentTemplate?.objectifsHebdo?.[agent.id] !== undefined;
                         const objectifHebdoAgent = hasCustomObjectif ? currentTemplate.objectifsHebdo[agent.id] : defaultObjectif;
 
-                        // 2. Calcul de l'écart avec sécurité
                         let diffAgentHebdo = agentWeekHours - objectifHebdoAgent;
                         if (Math.abs(diffAgentHebdo) < 0.01) diffAgentHebdo = 0;                        
-                        return (
-                          <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex justify-between items-center p-3 rounded border-l-4 cursor-pointer ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} font-bold ring-1 ${t.borderLight}/10` : `${t.cardBg} hover:opacity-80`}`} style={{ borderLeftColor: agent.couleurFond }}>
-                            <div className="flex flex-col leading-tight w-full">
-                              <span className={`text-base font-bold ${t.header}`}>{agent.nom} {agent.estEtudiant && '🎓'}</span>
-                              <div className="flex gap-2 mt-1.5 items-center flex-wrap">
-                                <span className="text-xs font-mono text-gray-500 font-semibold" title="Total planifié cette semaine">Sem: {formatHeureTableau(agentWeekHours, true)}</span>
-                                
-                                {/* LE BOUTON D'ÉDITION D'OBJECTIF DEVIENT VISIBLE */}
-                                <button 
-                                   onClick={(e) => { 
-                                      e.stopPropagation(); 
-                                      if (vueActive === 'template' && currentTemplate?.statut === 'brouillon') {
-                                         const rep = window.prompt(`Objectif hebdo de ${agent.nom} pour ce modèle.\n\nLaissez vide pour revenir au calcul auto (${formatHeureTableau(defaultObjectif, true)}).`, hasCustomObjectif ? formatHeureTableau(objectifHebdoAgent, true) : '');
-                                         if (rep !== null) {
-                                            const newObj = { ...(currentTemplate.objectifsHebdo || {}) };
-                                            if (rep.trim() === '') {
-                                               delete newObj[agent.id];
-                                            } else {
-                                               const val = parseHeureSaisie(rep);
-                                               if (val > 0) newObj[agent.id] = val;
-                                            }
-                                            updateCurrentTemplate(null, null, newObj);
-                                         }
-                                      } else {
-                                         alert("Déverrouillez ce modèle (ou passez en mode brouillon) pour modifier l'objectif.");
-                                      }
-                                   }}
-                                   className={`text-xs font-mono font-bold flex items-center gap-1 border ${t.borderLight} bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 px-1.5 py-0.5 rounded shadow-sm transition-colors ${diffAgentHebdo >= 0 ? 'text-emerald-600 border-emerald-500/30' : 'text-orange-500 border-orange-500/30'}`} 
-                                   title="Cliquez pour forcer un objectif différent sur ce modèle"
-                                >
-                                   Obj: {formatHeureTableau(objectifHebdoAgent, true)} {hasCustomObjectif ? '📌' : '✏️'}
-                                </button>
+                        
+                        // NOUVEAU : Calcul du solde local (Rattrapages - Retards)
+                        const agentBilan = bilanAbsences.find(b => b.id === agent.id);
+                        const soldeLocal = (agentBilan?.hAvance || 0) - (agentBilan?.hDetteRestante || 0);
 
-                                <span className={`text-xs font-mono font-bold ${diffAgentHebdo >= 0 ? 'text-emerald-600' : 'text-orange-500'}`}>
-                                  ({diffAgentHebdo > 0 ? '+' : ''}{formatHeureTableau(diffAgentHebdo, true)})
-                                </span>
+                        return (
+                          <li key={agent.id} onClick={() => setAgentActif(agentActif === agent.id ? null : agent.id)} className={`flex flex-col p-2.5 rounded-lg border-l-4 cursor-pointer gap-2.5 shadow-sm transition-all ${agentActif === agent.id ? `${t.bgLight} ${t.textAccent} ring-1${t.borderLight}` : `${t.cardBg} border border-transparent hover:border-black/10 dark:hover:border-white/10`}`} style={{ borderLeftColor: agent.couleurFond }}>
+                            
+                            {/* LIGNE 1 : Identité et actions */}
+                            <div className="flex justify-between items-center w-full">
+                              <span className={`text-sm font-bold ${t.header} leading-none flex items-center gap-1.5`}>
+                                {agent.nom} 
+                                {agent.estEtudiant && <span title="Étudiant" className="text-xs">🎓</span>} 
+                                {agent.isRemplacant && <span title="Remplaçant (CDD)" className="text-xs">🔄</span>}
+                              </span>
+                              <div className="flex gap-1 items-center shrink-0">
+                                <button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className={`text-gray-400 hover:opacity-75 text-xs px-1 ${t.headerText}`} title="Paramètres de l'agent">⚙️</button>
+                                <button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-xs px-1" title="Supprimer">✖</button>
                               </div>
-                              <span className={`text-xs font-mono mt-1.5 ${agent.soldeGlobal > 0 ? 'text-green-600' : (agent.soldeGlobal < 0 ? 'text-red-500' : 'text-gray-500')}`}>Solde global: {agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</span>
                             </div>
-                            <div className="flex gap-1.5 items-center shrink-0 ml-2">
-                              <button onClick={(e) => { e.stopPropagation(); setModalAgent({isOpen:true, ...agent}); }} className={`text-gray-400 hover:opacity-75 text-sm px-1 ${t.headerText}`}>⚙️</button>
-                              <button onClick={(e) => supprimerAgent(agent.id, agent.nom, e)} className="text-red-400 hover:text-red-600 text-sm px-1">✖</button>
+
+                            {/* LIGNE 2 : Planning de la semaine (Réalisé / Objectif) */}
+                            <div className="flex items-center justify-between bg-black/5 dark:bg-white/5 p-1.5 rounded border border-black/5 dark:border-white/5">
+                              <div className="flex flex-col">
+                                <span className="text-[9px] text-gray-500 uppercase font-bold tracking-wider leading-none mb-1">Semaine</span>
+                                <div className="flex items-baseline gap-1">
+                                  <span className={`font-mono font-bold text-xs ${t.header}`}>{formatHeureTableau(agentWeekHours, true)}</span>
+                                  <span className="text-gray-400 text-[10px]">/</span>
+                                  
+                                  {/* Bouton pour forcer un objectif personnalisé */}
+                                  <button 
+                                    onClick={(e) => { 
+                                       e.stopPropagation(); 
+                                       if (vueActive === 'template' && currentTemplate?.statut === 'brouillon') {
+                                          const rep = window.prompt(`Objectif hebdo de ${agent.nom} pour ce modèle.\n\nLaissez vide pour revenir au calcul auto (${formatHeureTableau(defaultObjectif, true)}).`, hasCustomObjectif ? formatHeureTableau(objectifHebdoAgent, true) : '');
+                                          if (rep !== null) {
+                                             const newObj = { ...(currentTemplate.objectifsHebdo || {}) };
+                                             if (rep.trim() === '') {
+                                                delete newObj[agent.id];
+                                             } else {
+                                                const val = parseHeureSaisie(rep);
+                                                if (val > 0) newObj[agent.id] = val;
+                                             }
+                                             updateCurrentTemplate(null, null, newObj);
+                                          }
+                                       } else {
+                                          alert("Déverrouillez ce modèle (ou passez en mode brouillon) pour modifier l'objectif.");
+                                       }
+                                    }}
+                                    className={`font-mono text-[11px] font-bold transition-colors flex items-center gap-0.5 ${hasCustomObjectif ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-blue-500'}`} 
+                                    title="Modifier l'objectif de la semaine"
+                                  >
+                                    {formatHeureTableau(objectifHebdoAgent, true)}{hasCustomObjectif ? '📌' : '✏️'}
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {/* Pastille de différence (+/-) */}
+                              <div className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold shadow-sm ${diffAgentHebdo > 0 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : diffAgentHebdo < 0 ? 'bg-orange-500/15 text-orange-700 dark:text-orange-400' : 'bg-black/10 dark:bg-white/10 text-gray-600 dark:text-gray-300'}`}>
+                                {diffAgentHebdo > 0 ? '+' : ''}{formatHeureTableau(diffAgentHebdo, true)}
+                              </div>
                             </div>
+
+                            {/* LIGNE 3 : Les Soldes (Global et Local) */}
+                            <div className="flex gap-1.5 w-full">
+                              
+                              {/* Bloc Solde Global (Maladies, Absences longues) */}
+                              <div className={`flex-1 flex flex-col items-center justify-center py-1 px-0.5 rounded border shadow-sm ${agent.soldeGlobal > 0 ? 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400' : agent.soldeGlobal < 0 ? 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-400' : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-400'}`} title="Bilan contractuel global sur l'année">
+                                <span className="text-[8px] uppercase font-bold opacity-70 leading-none mb-0.5">Solde Global</span>
+                                <span className="font-mono text-[11px] font-black">{agent.soldeGlobal > 0 ? '+' : ''}{formatHeureTableau(agent.soldeGlobal, true)}</span>
+                              </div>
+                              
+                              {/* Bloc Compteur Local (Retards, Heures supp) */}
+                              <div className={`flex-1 flex flex-col items-center justify-center py-1 px-0.5 rounded border shadow-sm ${soldeLocal > 0 ? 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-400' : soldeLocal < 0 ? 'bg-orange-500/10 border-orange-500/30 text-orange-700 dark:text-orange-400' : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-400'}`} title="Compteur de rattrapages internes">
+                                <span className="text-[8px] uppercase font-bold opacity-70 leading-none mb-0.5">Compteur Local</span>
+                                <span className="font-mono text-[11px] font-black">{soldeLocal > 0 ? '+' : ''}{formatHeureTableau(soldeLocal, true)}</span>
+                              </div>
+
+                            </div>
+                            
                           </li>
                         );
                       })}
+
                     </ul>
                   </div>
                   <div className="mt-4">
@@ -2090,12 +2185,15 @@ const validerCreationModal = (e) => {
                                         evtBgColor = typeAbs === 'absence' ? '#ef4444' : typeAbs === 'retard' ? '#f59e0b' : '#10b981';
                                         evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = '#ffffff';
                                         evtTitle = typeAbs === 'absence' ? '🚫 ABS' : typeAbs === 'retard' ? '⏰ RET' : '🟢 SUPP';
-                                        
                                         // Si c'est un rattrapage assigné à un poste
                                         if (typeAbs === 'heures_supp' && evt.extendedProps.posteId && evt.extendedProps.posteId !== 'abs') {
-                                            const pName = postes.find(pos => String(pos.id) === String(evt.extendedProps.posteId))?.nom;
-                                            if (pName) evtTitle = `🟢 ${pName}`;
+                                            const p = postes.find(pos => String(pos.id) === String(evt.extendedProps.posteId));
+                                            if (p) {
+                                                evtTitle = `🟢 ${p.nom}`;
+                                                evtBgColor = `repeating-linear-gradient(45deg, #10b981, #10b981 10px, ${p.couleur} 10px, ${p.couleur} 20px)`;
+                                            }
                                         }
+
                                         extInfo = evt.extendedProps?.motif;
                                       } else {
                                             applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(min)}:00`, end: `${jourConsulte}T${formatTime(max)}:00` });
@@ -2622,6 +2720,15 @@ const validerCreationModal = (e) => {
                                             evtBgColor = typeAbs === 'absence' ? '#ef4444' : typeAbs === 'retard' ? '#f59e0b' : '#10b981';
                                             evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = '#ffffff';
                                             evtTitle = typeAbs === 'absence' ? '🚫 ABS' : typeAbs === 'retard' ? '⏰ RET' : '🟢 SUPP';
+                                            // Si c'est un rattrapage assigné à un poste
+                                            if (typeAbs === 'heures_supp' && evt.extendedProps.posteId && evt.extendedProps.posteId !== 'abs') {
+                                                const p = postes.find(pos => String(pos.id) === String(evt.extendedProps.posteId));
+                                                if (p) {
+                                                    evtTitle = `🟢 ${p.nom}`;
+                                                    // NOUVEAU : Application des hachures
+                                                    evtBgColor = `repeating-linear-gradient(45deg, #10b981, #10b981 10px, ${p.couleur} 10px, ${p.couleur} 20px)`;
+                                                }
+                                            }
                                             extInfo = evt.extendedProps?.motif;
                                           } else {
                                             evtBgColor = evt.extendedProps?.posteCouleur || '#3b82f6';

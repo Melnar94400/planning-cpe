@@ -587,6 +587,21 @@ export const ModalCreation = ({
                     <option value="heures_supp">🟢 Heures Supp' / Rattrapage</option>
                   </select>
                 </div>
+
+                {/* --- SÉLECTEUR DE POSTE POUR LES RATTRAPAGES --- */}
+                {formTypeAbsence === 'heures_supp' && (
+                  <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <label className={`block text-sm font-semibold mb-1 ${t.header}`}>📍 Poste de rattrapage (Optionnel)</label>
+                    <DropdownAvecCouleur 
+                      options={postes.map(p => ({ id: p.id, nom: p.nom, couleur: p.couleur }))}
+                      value={formPoste}
+                      onChange={setFormPoste}
+                      placeholder="-- Aucun poste --"
+                      t={t}
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className={`block text-sm font-semibold mb-1 mt-2 ${t.header}`}>Impact sur les compteurs</label>
                   <select value={formAbsImpact} onChange={e => setFormAbsImpact(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent font-bold text-sm`}>
@@ -596,7 +611,6 @@ export const ModalCreation = ({
                   </select>
                 </div>
 
-                {/* NOUVEAU BLOC DATES ET DURÉE POUR ABSENCE */}
                 <div className="p-3 border border-blue-500/30 bg-blue-500/5 rounded-lg mt-3 space-y-3 shadow-inner">
                   <div className="flex gap-3">
                     <div className="flex-1">

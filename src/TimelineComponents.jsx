@@ -197,8 +197,7 @@ export const TimelineEvent = ({
   return (
     <div 
       className={`event-item absolute top-0.5 bottom-0.5 rounded shadow-sm text-[10px] flex flex-col justify-center px-0.5 border group/item ${dragState ? 'transition-none z-[99999] opacity-90 scale-[1.02]' : 'transition-all z-10 hover:z-50'} ${conflit ? 'ring-2 ring-red-500 animate-pulse' : ''} ${isCopied ? 'ring-4 ring-purple-500 shadow-xl brightness-110 z-[60] scale-105' : 'hover:ring-2'}`}
-      style={{ left: `${left}%`, width: `${width}%`, backgroundColor: bgColor, borderColor: borderColor, color: textColor, cursor: dragState ? 'grabbing' : 'pointer' }}
-      onMouseDown={(e) => handleMouseDown(e, 'move')}
+      style={{ left: `${left}%`, width: `${width}%`, background: bgColor, borderColor: borderColor, color: textColor, cursor: dragState ? 'grabbing' : 'pointer' }}      onMouseDown={(e) => handleMouseDown(e, 'move')}
       onMouseEnter={handleMouseEnter}
     >
       <div className="w-full h-full flex pointer-events-none overflow-hidden flex-col items-center justify-center relative">
