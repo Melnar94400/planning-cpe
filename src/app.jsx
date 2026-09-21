@@ -287,9 +287,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const [formAbsence, setFormAbsence] = useState({
     agentIds: [], type: 'retard',  journeeComplete: false, dateDebut: new Date().toISOString().split('T')[0],
-    dateFin: '', dureeSaisie: '', impact: 'local', motif: ''
+    dateFin: '', dureeSaisie: '', impact: 'local', motif: '', posteId: ''
   });
   const [filtreAgentAbsence, setFiltreAgentAbsence] = useState(null);
+  const [filtreTypeAbsence, setFiltreTypeAbsence] = useState('all');
+  const [filtreDateDebut, setFiltreDateDebut] = useState('');
+  const [filtreDateFin, setFiltreDateFin] = useState('');
 
   const [modalBesoinMulti, setModalBesoinMulti] = useState({ isOpen: false, posteId: '', qte: 1, slots: [] });
   const [modalEditBesoin, setModalEditBesoin] = useState({ isOpen: false, id: null, posteId: '', qte: 1, start: '', end: '' });
@@ -655,43 +658,52 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     });
   }, [agents]);
 
-
-  // --- NOUVEAU : CRÉATION DES BLOCS VISUELS POUR LES ABSENCES ---
+  // --- NOUVEAU : CRÉATION DES BLOCS VISUELS POUR TOUS LES ÉVÉNEMENTS (ABS/RETARD/SUPP) ---
   const absencesVisuelles = useMemo(() => {
-    return absences.filter(a => a.type === 'absence').map(a => {
-      // On récupère la date du bloc d'absence
+    return absences.map(a => { // On a retiré le '.filter', on prend tout !
       const dateAbs = a.start.split('T')[0];
       
-      // Par défaut, on garde les heures de l'absence telles qu'elles sont enregistrées
       let startStr = a.start;
       let endStr = a.end;
 
-      // Si c'est une journée complète, on force l'affichage de l'ouverture à la fermeture
-      if (a.journeeEntiere !== false) {
+      if (a.journeeEntiere !== false && a.journeeComplete !== false && a.type === 'absence') {
         startStr = `${dateAbs}T${amplitude.start || '07:30'}:00`;
         endStr = `${dateAbs}T${amplitude.end || '18:00'}:00`;
       }
+
+      let bg = a.type === 'absence' ? '#ef4444' : a.type === 'retard' ? '#f59e0b' : '#10b981';
+      let border = a.type === 'absence' ? '#b91c1c' : a.type === 'retard' ? '#d97706' : '#059669';
+      let titleBase = a.type === 'absence' ? '🚫 Absent(e)' : a.type === 'retard' ? '⏰ Retard' : '🟢 Rattrapage';
+
+      // Si c'est un rattrapage assigné à un poste
+      if (a.type === 'heures_supp' && a.posteId) {
+         const p = postes.find(pos => String(pos.id) === String(a.posteId));
+         if (p) titleBase = `🟢 ${p.nom}`;
+      }
+
+      const titleAffichage = a.motif ? `${titleBase} - ${a.motif}` : titleBase;
 
       return {
         id: `abs_visuel_${a.id}`,
         start: startStr,
         end: endStr,
-        title: "🚫 Absent(e)",
-        backgroundColor: "#ef4444", 
-        borderColor: "#b91c1c",
+        title: titleAffichage,
+        backgroundColor: bg, 
+        borderColor: border,
         extendedProps: {
           isAbsence: true,
           agentId: a.agentId,
           agentNom: agents.find(ag => String(ag.id) === String(a.agentId))?.nom || '',
-          posteId: 'abs',
-          posteNom: "Absent(e)",
-          posteCouleur: "#ef4444",
+          posteId: a.posteId || 'abs',
+          posteNom: titleBase,
+          posteCouleur: bg,
           typeAbsence: a.type,
-          motif: a.motif
+          motif: a.motif,
+          note: a.motif // Permet à la variable extInfo d'afficher le motif
         }
       };
     });
-  }, [absences, agents, amplitude]);
+  }, [absences, agents, postes, amplitude]);
 
   // On injecte les absences dans tous les événements du calendrier
   const allCalendarEvents = modeEdition === 'besoins' ? besoinsEvents : [...applyReplacements(currentRealEvents), ...absencesVisuelles];
@@ -1400,7 +1412,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     return totalDec;
   };
 
-  const validerCreationModal = (e) => {
+const validerCreationModal = (e) => {
     e.preventDefault();
     sauvegarderEtatPrecedent();
     if (!formAgent) return alert('Veuillez sélectionner un agent.');
@@ -1464,6 +1476,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                 type: formTypeAbsence,
                 impact: formAbsImpact,
                 motif: formNote,
+                posteId: formTypeAbsence === 'heures_supp' ? Number(formPoste) : null, // <-- SAUVEGARDE DU POSTE ICI
                 start: `${dateLoc}T08:00:00`,
                 end: `${dateLoc}T${pad(endT.getHours())}:${pad(endT.getMinutes())}:00`,
                 journeeEntiere: true,
@@ -1488,6 +1501,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
             type: formTypeAbsence,
             impact: formAbsImpact,
             motif: formNote,
+            posteId: formTypeAbsence === 'heures_supp' ? Number(formPoste) : null, // <-- SAUVEGARDE DU POSTE ICI
             start: `${modalCreation.date}T${startTStr}:00`,
             end: `${modalCreation.date}T${pad(endT.getHours())}:${pad(endT.getMinutes())}:00`,
             journeeEntiere: false,
@@ -2026,8 +2040,11 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                   }}
                                   onAddLasso={(startMins, endMins) => {
                                     const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                    const durDec = (endMins - startMins) / 60;
+                                    const dureeStr = `${Math.floor(durDec)}h${String(Math.round((durDec % 1) * 60)).padStart(2, '0')}`;
+                                    
                                     setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(agent.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
-                                    setModalCreation({ isOpen: true, eventId: null, date: jourConsulte, start: formatTime(startMins), end: formatTime(endMins) });
+                                    setModalCreation({ isOpen: true, eventId: null, date: jourConsulte, start: formatTime(startMins), end: formatTime(endMins), duree: dureeStr, journeeEntiere: false });
                                   }}
                                   onLassoSelect={(min, max) => {
                                     const selected = eventsDuJour.filter(evt => {
@@ -2068,7 +2085,21 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                         onUpdate={(min, max) => {
                                           const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
                                           sauvegarderEtatPrecedent();
-                                          applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(min)}:00`, end: `${jourConsulte}T${formatTime(max)}:00` });
+                                          if (evt.extendedProps?.isAbsence) {
+                                        const typeAbs = evt.extendedProps.typeAbsence;
+                                        evtBgColor = typeAbs === 'absence' ? '#ef4444' : typeAbs === 'retard' ? '#f59e0b' : '#10b981';
+                                        evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = '#ffffff';
+                                        evtTitle = typeAbs === 'absence' ? '🚫 ABS' : typeAbs === 'retard' ? '⏰ RET' : '🟢 SUPP';
+                                        
+                                        // Si c'est un rattrapage assigné à un poste
+                                        if (typeAbs === 'heures_supp' && evt.extendedProps.posteId && evt.extendedProps.posteId !== 'abs') {
+                                            const pName = postes.find(pos => String(pos.id) === String(evt.extendedProps.posteId))?.nom;
+                                            if (pName) evtTitle = `🟢 ${pName}`;
+                                        }
+                                        extInfo = evt.extendedProps?.motif;
+                                      } else {
+                                            applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(min)}:00`, end: `${jourConsulte}T${formatTime(max)}:00` });
+                                          }
                                         }}
                                         onClick={() => ouvrirEdition(evt)}
                                         onCopy={(dur, startM) => {
@@ -2283,8 +2314,11 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                         extendedProps: { posteId: item.id, posteNom: item.nom, qte: formBesoinQte } 
                                       }]);
                                     } else {
+                                      const durDec = (endMins - startMins) / 60;
+                                      const dureeStr = `${Math.floor(durDec)}h${String(Math.round((durDec % 1) * 60)).padStart(2, '0')}`;
+                                      
                                       setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(item.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
-                                      setModalCreation({ isOpen: true, eventId: null, date: currentTemplateDateStr, start: formatTime(startMins), end: formatTime(endMins) });
+                                      setModalCreation({ isOpen: true, eventId: null, date: currentTemplateDateStr, start: formatTime(startMins), end: formatTime(endMins), duree: dureeStr, journeeEntiere: false });
                                     }
                                   }}
                                   onLassoSelect={(min, max) => {
@@ -2545,10 +2579,13 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                                           setCustomWeeks({ ...customWeeks, [monStr]: [...currentWeek, ...newEvents] });
                                         }}
                                         onAddLasso={(startMins, endMins) => {
-                                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                          setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(agent.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
-                                          setModalCreation({ isOpen: true, eventId: null, date: dateStr, start: formatTime(startMins), end: formatTime(endMins) });
-                                        }}
+                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                    const durDec = (endMins - startMins) / 60;
+                                    const dureeStr = `${Math.floor(durDec)}h${String(Math.round((durDec % 1) * 60)).padStart(2, '0')}`;
+
+                                    setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(agent.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
+                                    setModalCreation({ isOpen: true, eventId: null, date: dateStr, start: formatTime(startMins), end: formatTime(endMins), duree: dureeStr, journeeEntiere: false });
+                                  }}
                                         onLassoSelect={(min, max) => {
                                           const selected = eventsDeLaLigne.filter(evt => {
                                             const sD = new Date(evt.start); const eD = new Date(evt.end);
@@ -2704,13 +2741,23 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         })()}
 
         {/* 5. VUE ABSENCES & RETARDS */}
-        {vueActive === 'absences' && (() => {
+{vueActive === 'absences' && (() => {
           const absencesGroupees = [];
           const groupesVus = new Set();
           
-          const absencesFiltreesBase = absences.filter(a => filtreAgentAbsence ? a.agentId === filtreAgentAbsence : true);
+          // Filtrage complet : Agent + Type + Plage de dates
+          const absencesFiltreesBase = absences.filter(a => {
+            if (filtreAgentAbsence && a.agentId !== filtreAgentAbsence) return false;
+            if (filtreTypeAbsence !== 'all' && a.type !== filtreTypeAbsence) return false;
+            
+            const dateEvt = a.start.split('T')[0];
+            if (filtreDateDebut && dateEvt < filtreDateDebut) return false;
+            if (filtreDateFin && dateEvt > filtreDateFin) return false;
+            
+            return true;
+          });
 
-          [...absencesFiltreesBase].sort((a,b) => new Date(b.start) - new Date(a.start)).forEach(a => {
+          [...absencesFiltreesBase].sort((a,b) => new Date(a.start) - new Date(b.start)).forEach(a => {
              const gid = a.groupId || a.id;
              if (groupesVus.has(gid)) return;
              groupesVus.add(gid);
@@ -2727,10 +2774,33 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
              });
           });
 
+          const imprimerRecapAbsences = () => {
+            window.print();
+          };
+
           return (
           <div className={`flex-1 p-6 overflow-auto ${t.bgMain}`}>
-            <h2 className={`text-2xl font-bold ${t.header} mb-6`}>Gestion des Absences et Retards</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {/* EN-TÊTE D'IMPRESSION (Visible uniquement sur le papier) */}
+            <div className="hidden print:block mb-6 print:bg-white print:text-black">
+              <h1 className="text-xl font-bold uppercase tracking-wider text-black border-b-2 border-black pb-2">
+                Récapitulatif des Événements & Rattrapages AED
+              </h1>
+              <div className="flex justify-between text-xs text-black mt-2 font-mono">
+                <span>Établissement : Collège / Lycée</span>
+                <span>Document édité le : {new Date().toLocaleDateString('fr-FR')}</span>
+              </div>
+              <div className="text-xs text-black mt-1">
+                <span className="font-bold">Filtres appliqués :</span> {filtreTypeAbsence !== 'all' ? filtreTypeAbsence.toUpperCase() : 'Tous types'} 
+                {filtreAgentAbsence ? ` | Agent : ${agents.find(ag => ag.id === filtreAgentAbsence)?.nom}` : ''}
+                {filtreDateDebut ? ` | Du ${formatDateFr(filtreDateDebut)}` : ''}
+                {filtreDateFin ? ` au ${formatDateFr(filtreDateFin)}` : ''}
+              </div>
+            </div>
+
+            <h2 className={`text-2xl font-bold ${t.header} mb-6 no-print`}>Gestion des Absences et Retards</h2>
+            
+            {/* BILAN PAR CARTES (Masqué à l'impression) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 no-print">
               {bilanAbsences.map(b => (
                 <div key={b.id} 
                      onClick={() => setFiltreAgentAbsence(filtreAgentAbsence === b.id ? null : b.id)}
@@ -2754,7 +2824,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className={`lg:col-span-1 ${t.cardBg} p-6 rounded-xl shadow border ${t.borderLight} h-fit`}>
+              {/* FORMULAIRE DE SAISIE (Masqué à l'impression) */}
+              <div className={`lg:col-span-1 ${t.cardBg} p-6 rounded-xl shadow border ${t.borderLight} h-fit no-print`}>
                 <h3 className={`font-bold text-md ${t.header} mb-4 pb-2 border-b ${t.borderLight}`}>Déclarer un événement</h3>
                 <form onSubmit={ajouterAbsenceRetard} className="space-y-4">
                   <div>
@@ -2795,6 +2866,16 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                     </select>
                   </div>
 
+                  {formAbsence.type === 'heures_supp' && (
+                    <div className="mt-3">
+                      <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Poste de rattrapage (Optionnel)</label>
+                      <select value={formAbsence.posteId || ''} onChange={e => setFormAbsence({...formAbsence, posteId: e.target.value})} className={`w-full border ${t.borderLight} rounded p-2 bg-transparent text-sm font-bold ${t.header}`}>
+                        <option value="">-- Aucun poste spécifique --</option>
+                        {postes.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}
+                      </select>
+                    </div>
+                  )}
+
                   {formAbsence.type === 'absence' && (<label className={`flex items-center gap-2 text-sm font-bold ${t.textAccent} cursor-pointer ${t.bgLight} p-2 rounded border ${t.borderLight}`}><input type="checkbox" checked={formAbsence.journeeComplete} onChange={e => setFormAbsence({...formAbsence, journeeComplete: e.target.checked})} className="w-4 h-4 cursor-pointer" />Journée(s) complète(s)</label>)}
                   
                   <div className="flex gap-4">
@@ -2824,25 +2905,99 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                 </form>
               </div>
               
-              <div className={`lg:col-span-2 ${t.cardBg} rounded-xl shadow border ${t.borderLight} overflow-hidden flex flex-col`}>
-                <div className={`${t.headerBg} ${t.headerText} p-4 font-bold text-sm flex justify-between items-center`}>
-                  <span>Historique {filtreAgentAbsence ? `de ${agents.find(a=>a.id===filtreAgentAbsence)?.nom}` : 'complet des événements'}</span>
-                  {filtreAgentAbsence && <button onClick={() => setFiltreAgentAbsence(null)} className="text-xs bg-white/20 hover:bg-white/30 px-2 py-1 rounded transition-colors shadow-sm">Afficher tout</button>}
+              {/* TABLEAU RÉCAPITULATIF (S'ÉLARGIT EN PLEINE LARGEUR EN MODE IMPRESSION) */}
+              <div className={`lg:col-span-2 print:col-span-3 ${t.cardBg} print:bg-white rounded-xl shadow print:shadow-none border ${t.borderLight} print:border-black overflow-hidden flex flex-col`}>
+                
+                {/* BARRE D'ACTION ET DE FILTRES */}
+                <div className={`${t.headerBg} ${t.headerText} p-3 font-bold text-sm flex flex-col gap-2.5 no-print`}>
+                  <div className="flex justify-between items-center">
+                    <span className="font-black tracking-wide">Filtrer & Imprimer les événements</span>
+                    <button 
+                      onClick={imprimerRecapAbsences}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-bold shadow transition flex items-center gap-1.5"
+                    >
+                      🖨️ Imprimer la sélection
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-black/10 dark:border-white/10 text-xs">
+                    {/* FILTRE AGENT */}
+                    <div>
+                      <label className="block text-[10px] font-bold opacity-80 uppercase mb-0.5">Agent</label>
+                      <select 
+                        value={filtreAgentAbsence || ''} 
+                        onChange={e => setFiltreAgentAbsence(e.target.value ? Number(e.target.value) : null)} 
+                        className="w-full p-1.5 rounded bg-white dark:bg-gray-800 text-black dark:text-white font-bold border border-black/20 dark:border-white/20 outline-none shadow-sm"
+                      >
+                        <option value="">Tous les agents</option>
+                        {agents.map(a => <option key={a.id} value={a.id}>{a.nom}</option>)}
+                      </select>
+                    </div>
+
+                    {/* FILTRE TYPE */}
+                    <div>
+                      <label className="block text-[10px] font-bold opacity-80 uppercase mb-0.5">Type</label>
+                      <select 
+                        value={filtreTypeAbsence} 
+                        onChange={e => setFiltreTypeAbsence(e.target.value)} 
+                        className="w-full p-1.5 rounded bg-white dark:bg-gray-800 text-black dark:text-white font-bold border border-black/20 dark:border-white/20 outline-none shadow-sm"
+                      >
+                        <option value="all">Tous les types</option>
+                        <option value="heures_supp">🟢 Rattrapages / Heures supp'</option>
+                        <option value="absence">🚫 Absences</option>
+                        <option value="retard">⏰ Retards</option>
+                      </select>
+                    </div>
+
+                    {/* FILTRE DATE DÉBUT */}
+                    <div>
+                      <label className="block text-[10px] font-bold opacity-80 uppercase mb-0.5">Du</label>
+                      <input 
+                        type="date" 
+                        value={filtreDateDebut} 
+                        onChange={e => setFiltreDateDebut(e.target.value)} 
+                        className="w-full p-1.5 rounded bg-white dark:bg-gray-800 text-black dark:text-white font-mono border border-black/20 dark:border-white/20 outline-none shadow-sm" 
+                      />
+                    </div>
+
+                    {/* FILTRE DATE FIN & BOUTON RESET */}
+                    <div>
+                      <label className="block text-[10px] font-bold opacity-80 uppercase mb-0.5">Au</label>
+                      <div className="flex gap-1">
+                        <input 
+                          type="date" 
+                          value={filtreDateFin} 
+                          onChange={e => setFiltreDateFin(e.target.value)} 
+                          className="w-full flex-1 p-1.5 rounded bg-white dark:bg-gray-800 text-black dark:text-white font-mono border border-black/20 dark:border-white/20 outline-none shadow-sm" 
+                        />
+                        {(filtreDateDebut || filtreDateFin || filtreTypeAbsence !== 'all' || filtreAgentAbsence) && (
+                          <button 
+                            onClick={() => { setFiltreDateDebut(''); setFiltreDateFin(''); setFiltreTypeAbsence('all'); setFiltreAgentAbsence(null); }}
+                            className="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-bold shrink-0 shadow-sm transition-colors"
+                            title="Réinitialiser tous les filtres"
+                          >
+                            ✖
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
                 <div className="overflow-x-auto flex-1">
-                  <table className="w-full text-sm text-left">
-                    <thead className={`${t.bgLight} ${t.header} uppercase text-xs border-b ${t.borderLight}`}>
+                  <table className="w-full text-sm text-left print:text-xs">
+                        <thead className={`${t.bgLight} print:bg-gray-100 ${t.header} print:text-black uppercase text-xs border-b ${t.borderLight} print:border-black`}>
                       <tr>
-                        <th className="p-3">Date</th>
-                        {!filtreAgentAbsence && <th className="p-3">Agent</th>}
-                        <th className="p-3">Type</th>
-                        <th className="p-3 text-center">Durée</th>
-                        <th className="p-3 text-center">Impact</th>
-                        <th className="p-3">Motif</th>
-                        <th className="p-3 text-center">Action</th>
+                        <th className="p-3 print:py-1.5 print:text-black">Date</th>
+                        <th className="p-3 print:py-1.5 print:text-black">Agent</th>
+                        <th className="p-3 print:py-1.5 print:text-black">Type / Poste</th>
+                        <th className="p-3 print:py-1.5 text-center print:text-black">Durée</th>
+                        <th className="p-3 print:py-1.5 text-center print:text-black">Impact</th>
+                        <th className="p-3 print:py-1.5 print:text-black">Motif</th>
+                        <th className="p-3 text-center no-print">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-black/5 dark:divide-white/5">
+                    <tbody className="divide-y divide-black/5 dark:divide-white/5 print:divide-gray-300">
                       {absencesGroupees.map(a => {
                         const ag = agents.find(agent => String(agent.id) === String(a.agentId)); 
                         const typeAbs = a.type || 'absence'; 
@@ -2856,25 +3011,32 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                           ? formatDateFr(a._dDebut) 
                           : `Du ${formatDateFr(a._dDebut)} au ${formatDateFr(a._dFin)}`;
 
+                        const posteAssigne = a.posteId ? postes.find(p => String(p.id) === String(a.posteId)) : null;
+
                         return (
-                          <tr key={a.groupId || a.id} className={`hover:${t.bgLight} transition-colors`}>
-                            <td className="p-3 font-mono text-xs text-gray-500 whitespace-nowrap">{affichageDate}</td>
-                            {!filtreAgentAbsence && <td className={`p-3 font-bold ${t.header}`}>{ag ? ag.nom : 'Inconnu'}</td>}
-                            <td className="p-3">
-                              <span className={`inline-block px-2 py-0.5 rounded text-[11px] uppercase font-bold ${typeAbs === 'absence' ? 'bg-red-500/20 text-red-500' : typeAbs === 'retard' ? 'bg-orange-500/20 text-orange-500' : 'bg-green-500/20 text-green-600'}`}>
+                          <tr key={a.groupId || a.id} className={`hover:${t.bgLight} transition-colors print:hover:bg-transparent`}>
+                            <td className="p-3 print:py-1.5 font-mono text-xs text-gray-500 print:text-black whitespace-nowrap">{affichageDate}</td>
+                            <td className={`p-3 print:py-1.5 font-bold ${t.header} print:text-black`}>{ag ? ag.nom : 'Inconnu'}</td>
+                            <td className="p-3 print:py-1.5">
+                              <span className={`inline-block px-2 py-0.5 rounded text-[11px] uppercase font-bold print:border print:border-black print:text-black ${typeAbs === 'absence' ? 'bg-red-500/20 text-red-500' : typeAbs === 'retard' ? 'bg-orange-500/20 text-orange-500' : 'bg-green-500/20 text-green-600'}`}>
                                 {typeAbs === 'heures_supp' ? 'Rattrapage' : typeAbs}
                               </span>
+                              {posteAssigne && (
+                                <span className="ml-1.5 text-xs font-semibold text-gray-600 print:text-black">
+                                  ({posteAssigne.nom})
+                                </span>
+                              )}
                             </td>
-                            <td className={`p-3 text-center font-mono font-bold ${t.header}`}>
+                            <td className={`p-3 print:py-1.5 text-center font-mono font-bold ${t.header} print:text-black`}>
                               {formatHeureTableau ? formatHeureTableau(a._totalDureeDec, true) : `${Math.floor(a._totalDureeDec)}h${String(Math.round((a._totalDureeDec % 1)*60)).padStart(2,'0')}`}
                             </td>
-                            <td className="p-3 text-center">
-                              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${a.impact === 'global' ? 'bg-purple-100 text-purple-700' : a.impact === 'neutre' ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'}`}>
+                            <td className="p-3 print:py-1.5 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase print:text-black ${a.impact === 'global' ? 'bg-purple-100 text-purple-700' : a.impact === 'neutre' ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'}`}>
                                 {a.impact}
                               </span>
                             </td>
-                            <td className="p-3 text-gray-500 italic">{a.motif || '-'}</td>
-                            <td className="p-3 text-center">
+                            <td className="p-3 print:py-1.5 text-gray-500 print:text-black italic">{a.motif || '-'}</td>
+                            <td className="p-3 text-center no-print">
                               <div className="flex items-center justify-center gap-1">
                                 <button onClick={() => ouvrirEditionAbsenceTableau(a)} className="text-gray-400 hover:text-blue-500 px-2 py-1 rounded text-xs font-bold transition shadow-sm" title="Modifier l'événement">✏️</button>
                                 <button onClick={() => supprimerAbsence(a.groupId || a.id)} className="text-gray-400 hover:text-red-500 px-2 py-1 rounded text-xs font-bold transition shadow-sm" title="Supprimer">✖</button>
@@ -2885,8 +3047,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
                       })}
                       {absencesGroupees.length === 0 && ( 
                         <tr>
-                          <td colSpan={filtreAgentAbsence ? "6" : "7"} className="p-6 text-center text-gray-500 italic">
-                            Aucune absence ou retard enregistré{filtreAgentAbsence ? ' pour cet agent' : ''}.
+                          <td colSpan="7" className="p-6 text-center text-gray-500 italic">
+                            Aucun événement ne correspond à vos critères de recherche.
                           </td>
                         </tr> 
                       )}
@@ -3282,6 +3444,9 @@ export default function App() {
           .print-dashboard-table { transform: scale(0.85); transform-origin: top left; width: 115% !important; border:none; box-shadow:none; }
           .print-agent-page td, .print-agent-page th, .print-dashboard-table td, .print-dashboard-table th { color: black !important; }
           .print-agent-page td > div > div { color: black !important; }
+          body { color: black !important; }
+          table { width: 100% !important; border-collapse: collapse !important; }
+          th, td { border: 1px solid #d1d5db !important; }
         }
       `}</style>
 

@@ -561,7 +561,7 @@ export const ModalCreation = ({
                 <label className={`block text-sm font-semibold mb-1 ${t.header}`}>Type d'action</label>
                 <select value={formTypeEvent} onChange={e => setFormTypeEvent(e.target.value)} className={`w-full border ${t.borderLight} rounded p-2 ${t.bgLight} font-bold text-sm`}>
                   <option value="affectation">Affectation de poste</option>
-                  <option value="absence">Absence ou Retard</option>
+                  <option value="absence">Absence/Retard/H. Supp</option>
                 </select>
               </div>
             )}
