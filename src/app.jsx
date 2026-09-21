@@ -21,7 +21,6 @@ import {
 
 // =========================================================================
 // WRAPPERS DE SÉCURITÉ POUR TIMELINE TRACK
-// Empêche TimelineTrack de faire crasher le rendu React
 // =========================================================================
 
 const SafeTimelineTrack = (props) => {
@@ -39,14 +38,17 @@ const SafeTimelineEvent = (props) => {
   if (props.onCopy) safeProps.onCopy = (...args) => setTimeout(() => props.onCopy(...args), 0);
   return <TimelineEvent {...safeProps} />;
 };
+
+// =========================================================================
+// COMPOSANT PRINCIPAL MAIN APP
 // =========================================================================
 
 const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customColors, updateCustomColor }) => {
   
   const [modalBasculement, setModalBasculement] = useState(false);
-
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [now, setNow] = useState(new Date());
+  
   // --- GESTIONNAIRE DE CONFIRMATION ---
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isDanger: true, confirmText: 'Confirmer' });
   const requestConfirm = (options) => setConfirmDialog({ isOpen: true, isDanger: true, confirmText: 'Confirmer', ...options });
@@ -64,11 +66,16 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const pad = n => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   });
-    const [etablissement, setEtablissement] = useState('');
+  
+  const [etablissement, setEtablissement] = useState('');
   const [hasInternat, setHasInternat] = useState(false);
+  const [formIsNuit, setFormIsNuit] = useState(false);
+  const [pauseLegale, setPauseLegale] = useState(20);
+  const [deduirePause, setDeduirePause] = useState(false); // Par défaut: on AJOUTE la pause.
+
   const joursTravailles = hasInternat ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5];
 
-  // -- ÉTATS VIDES AU DÉMARRAGE (Remontés par IndexedDB) --
+  // -- ÉTATS VIDES AU DÉMARRAGE --
   const [agents, setAgents] = useState([]);
   const [postes, setPostes] = useState([]);
   const [jourTemplate, setJourTemplate] = useState(1); 
@@ -82,6 +89,42 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [sonneries, setSonneries] = useState(['08:00', '08:55', '10:05', '11:00', '11:55', '12:50', '13:45', '14:40', '15:50', '16:45', '17:40']);
   const [sonneriesText, setSonneriesText] = useState('');
   const [absences, setAbsences] = useState([]);
+
+  // --- FONCTION INTELLIGENTE : CALCUL DU TEMPS EFFECTIF (AVEC AJOUT/DÉDUCTION DE PAUSE) ---
+  const getTempsTravailEffectif = useCallback((evtsList) => {
+      if (!evtsList || evtsList.length === 0) return 0;
+      const validEvts = evtsList.filter(e => !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin);
+      if (validEvts.length === 0) return 0;
+
+      const byDay = {};
+      validEvts.forEach(e => {
+          const dStr = e.start.split('T')[0];
+          if (!byDay[dStr]) byDay[dStr] = [];
+          byDay[dStr].push(e);
+      });
+
+      const pauseVal = Number(pauseLegale) || 20;
+      let grandTotal = 0;
+
+      Object.values(byDay).forEach(dayEvts => {
+          let dailyMins = 0;
+          dayEvts.forEach(e => {
+              const eStart = new Date(e.start);
+              const eEnd = new Date(e.end);
+              const isNuit = e.extendedProps?.isNuit;
+              dailyMins += isNuit ? 180 : (eEnd.getTime() - eStart.getTime()) / 60000;
+          });
+
+          // RÈGLE SIMPLIFIÉE : 6h (360min) ou plus -> on ajoute la pause si la case n'est pas cochée.
+          // Si la case est cochée, on ne fait rien (le temps reste strictement celui du planning).
+          if (dailyMins >= 360 && deduirePause === false) {
+              dailyMins += pauseVal;
+          }
+          
+          grandTotal += dailyMins;
+      });
+      return grandTotal;
+  }, [pauseLegale, deduirePause]);
 
   // --- HELPER AMPLITUDE HORAIRE ---
   const getAmplitudeStr = (eventsList) => {
@@ -138,7 +181,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       return true;
     }) || templatesPossibles[0] || templates[0];
   }, [getSchoolWeekRelative]);
-  // =========================================================================
 
   // =========================================================================
   // CHARGEMENT INITIAL (INDEXED DB)
@@ -161,6 +203,9 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         }
         if (data.etablissement) setEtablissement(data.etablissement);
         if (data.hasInternat) setHasInternat(data.hasInternat);
+        if (data.pauseLegale !== undefined) setPauseLegale(data.pauseLegale);
+        if (data.deduirePause !== undefined) setDeduirePause(data.deduirePause);
+        
         if (data.templateVersions && data.templateVersions.length > 0) {
           setTemplateVersions(data.templateVersions.map(p => ({ ...p, statut: p.statut || 'valide' })));
           setActiveTemplateId(data.templateVersions[0].id);
@@ -182,19 +227,16 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   useEffect(() => {
     if (!isDataLoaded) return;
     const timer = setTimeout(() => {
-      saveAppData({ agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, amplitude, sonneries, etablissement, hasInternat });
+      saveAppData({ agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, amplitude, sonneries, etablissement, hasInternat, pauseLegale, deduirePause });
     }, 1500); 
     return () => clearTimeout(timer);
-  }, [agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, amplitude, sonneries, isDataLoaded]);
+  }, [agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, amplitude, sonneries, etablissement, hasInternat, pauseLegale, deduirePause, isDataLoaded]);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [modalPoste, setModalPoste] = useState({ isOpen: false, id: null, nom: '', couleur: '#8B5CF6', qte: 1, slots: [] });
 
   const ouvrirCreationPoste = () => {
-    setModalPoste({
-      isOpen: true, id: null, nom: '', couleur: '#8B5CF6', qte: 1, 
-      slots: [] 
-    });
+    setModalPoste({ isOpen: true, id: null, nom: '', couleur: '#8B5CF6', qte: 1, slots: [] });
   };
 
   const ouvrirEditionPoste = (poste) => {
@@ -251,13 +293,37 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setModalPoste({ isOpen: false, id: null, nom: '', couleur: '#8B5CF6', qte: 1, slots: [] });
   };
 
-  const supprimerPoste = (id, nom, e) => { 
-    if (e) e.stopPropagation(); 
+  const supprimerPoste = (id, nom, e) => {  
+    if (e) e.stopPropagation();  
     requestConfirm({
       title: 'Supprimer un poste',
-      message: `Voulez-vous vraiment supprimer le poste "${nom}" ?\nLes agents affectés dessus perdront leur étiquette.`,
-      confirmText: 'Supprimer',
-      onConfirm: () => setPostes(postes.filter(p => p.id !== id))
+      message: `Voulez-vous vraiment supprimer le poste "${nom}" ?\nTous les besoins et créneaux associés à ce poste seront définitivement retirés des modèles et des plannings.`,
+      confirmText: 'Supprimer tout',
+      isDanger: true,
+      onConfirm: () => {
+        sauvegarderEtatPrecedent();
+        const targetId = String(id);
+
+        setPostes(prev => prev.filter(p => String(p.id) !== targetId));
+
+        setTemplateVersions(prev => prev.map(tv => ({
+          ...tv,
+          events: (tv.events || []).filter(evt => String(evt.extendedProps?.posteId) !== targetId),
+          besoins: (tv.besoins || []).filter(b => String(b.extendedProps?.posteId) !== targetId)
+        })));
+
+        setCustomWeeks(prev => {
+          const next = {};
+          Object.keys(prev).forEach(mon => {
+            next[mon] = (prev[mon] || []).filter(evt => String(evt.extendedProps?.posteId) !== targetId);
+          });
+          return next;
+        });
+
+        setAbsences(prev => prev.map(a => String(a.posteId) === targetId ? { ...a, posteId: null } : a));
+
+        if (posteActif === id || posteActif === Number(id)) setPosteActif(null);
+      }
     });
   };
 
@@ -325,6 +391,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [copiedEvents, setCopiedEvents] = useState([]);
 
   const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
+  const nomsJoursComplets = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
   const currentTemplate = templateVersions.find(v => v.id === activeTemplateId) || templateVersions[0] || { id: 1, nom: 'Chargement...', dateDebut: `${baseYear}-09-01`, statut: 'brouillon', events: [], besoins: [], objectifsHebdo: {} }; 
 
@@ -332,19 +399,28 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const g = {};
     templateVersions.forEach(tv => {
       g[tv.id] = {};
-      agents.forEach(a => { g[tv.id][a.id] = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, totalHebdo: 0 }; });
-      (tv.events || []).forEach(evt => {
-        const agentId = evt.extendedProps?.agentId;
-        if (g[tv.id][agentId] && !evt.extendedProps?.isAbsence) {
-          const d = new Date(evt.start);
-          const duree = (new Date(evt.end) - d) / 3600000;
-          g[tv.id][agentId][d.getDay()] += duree;
-          g[tv.id][agentId].totalHebdo += duree;
-        }
+      agents.forEach(agent => { 
+        g[tv.id][agent.id] = { 0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, totalHebdo: 0 }; 
+        
+        const agentEvts = (tv.events || []).filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence);
+        const byDay = {};
+        agentEvts.forEach(e => {
+           const dStr = e.start.split('T')[0];
+           if (!byDay[dStr]) byDay[dStr] = [];
+           byDay[dStr].push(e);
+        });
+
+        Object.keys(byDay).forEach(dStr => {
+           const dayOfWeek = new Date(dStr).getDay();
+           const dailyMins = getTempsTravailEffectif(byDay[dStr]);
+           const dailyHours = dailyMins / 60;
+           g[tv.id][agent.id][dayOfWeek] += dailyHours;
+           g[tv.id][agent.id].totalHebdo += dailyHours;
+        });
       });
     });
     return g;
-  }, [templateVersions, agents]);
+  }, [templateVersions, agents, getTempsTravailEffectif]);
 
   const getInfosPeriode = (date) => {
     const pad = n => String(n).padStart(2, '0');
@@ -378,11 +454,9 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     if (ferie) return { type: 'ferie', nom: ferie.nom };
     return null;
   };
-                          // À coller juste sous la fin de la fonction getInfosPeriode
+
   const isSemaineVacances = (dateStr) => {
     if (!dateStr || !periodesFeriees || periodesFeriees.length === 0) return false;
-    
-    // On avance au mardi pour éviter les bugs de fuseau horaire ou les lundis fériés isolés
     const dateCible = new Date(dateStr);
     dateCible.setDate(dateCible.getDate() + 1);
     const pad = n => String(n).padStart(2, '0');
@@ -392,6 +466,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       return p.type === 'vacances' && dateCibleStr >= p.debut && dateCibleStr <= p.fin;
     });
   };
+
   const getHeuresTheoriquesJourRaw = (agentId, dateStr) => {
     const dateObj = new Date(dateStr);
     const mondayStr = getMondayStr(dateObj);
@@ -407,8 +482,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     if (customWeeks[mondayStr]) {
       const evtsJour = customWeeks[mondayStr].filter(e => e.extendedProps?.agentId === agentId && e.start.startsWith(dateStr) && !e.extendedProps?.isAbsence && !e.extendedProps?.isBesoin);
       if (evtsJour.length > 0) {
-        hJour = evtsJour.reduce((tot, e) => tot + ((new Date(e.end) - new Date(e.start)) / 3600000), 0);
-        aDesEvenementsReels = true;
+          hJour = getTempsTravailEffectif(evtsJour) / 60;
+          aDesEvenementsReels = true;
       }
     }
 
@@ -449,9 +524,18 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       let heuresTheoriquesCDD = 0; 
       
       const isRemplacant = !!agent.remplacement?.agentId;
-      // On calcule sa cible par jour ouvré (LUN-VEN)
-      const hHebdoBase = (agent.hContrat || 1607) / 39; 
-      const hJourCible = hHebdoBase / 5;
+      
+      // CALCUL DE L'OBJECTIF CIBLE AVEC TRONCATURE SÉCURISÉE (Math.floor sur les minutes)
+      let baseMins = Math.round(((agent.hContrat || 1607) / 39) * 60);
+      let hHebdoDec = baseMins / 60;
+      
+      if (agent.quotite < 100) {
+          hHebdoDec = Math.floor(baseMins / 5) * 5 / 60; // Troncature stricte à l'avantage de l'AED
+      } else {
+          hHebdoDec = Math.round(baseMins / 5) * 5 / 60;
+      }
+      
+      const hJourCible = hHebdoDec / 5;
 
       for (let m = 8; m < 20; m++) {
         const year = baseYear + Math.floor(m / 12);
@@ -460,26 +544,21 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         
         for (let d = 1; d <= daysInMonth; d++) {
           const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-          const dateObj = new Date(year, month, d); // Nécessaire pour obtenir le jour de la semaine
+          const dateObj = new Date(year, month, d); 
           
-          // --- NOUVEAU BLOC : Proratisation journalière du contrat CDD ---
           if (isRemplacant && agent.remplacement?.start && agent.remplacement?.end) {
             if (dateStr >= agent.remplacement.start && dateStr <= agent.remplacement.end) {
               const dayOfWeek = dateObj.getDay();
-              // On ne compte que les jours ouvrés du Lundi (1) au Vendredi (5)
               if (dayOfWeek >= 1 && dayOfWeek <= 5) {
                 const targetMon = getMondayStr(dateObj);
-                // On ajoute l'objectif journalier uniquement si ce n'est pas les vacances
                 if (!isSemaineVacances(targetMon)) {
                   heuresTheoriquesCDD += hJourCible;
                 }
               }
             }
           }
-          // ---------------------------------------------------------------
 
           const hJour = getHeuresTheoriquesJour(agent.id, dateStr);
-          
           const absDuJour = absences.filter(a => a.agentId === agent.id && a.start.startsWith(dateStr));
           
           const hDeductGlobal = absDuJour.filter(a => ['absence', 'retard'].includes(a.type) && a.impact === 'global').reduce((tot, a) => tot + getHeuresAbsence(a), 0);
@@ -489,46 +568,73 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         }
       }
       
-      const applicableTemplate = templateVersions.find(tv => tv.id === activeTemplateId) || templateVersions[0];
+      const hHebdoType = hHebdoDec;
+
+      let hContratEffectif = isRemplacant ? heuresTheoriquesCDD : (agent.hContratProratise || agent.hContrat);
       
-      // MODIFIÉ : Si c'est un CDD, son H. Type Hebdo est son obligation contractuelle (ex: 40h50) 
-      // Sinon, on prend son volume prévu dans le modèle de roulement.
-      const hHebdoType = isRemplacant ? hHebdoBase : (gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0);
+      // TRONCATURE DU VOLUME ANNUEL GLOBAL
+      let contratEffectifMins = Math.round(hContratEffectif * 60);
+      if (agent.quotite < 100 && !isRemplacant) {
+          hContratEffectif = Math.floor(contratEffectifMins / 5) * 5 / 60;
+      } else if (!isRemplacant) {
+          hContratEffectif = Math.round(contratEffectifMins / 5) * 5 / 60;
+      }
 
-      // Le contrat effectif devient la somme des jours ouvrés de son CDD
-      const hContratEffectif = isRemplacant ? heuresTheoriquesCDD : (agent.hContratProratise || agent.hContrat);
-
-      let soldeMins = (hContratEffectif - heuresConsommees) * 60;
+      let soldeMins = Math.round((hContratEffectif - heuresConsommees) * 60);
       soldeMins = Math.round(soldeMins / 5) * 5;
       const soldeGlobal = soldeMins / 60;
 
       return { ...agent, heuresConsommees, soldeGlobal, hHebdoType, hContratEffectif, isRemplacant };
     });
-  }, [agents, baseYear, absences, exceptions, customWeeks, templateVersions, activeTemplateId, gabarits, getApplicableTemplate]);
-  // À PLACER AVANT LE RETURN PRINCIPAL DU COMPOSANT
+  // On force l'actualisation si on touche aux paramètres de pause (pauseLegale, deduirePause)
+  }, [agents, baseYear, absences, exceptions, customWeeks, templateVersions, activeTemplateId, gabarits, getApplicableTemplate, getHeuresTheoriquesJour, isSemaineVacances, pauseLegale, deduirePause]);
+
   const calculerObjectifHebdo = useCallback((agent, targetMon) => {
     if (isSemaineVacances(targetMon)) return 0;
 
-    if (agent.remplacement?.agentId && agent.remplacement?.start && agent.remplacement?.end) {
-      let joursPresents = 0;
-      const [y, m, d] = targetMon.split('-').map(Number);
+    let joursOuvres = 0;
+    const [y, m, d] = targetMon.split('-').map(Number);
+    
+    for (let i = 0; i < 5; i++) {
+      const currentDay = new Date(y, m - 1, d + i);
+      const currentDayStr = `${currentDay.getFullYear()}-${String(currentDay.getMonth() + 1).padStart(2, '0')}-${String(currentDay.getDate()).padStart(2, '0')}`;
       
-      for (let i = 0; i < 5; i++) {
-        const currentDay = new Date(y, m - 1, d + i);
-        const currentDayStr = `${currentDay.getFullYear()}-${String(currentDay.getMonth() + 1).padStart(2, '0')}-${String(currentDay.getDate()).padStart(2, '0')}`;
-        
-        if (currentDayStr >= agent.remplacement.start && currentDayStr <= agent.remplacement.end) {
-          joursPresents++;
+      const info = getInfosPeriode(currentDay);
+      if (!info || info.type !== 'vacances') {
+        if (agent.remplacement?.agentId && agent.remplacement?.start && agent.remplacement?.end) {
+           if (currentDayStr >= agent.remplacement.start && currentDayStr <= agent.remplacement.end) {
+               joursOuvres++;
+           }
+        } else {
+           joursOuvres++;
         }
       }
-      const hHebdoBase = (agent.hContrat || 1607) / 39;
-      const hJourCible = hHebdoBase / 5;
-      return joursPresents * hJourCible;
+    }
+    
+    let baseMins = Math.round(((agent.hContrat || 1607) / 39) * 60);
+    let hHebdoDec = baseMins / 60;
+    
+    // TRONCATURE PURE SI TEMPS PARTIEL (Evite les "35h43" ou "35h44")
+    if (agent.quotite < 100) {
+        hHebdoDec = Math.floor(baseMins / 5) * 5 / 60;
+    } else {
+        hHebdoDec = Math.round(baseMins / 5) * 5 / 60;
     }
 
-    const applicableTemplate = getApplicableTemplate(targetMon, templateVersions);
-    return gabarits[applicableTemplate?.id]?.[agent.id]?.totalHebdo || 0;
-  }, [isSemaineVacances, getApplicableTemplate, templateVersions, gabarits]);
+    const hJourCible = hHebdoDec / 5;
+    let objectifFinal = joursOuvres * hJourCible;
+    
+    // TRONCATURE DU RÉSULTAT FINAL DE LA SEMAINE
+    let finalMins = Math.round(objectifFinal * 60);
+    if (agent.quotite < 100) {
+        objectifFinal = Math.floor(finalMins / 5) * 5 / 60;
+    } else {
+        objectifFinal = Math.round(finalMins / 5) * 5 / 60;
+    }
+
+    return objectifFinal;
+  }, [isSemaineVacances, periodesFeriees]);
+
   const shiftEventToWeek = (evt, targetMondayStr) => {
     const origMondayStr = getMondayStr(evt.start);
     if (origMondayStr === targetMondayStr) return { ...evt, id: String(evt.id).includes('_') ? evt.id : evt.id + '_' + targetMondayStr };
@@ -600,14 +706,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         const isAbsentAtT = weekAbsences.some(abs => {
           if (Number(abs.agentId) !== Number(shift.extendedProps.agentId)) return false;
           
-          // Si c'est une absence journée complète, il est déduit de l'effectif toute la journée
           if ((abs.journeeComplete === true || abs.journeeEntiere === true) && abs.type === 'absence') {
             const dateAbs = abs.start.split('T')[0];
             const dateShift = shift.start.split('T')[0];
             if (dateAbs === dateShift) return true;
           }
           
-          // Sinon (retards, absences de 2h), on vérifie s'il est absent à la minute T exacte
           return new Date(abs.start).getTime() <= t && new Date(abs.end).getTime() > t;
         });
 
@@ -631,7 +735,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const applyReplacements = useCallback((eventsList) => {
     if (!eventsList) return [];
     
-    // On utilise flatMap au lieu de map pour pouvoir dédoubler l'événement
     return eventsList.flatMap(evt => {
       if (evt.extendedProps?.isAbsence || evt.extendedProps?.isBesoin) return [evt];
       const dateStr = evt.start.split('T')[0];
@@ -645,27 +748,23 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       );
 
       if (replacer) {
-        // On crée la copie parfaite pour le remplaçant
         const evtRemplacant = {
           ...evt,
-          id: String(evt.id) + '_remp', // ID unique pour la copie
+          id: String(evt.id) + '_remp', 
           title: `${evt.extendedProps.posteNom} - ${replacer.nom}`,
           backgroundColor: replacer.couleurFond,
           borderColor: replacer.couleurFond,
           extendedProps: { ...evt.extendedProps, originalAgentId: origAgentId, agentId: replacer.id, agentNom: replacer.nom }
         };
-        // La magie opère ici : on retourne l'original ET la copie !
         return [evt, evtRemplacant];
       }
       
-      // S'il n'y a pas de remplaçant, on retourne juste le créneau normal
       return [evt];
     });
   }, [agents]);
 
-  // --- NOUVEAU : CRÉATION DES BLOCS VISUELS POUR TOUS LES ÉVÉNEMENTS (ABS/RETARD/SUPP) ---
   const absencesVisuelles = useMemo(() => {
-    return absences.map(a => { // On a retiré le '.filter', on prend tout !
+    return absences.map(a => { 
       const dateAbs = a.start.split('T')[0];
       
       let startStr = a.start;
@@ -680,12 +779,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       let border = a.type === 'absence' ? '#b91c1c' : a.type === 'retard' ? '#d97706' : '#059669';
       let titleBase = a.type === 'absence' ? '🚫 Absent(e)' : a.type === 'retard' ? '⏰ Retard' : '🟢 Rattrapage';
 
-      // Si c'est un rattrapage assigné à un poste
       if (a.type === 'heures_supp' && a.posteId) {
          const p = postes.find(pos => String(pos.id) === String(a.posteId));
          if (p) {
              titleBase = `🟢 ${p.nom}`;
-             // NOUVEAU : On crée le motif hachuré oblique (Vert / Couleur du poste)
              bg = `repeating-linear-gradient(45deg, #10b981, #10b981 10px, ${p.couleur} 10px, ${p.couleur} 20px)`;
          }
       }
@@ -708,13 +805,12 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
           posteCouleur: bg,
           typeAbsence: a.type,
           motif: a.motif,
-          note: a.motif // Permet à la variable extInfo d'afficher le motif
+          note: a.motif 
         }
       };
     });
   }, [absences, agents, postes, amplitude]);
 
-  // On injecte les absences dans tous les événements du calendrier
   const allCalendarEvents = modeEdition === 'besoins' ? besoinsEvents : [...applyReplacements(currentRealEvents), ...absencesVisuelles];
   const conflitsIds = useMemo(() => {
     return detecterChevauchements(allCalendarEvents);
@@ -740,7 +836,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const realEvts = customWeeks[targetMon] ? customWeeks[targetMon] : baseTplEvts;
     const besoins = applicableT ? (applicableT.besoins || []).map(b => shiftEventToWeek(b, targetMon)) : [];
 
-    // --- ALERTE SOUS-EFFECTIFS ---
     besoins.forEach(b => {
       const { isSousEffectif, minCount, missingAgents } = checkCoverage(b, realEvts, absences);
       if (isSousEffectif) {
@@ -763,82 +858,143 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
     const affectationsSemaine = realEvts.filter(e => !e.extendedProps?.isBesoin && !e.extendedProps?.isAbsence && e.extendedProps?.agentId);
     
-    // --- MOTEUR DROIT DU TRAVAIL & DOUBLONS ---
     const agentEvents = {};
     affectationsSemaine.forEach(e => {
         if (!agentEvents[e.extendedProps.agentId]) agentEvents[e.extendedProps.agentId] = [];
         agentEvents[e.extendedProps.agentId].push(e);
     });
 
+    const isCours = (e) => {
+        const p = (e.extendedProps?.posteNom || '').toLowerCase();
+        const t = (e.title || '').toLowerCase();
+        return p.includes('cours') || t.includes('cours');
+    };
+
     Object.keys(agentEvents).forEach(agentId => {
-        const evts = agentEvents[agentId].sort((a, b) => new Date(a.start) - new Date(b.start));
-        const agentNom = evts[0].extendedProps.agentNom || 'Agent';
+        const agent = agents.find(a => String(a.id) === String(agentId));
+        if (!agent) return;
+
+        const allAgentEvts = agentEvents[agentId].sort((a, b) => new Date(a.start) - new Date(b.start));
+        if (allAgentEvts.length === 0) return;
+        const agentNom = allAgentEvts[0].extendedProps.agentNom || agent.nom;
+
+        for (let i = 0; i < allAgentEvts.length; i++) {
+            const e1 = allAgentEvts[i];
+            for (let j = i + 1; j < allAgentEvts.length; j++) {
+                const e2 = allAgentEvts[j];
+                if (new Date(e1.start).getTime() < new Date(e2.end).getTime() && new Date(e2.start).getTime() < new Date(e1.end).getTime()) {
+                    const dateStr = e1.start.split('T')[0];
+                    alerts.push({ title: `Double affectation : ${agentNom}`, message: `${agentNom} est affecté(e) sur 2 postes en même temps le ${dateStr.split('-').reverse().join('/')} !` });
+                }
+            }
+        }
+
+        const validEvts = allAgentEvts.filter(e => !isCours(e));
+        if (validEvts.length === 0) return;
+
         let totalHebdo = 0;
         const dayTotals = {};
+        let nightCount = 0;
+        const nightDates = [];
+        const normalWorkedDates = new Set();
         
         let currentBlockStart = null;
         let currentBlockEnd = null;
         let continuousWork = 0;
 
-        for (let i = 0; i < evts.length; i++) {
-            const e = evts[i];
+        const targetMondayDate = new Date(targetMon);
+        let lastEnd = new Date(targetMondayDate); 
+        let maxConsecutiveRest = 0;
+
+        for (let i = 0; i < validEvts.length; i++) {
+            const e = validEvts[i];
             const eStart = new Date(e.start);
             const eEnd = new Date(e.end);
             
-            // Forfait Nuit : 3h, sinon durée réelle
-            const dureeHours = e.extendedProps?.isNuit ? 3 : (eEnd - eStart) / 3600000;
-            
-            totalHebdo += dureeHours;
+            const isNuit = e.extendedProps?.isNuit;
             const dateStr = e.start.split('T')[0];
-            dayTotals[dateStr] = (dayTotals[dateStr] || 0) + dureeHours;
+            
+            const gapRestHours = (eStart - lastEnd) / 3600000;
+            if (gapRestHours > maxConsecutiveRest) maxConsecutiveRest = gapRestHours;
+            if (eEnd > lastEnd) lastEnd = eEnd;
 
-            // Règle 4 : Pause légale (6h max sans pause de 20min)
-            if (!currentBlockStart) {
-                currentBlockStart = eStart; currentBlockEnd = eEnd; continuousWork = dureeHours;
+            const dureeHours = isNuit ? 3 : (eEnd - eStart) / 3600000;
+            totalHebdo += dureeHours;
+            
+            if (isNuit) {
+                nightCount++;
+                nightDates.push(dateStr);
             } else {
-                const gapMins = (eStart - currentBlockEnd) / 60000;
-                if (gapMins >= 20) {
-                    currentBlockStart = eStart; currentBlockEnd = eEnd; continuousWork = dureeHours; // Reset après une vraie pause
+                dayTotals[dateStr] = (dayTotals[dateStr] || 0) + dureeHours;
+                normalWorkedDates.add(dateStr);
+            }
+
+            if (!isNuit) {
+                if (!currentBlockStart) {
+                    currentBlockStart = eStart; currentBlockEnd = eEnd; continuousWork = dureeHours;
                 } else {
-                    continuousWork += dureeHours; currentBlockEnd = eEnd;
-                    if (continuousWork > 6 && !e.extendedProps?.isNuit) {
-                        alerts.push({ title: `Droit du Travail : Pause (${agentNom})`, message: `Plus de 6h consécutives sans pause de 20min le ${dateStr}.` });
-                        continuousWork = 0; // On reset pour ne pas spammer
+                    const gapMins = (eStart - currentBlockEnd) / 60000;
+                    const pauseExigee = pauseLegale || 20; 
+                    
+                    if (gapMins >= pauseExigee) {
+                        currentBlockStart = eStart; currentBlockEnd = eEnd; continuousWork = dureeHours;
+                    } else {
+                        continuousWork += dureeHours; currentBlockEnd = eEnd;
+                        if (continuousWork > 6) {
+                            alerts.push({ title: `Droit du Travail : Pause (${agentNom})`, message: `Plus de 6h consécutives sans pause légale de ${pauseExigee}min le ${dateStr.split('-').reverse().join('/')}.` });
+                            continuousWork = 0; 
+                        }
                     }
                 }
+            } else {
+                currentBlockStart = null; continuousWork = 0; 
             }
 
-            // Règle 2 : Repos quotidien de 11h
             if (i > 0) {
-                const prevE = evts[i-1];
+                const prevE = validEvts[i-1];
                 const prevEnd = new Date(prevE.end);
                 const gapHours = (eStart - prevEnd) / 3600000;
-                // Un écart entre 4h et 11h est une tentative de nuit de repos illégale (moins de 4h est considéré comme un simple service coupé)
                 if (gapHours > 4 && gapHours < 11) {
-                    alerts.push({ title: `Droit du Travail : Repos (${agentNom})`, message: `Seulement ${gapHours.toFixed(1)}h de repos avant la reprise le ${dateStr} (11h minimum légal).` });
-                }
-            }
-
-            // Vérification des doublons (Chevauchement strict)
-            for (let j = i + 1; j < evts.length; j++) {
-                const e2 = evts[j];
-                if (new Date(e.start).getTime() < new Date(e2.end).getTime() && new Date(e2.start).getTime() < new Date(e.end).getTime()) {
-                    alerts.push({ title: `Double affectation : ${agentNom}`, message: `${agentNom} est affecté(e) sur 2 postes en même temps le ${dateStr} !` });
+                    alerts.push({ title: `Droit du Travail : Repos (${agentNom})`, message: `Seulement ${gapHours.toFixed(1)}h de repos avant la reprise le ${dateStr.split('-').reverse().join('/')} (11h minimum).` });
                 }
             }
         }
 
-        // Règle 3 : Max 10h par jour
+        const endOfWeek = new Date(targetMondayDate);
+        endOfWeek.setDate(endOfWeek.getDate() + 7);
+        const finalGap = (endOfWeek - lastEnd) / 3600000;
+        if (finalGap > maxConsecutiveRest) maxConsecutiveRest = finalGap;
+
+        if (maxConsecutiveRest < 35) {
+            alerts.push({ title: `Droit du Travail : Repos Hebdo (${agentNom})`, message: `Moins de 35h consécutives de repos sur la semaine (Max: ${maxConsecutiveRest.toFixed(1)}h).` });
+        }
+
         Object.entries(dayTotals).forEach(([dStr, tot]) => {
-            if (tot > 10) alerts.push({ title: `Droit du Travail : 10h max (${agentNom})`, message: `${tot.toFixed(1)}h de travail planifiées le ${dStr.split('-').reverse().join('/')} (Dépassement des 10h/jour).` });
+            if (tot > 10) alerts.push({ title: `Droit du Travail : 10h max (${agentNom})`, message: `${tot.toFixed(1)}h de travail effectif le ${dStr.split('-').reverse().join('/')} (Maximum 10h/jour).` });
         });
 
-        // Règle 5 : Max 48h hebdo
-        if (totalHebdo > 48) alerts.push({ title: `Droit du Travail : 48h max (${agentNom})`, message: `Volume de ${totalHebdo.toFixed(1)}h sur cette semaine (Maximum légal 48h).` });
+        if (nightCount > 3) {
+            alerts.push({ title: `Droit du Travail : Nuits (${agentNom})`, message: `${nightCount} nuits planifiées (Maximum 3 nuits/semaine).` });
+        }
+
+        nightDates.forEach(nDate => {
+            if (normalWorkedDates.has(nDate)) {
+                alerts.push({ title: `Droit du Travail : Nuit + Jour (${agentNom})`, message: `Une nuit est planifiée le ${nDate.split('-').reverse().join('/')} en plus d'un service de jour.` });
+            }
+        });
+
+        const threshold44 = 44 * (agent.quotite / 100);
+        if (agent.estEtudiant && totalHebdo > 35) {
+            alerts.push({ title: `Droit du Travail : Temps Étudiant (${agentNom})`, message: `Volume de ${totalHebdo.toFixed(1)}h (Max 35h/semaine pour un étudiant).` });
+        } else if (totalHebdo > 48) {
+            alerts.push({ title: `Droit du Travail : 48h max (${agentNom})`, message: `Volume de ${totalHebdo.toFixed(1)}h (Maximum légal absolu 48h).` });
+        } else if (totalHebdo > threshold44) {
+            alerts.push({ title: `Droit du Travail : Dépassement (${agentNom})`, message: `Volume de ${totalHebdo.toFixed(1)}h (Dépasse le plafond moyen de ${threshold44.toFixed(1)}h pour son contrat).` });
+        }
     });
 
     return alerts;
-  }, [currentTemplate, currentViewMonday, customWeeks, absences, templateVersions, vueActive, getApplicableTemplate]);
+  }, [currentTemplate, currentViewMonday, customWeeks, absences, templateVersions, vueActive, getApplicableTemplate, agents, pauseLegale]);
 
   const validerTemplateModal = (e) => {
     e.preventDefault();
@@ -889,12 +1045,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         if (window.confirm(`Voulez-vous vraiment supprimer ces ${copiedEvents.length} créneau(x) ?`)) {
           sauvegarderEtatPrecedent();
           
-          // CORRECTION : On gère correctement le préfixe 'abs_visuel_'
           const idsAbsToDelete = copiedEvents.filter(ev => ev.extendedProps?.isAbsence).map(ev => String(ev.id).replace('abs_visuel_', '').replace('abs_', '').split('_')[0]);
           const idsEvtToDelete = copiedEvents.filter(ev => !ev.extendedProps?.isAbsence).map(ev => String(ev.id).split('_')[0]);
 
           if (idsAbsToDelete.length > 0) {
-            // On récupère les "groupId" pour que la suppression nettoie bien toutes les parties d'une absence de plusieurs jours
             const gidsToDelete = absences.filter(a => idsAbsToDelete.includes(String(a.id))).map(a => String(a.groupId || a.id));
             setAbsences(prev => prev.filter(a => !gidsToDelete.includes(String(a.groupId || a.id)) && !idsAbsToDelete.includes(String(a.id))));
           }
@@ -937,6 +1091,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [copiedEvents, templateVersions, customWeeks, absences, vueActive, modeEdition, jourConsulte, currentViewMonday, activeTemplateId, getEventsForWeek]);
+  
   useEffect(() => {
     let isModified = false;
     let newPeriodes = [...periodesFeriees];
@@ -977,7 +1132,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
       if (isDataLoaded) setNeedsBackup(true); 
     }
   }, [agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, isDataLoaded]);
-
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1080,7 +1234,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setSonneries(arr); setSonneriesText(arr.join(', '));
   };
 
-  const [formIsNuit, setFormIsNuit] = useState(false);
 
   const limitesHeures = (() => {
     const [hS, mS] = (amplitude.start || '07:30').split(':').map(Number);
@@ -1260,12 +1413,9 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   };
   
   const supprimerAbsence = (idFallback) => {
-    // FORCE BRUTE : On prend l'ID de la modale en priorité absolue.
-    // Cela court-circuite n'importe quel bug de clic ou d'objet transmis par erreur.
     const targetId = modalCreation.eventId || idFallback;
     if (!targetId) return;
 
-    // Nettoyage de sécurité
     let idClean = String(targetId).replace('abs_visuel_', '').replace('abs_', '');
     if (idClean.includes('_') && !idClean.startsWith('grp_')) {
         idClean = idClean.split('_')[0];
@@ -1273,16 +1423,13 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     
     sauvegarderEtatPrecedent();
 
-    // Mise à jour instantanée (immunisée contre les décalages de mémoire React)
     setAbsences(prevAbsences => {
         const cible = prevAbsences.find(a => String(a.id) === idClean || String(a.groupId) === idClean);
         
         if (!cible) {
-            // Si le groupe officiel n'est pas trouvé, on nettoie par sécurité
             return prevAbsences.filter(a => String(a.id) !== idClean && String(a.groupId) !== idClean);
         }
         
-        // Suppression de toutes les parties du groupe d'absence
         const gid = cible.groupId || cible.id;
         return prevAbsences.filter(a => String(a.groupId) !== String(gid) && String(a.id) !== String(gid));
     });
@@ -1291,7 +1438,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   };
 
   const applyAction = (action, info) => {
-    // MÊME FORCE BRUTE ICI POUR LES CRÉNEAUX CLASSIQUES
     const rawInfoId = (action === 'delete' && modalCreation.eventId) 
         ? modalCreation.eventId 
         : ((info && typeof info === 'object') ? info.id : info);
@@ -1303,7 +1449,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         cleanId = cleanId.split('_')[0]; 
     }
     
-    // REDIRECTION AUTOMATIQUE (Retards, Absences, Supp)
     if (action === 'delete' && (formTypeEvent === 'absence' || cleanId.startsWith('grp_') || cleanId.startsWith('abs_'))) {
         supprimerAbsence(cleanId);
         return;
@@ -1322,7 +1467,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
         }
     }
 
-    // MISE À JOUR SÉCURISÉE DES PLAGES CLASSIQUES
     if (vueActive === 'template') {
         setTemplateVersions(prevTemplates => prevTemplates.map(tv => {
             if (tv.id !== activeTemplateId) return tv;
@@ -1364,7 +1508,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const minutes = Math.round((dureeTotaleDec - heures) * 60);
     const dureeStr = `${heures}h${String(minutes).padStart(2, '0')}`;
 
-    // On récupère les vraies heures pour les retards/heures supp
     const startT = chunks[0].start.includes('T') ? chunks[0].start.split('T')[1].substring(0, 5) : '08:00';
     const endT = chunks[chunks.length - 1].end.includes('T') ? chunks[chunks.length - 1].end.split('T')[1].substring(0, 5) : '18:00';
 
@@ -1372,7 +1515,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setFormTypeAbsence(a.type || 'absence');
     setFormAbsImpact(a.impact || 'local');
     setFormAgent(String(a.agentId));
-    setFormPoste(a.posteId || ''); // <--- AJOUTE CETTE LIGNE ICI
+    setFormPoste(a.posteId || ''); 
     setFormNote(a.motif || '');
     setModalCreation({ 
       isOpen: true, 
@@ -1442,7 +1585,6 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const ouvrirEdition = (evt) => {
     const isAbs = evt.extendedProps ? evt.extendedProps.isAbsence : false;
     
-    // NOUVEAU : Si c'est une absence, on redirige vers le moteur de groupe multi-jours !
     if (isAbs) {
       const rawId = String(evt.id).replace('abs_visuel_', '').split('_')[0];
       const absenceOrig = absences.find(a => String(a.id) === rawId);
@@ -1530,7 +1672,6 @@ const validerCreationModal = (e) => {
     if (formTypeEvent === 'absence') {
       const isJourneeEntiere = modalCreation.journeeEntiere !== false;
 
-      // 1. On nettoie l'ID sans casser les identifiants de groupes
       let rawId = String(modalCreation.eventId || '');
       if (rawId.startsWith('abs_visuel_')) rawId = rawId.replace('abs_visuel_', '');
       if (rawId.includes('_') && !rawId.startsWith('grp_')) {
@@ -1540,7 +1681,6 @@ const validerCreationModal = (e) => {
       const absenceToEdit = absences.find(a => String(a.id) === rawId || String(a.groupId) === rawId);
       const groupId = (absenceToEdit && absenceToEdit.groupId) ? absenceToEdit.groupId : `grp_${Date.now()}`;
 
-      // 2. On filtre les vieux fragments de cette absence
       const existingAbs = absences.filter(a => {
          if (!absenceToEdit) return true;
          const aGid = a.groupId || a.id;
@@ -1562,7 +1702,6 @@ const validerCreationModal = (e) => {
           const isStartBoundary = curr.getTime() === new Date(modalCreation.date).getTime();
           const isEndBoundary = curr.getTime() === end.getTime();
 
-          // On génère le bloc si l'agent devait travailler OU si c'est le 1er/dernier jour
           if (missedDec > 0 || isStartBoundary || isEndBoundary) {
              const startT = new Date(`${dateLoc}T08:00:00`);
              const endT = new Date(startT.getTime() + (missedDec > 0 ? missedDec : 0) * 3600000);
@@ -1573,11 +1712,11 @@ const validerCreationModal = (e) => {
                 type: formTypeAbsence,
                 impact: formAbsImpact,
                 motif: formNote,
-                posteId: formTypeAbsence === 'heures_supp' ? Number(formPoste) : null, // <-- SAUVEGARDE DU POSTE ICI
+                posteId: formTypeAbsence === 'heures_supp' ? Number(formPoste) : null, 
                 start: `${dateLoc}T08:00:00`,
                 end: `${dateLoc}T${pad(endT.getHours())}:${pad(endT.getMinutes())}:00`,
                 journeeEntiere: true,
-                journeeComplete: true, // Sécurité de rétro-compatibilité
+                journeeComplete: true, 
                 dateFinReelle: modalCreation.dateFin || modalCreation.date
              });
           }
@@ -1598,7 +1737,7 @@ const validerCreationModal = (e) => {
             type: formTypeAbsence,
             impact: formAbsImpact,
             motif: formNote,
-            posteId: formTypeAbsence === 'heures_supp' ? Number(formPoste) : null, // <-- SAUVEGARDE DU POSTE ICI
+            posteId: formTypeAbsence === 'heures_supp' ? Number(formPoste) : null, 
             start: `${modalCreation.date}T${startTStr}:00`,
             end: `${modalCreation.date}T${pad(endT.getHours())}:${pad(endT.getMinutes())}:00`,
             journeeEntiere: false,
@@ -1633,7 +1772,7 @@ const validerCreationModal = (e) => {
         posteNom: poste.nom,
         posteCouleur: poste.couleur,
         note: formNote,
-        isNuit: formIsNuit // <--- NOUVEAU
+        isNuit: formIsNuit 
       }
     };
 
@@ -1736,7 +1875,7 @@ const validerCreationModal = (e) => {
   }
 
   return (
-    <div className={`flex h-screen w-screen ${t.bgMain} font-sans overflow-hidden transition-colors`}>
+    <div className={`flex h-screen w-screen ${t.bgMain} ${isDarkMode ? 'text-gray-100' : 'text-gray-900'} font-sans overflow-hidden transition-colors`}>
       {/* -------------------- MODALES -------------------- */}
       <ModalConfirm dialog={confirmDialog} closeDialog={closeConfirm} t={t} />
 
@@ -1755,7 +1894,8 @@ const validerCreationModal = (e) => {
         ajouterPeriodeFeriee={ajouterPeriodeFeriee} periodesFeriees={periodesFeriees} supprimerPeriodeFeriee={supprimerPeriodeFeriee}
         isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} themeId={themeId} changeTheme={changeTheme} customColors={customColors} updateCustomColor={updateCustomColor} 
         handleExport={handleExport} handleImport={handleImport} setPeriodesFeriees={setPeriodesFeriees} baseYear={baseYear}
-        etablissement={etablissement} setEtablissement={setEtablissement} hasInternat={hasInternat} setHasInternat={setHasInternat} t={t} 
+        etablissement={etablissement} setEtablissement={setEtablissement} hasInternat={hasInternat} setHasInternat={setHasInternat} 
+        pauseLegale={pauseLegale} setPauseLegale={setPauseLegale} deduirePause={deduirePause} setDeduirePause={setDeduirePause} t={t} 
       />
 
       <ModalBasculement modalBasculement={modalBasculement} setModalBasculement={setModalBasculement} baseYear={baseYear} postes={postes} agents={agents} currentTemplate={currentTemplate} t={t} onComplete={() => window.location.reload()} />
@@ -1863,7 +2003,7 @@ const validerCreationModal = (e) => {
                     <ul className="space-y-1">
                     {statsAgents.map((agent) => {
                         const weekEvents = applyReplacements(vueActive === 'template' ? (currentTemplate?.events || []) : getEventsForWeek(targetMonday));
-                        const agentWeekMins = weekEvents.filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence).reduce((acc, evt) => evt.extendedProps?.isNuit ? acc + 180 : acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                        const agentWeekMins = getTempsTravailEffectif(weekEvents.filter(e => e.extendedProps?.agentId === agent.id));
                         const agentWeekHours = agentWeekMins / 60;
                         const activeContract = getActiveContract(agent, targetMonday);
                         const hContratVirtuelActif = calculerContratBetty(activeContract.quotite, activeContract.estEtudiant);                        
@@ -1908,7 +2048,7 @@ const validerCreationModal = (e) => {
                                   <span className="text-gray-400 text-[10px]">/</span>
                                   
                                   {/* Bouton pour forcer un objectif personnalisé */}
-                                  <button 
+                                    <button 
                                     onClick={(e) => { 
                                        e.stopPropagation(); 
                                        if (vueActive === 'template' && currentTemplate?.statut === 'brouillon') {
@@ -1928,9 +2068,9 @@ const validerCreationModal = (e) => {
                                        }
                                     }}
                                     className={`font-mono text-[11px] font-bold transition-colors flex items-center gap-0.5 ${hasCustomObjectif ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-blue-500'}`} 
-                                    title="Modifier l'objectif de la semaine"
+                                    title="Objectif hebdomadaire (Basé sur le Modèle / Semaine Type)"
                                   >
-                                    {formatHeureTableau(objectifHebdoAgent, true)}{hasCustomObjectif ? '📌' : '✏️'}
+                                    {formatHeureTableau(objectifHebdoAgent, true)}{hasCustomObjectif ? '📌' : ' 📐'}
                                   </button>
                                 </div>
                               </div>
@@ -1972,7 +2112,7 @@ const validerCreationModal = (e) => {
                           <span className={t.header}>{poste.nom}</span>
                           <div className="flex gap-1 items-center shrink-0">
                             <button onClick={(e) => { e.stopPropagation(); ouvrirEditionPoste(poste); }} className={`text-gray-400 hover:opacity-75 text-xs px-1 ${t.headerText}`}>⚙️</button>
-                            <button onClick={(e) => supprimerPoste(poste.id, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
+                            <button onClick={(e) => supprimerPoste(poste.id, poste.nom, e)} className="text-red-400 hover:text-red-600 text-xs px-1">✖</button>
                           </div>
                         </li>
                       ))}
@@ -2047,11 +2187,7 @@ const validerCreationModal = (e) => {
                         <span key={p.id} className="px-2 py-1 rounded text-[10px] font-bold shadow-sm flex items-center gap-1.5" style={{ backgroundColor: p.couleur, color: getContrastYIQ(p.couleur) }}>
                           {p.nom}
                           <button onClick={() => ouvrirEditionPoste(p)} className="hover:opacity-75 text-xs ml-0.5 cursor-pointer" title="Modifier ce poste">⚙️</button>
-                          <button onClick={() => {
-                            if (confirm(`Voulez-vous vraiment supprimer le poste "${p.nom}" ?`)) {
-                              setPostes(postes.filter(x => x.id !== p.id));
-                            }
-                          }} className="hover:opacity-60 text-xs font-black ml-0.5 cursor-pointer" title="Supprimer ce poste">✖</button>
+                          <button onClick={(e) => supprimerPoste(p.id, p.nom, e)} className="hover:opacity-60 text-xs font-black ml-0.5 cursor-pointer" title="Supprimer ce poste">✖</button>
                         </span>
                       ))}
                       <button onClick={ouvrirCreationPoste} className={`ml-2 px-2.5 py-1 rounded text-xs font-bold ${t.btnPrimary} shadow-sm transition-transform hover:scale-105`}>
@@ -2104,7 +2240,7 @@ const validerCreationModal = (e) => {
                             const allEvents = [...applyReplacements(getEventsForWeek(mondayStr)), ...absencesVisuelles];
                             const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
 
-const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => evt.extendedProps?.isNuit ? acc + 180 : acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                            const totalMinsJour = getTempsTravailEffectif(eventsDuJour);
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
                             const amplitudeStr = getAmplitudeStr(eventsDuJour);
 
@@ -2179,7 +2315,6 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
                                     }
                                   }}
                                 >
-
                                   {eventsDuJour.map(evt => {
                                     const startD = new Date(evt.start); const endD = new Date(evt.end);
                                     const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
@@ -2220,7 +2355,6 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
                                           const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
                                           sauvegarderEtatPrecedent();
                                           if (evt.extendedProps?.isAbsence) {
-                                            // SÉCURITÉ : Nettoyage propre de l'ID visuel
                                             const cleanId = String(evt.id).replace('abs_visuel_', '').replace('abs_', '').split('_')[0];
                                             setAbsences(prev => prev.map(a => String(a.id) === cleanId ? { ...a, start: `${jourConsulte}T${formatTime(min)}:00`, end: `${jourConsulte}T${formatTime(max)}:00` } : a));
                                           } else {
@@ -2327,7 +2461,7 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
                 </div>
                 <div className="flex gap-2 mt-3 items-center">
                   {joursTravailles.map(d => (
-                    <button key={d} onClick={() => setJourTemplate(d)} className={`px-5 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${jourTemplate === d ? t.activeTab : `${t.cardBg} ${t.textMenuMuted} border border-transparent hover:border-black/10 dark:hover:border-white/10`}`}>{['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][d - 1]}</button>
+                    <button key={d} onClick={() => setJourTemplate(d)} className={`px-5 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${jourTemplate === d ? t.activeTab : `${t.cardBg} ${t.textMenuMuted} border border-transparent hover:border-black/10 dark:hover:border-white/10`}`}>{nomsJoursComplets[d - 1]}</button>
                   ))}
                   <div className="ml-auto text-xs font-bold px-3 py-1.5 rounded-full border border-black/10 dark:border-white/10 shadow-inner bg-black/5 dark:bg-white/5">Lignes : {isBesoinsMode ? '🎯 Postes (Besoins structurels)' : '👤 Agents (Affectations nominatives)'}</div>
                 </div>
@@ -2383,7 +2517,7 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
                             });
 
                             const rowBgColor = isBesoinsMode ? item.couleur : item.couleurFond;
-                            const totalMinsJour = eventsDeLaLigne.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => evt.extendedProps?.isNuit ? acc + 180 : acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                            const totalMinsJour = getTempsTravailEffectif(eventsDeLaLigne);
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
                             const amplitudeStr = getAmplitudeStr(eventsDeLaLigne);
 
@@ -2475,7 +2609,8 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
                                         return n; 
                                       });
                                     }
-                                  }}                                >
+                                  }}
+                                >
                                   {eventsDeLaLigne.map(evt => {
                                     const startD = new Date(evt.start); const endD = new Date(evt.end);
                                     const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
@@ -2537,8 +2672,7 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
             </div>
           );
         })()}
-
-        {/* 3. VUE PLANNING REEL */}
+{/* 3. VUE PLANNING REEL */}
         {vueActive === 'planning' && (() => {
           const { gridLines, gridLabelsDaily, gridTicks } = generateGrid(limitesHeures, sonneries, amplitude);
           const activeMonday = currentViewMonday || getMondayStr(new Date());
@@ -2662,7 +2796,7 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
                                 
                                 {agents.map(agent => {
                                   const eventsDeLaLigne = displayEvents.filter(e => e.start.startsWith(dateStr) && e.extendedProps?.agentId === agent.id);
-                                  const totalMinsJour = eventsDeLaLigne.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => evt.extendedProps?.isNuit ? acc + 180 : acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                                  const totalMinsJour = getTempsTravailEffectif(eventsDeLaLigne);
                                   const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
                                   const amplitudeStr = getAmplitudeStr(eventsDeLaLigne);
 
@@ -2705,13 +2839,13 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
                                           setCustomWeeks({ ...customWeeks, [monStr]: [...currentWeek, ...newEvents] });
                                         }}
                                         onAddLasso={(startMins, endMins) => {
-                                    const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                    const durDec = (endMins - startMins) / 60;
-                                    const dureeStr = `${Math.floor(durDec)}h${String(Math.round((durDec % 1) * 60)).padStart(2, '0')}`;
+                                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                          const durDec = (endMins - startMins) / 60;
+                                          const dureeStr = `${Math.floor(durDec)}h${String(Math.round((durDec % 1) * 60)).padStart(2, '0')}`;
 
-                                    setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(agent.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
-                                    setModalCreation({ isOpen: true, eventId: null, date: dateStr, start: formatTime(startMins), end: formatTime(endMins), duree: dureeStr, journeeEntiere: false });
-                                  }}
+                                          setFormTypeEvent('affectation'); setFormTypeAbsence('absence'); setFormAbsImpact('local'); setFormAgent(agent.id); setFormPoste(posteActif || (postes[0]?.id || '')); setFormNote('');
+                                          setModalCreation({ isOpen: true, eventId: null, date: dateStr, start: formatTime(startMins), end: formatTime(endMins), duree: dureeStr, journeeEntiere: false });
+                                        }}
                                         onLassoSelect={(min, max) => {
                                           const selected = eventsDeLaLigne.filter(evt => {
                                             const sD = new Date(evt.start); const eD = new Date(evt.end);
@@ -2737,12 +2871,14 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
                                           }
                                         }}
                                       >
-                                      {eventsDeLaLigne.map(evt => {
+                                        {eventsDeLaLigne.map(evt => {
                                           const startD = new Date(evt.start); const endD = new Date(evt.end);
                                           const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
+                                          const isLocked = false;
                                           
                                           let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo;
                                           const posteCouleur = evt.extendedProps?.posteCouleur || '#3b82f6';
+                                          
                                           if (evt.extendedProps?.isAbsence) {
                                             const typeAbs = evt.extendedProps.typeAbsence;
                                             evtBgColor = typeAbs === 'absence' ? '#ef4444' : typeAbs === 'retard' ? '#f59e0b' : '#10b981';
@@ -2762,14 +2898,15 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
                                             evtBgColor = posteCouleur;
                                             const estEnConflit = conflitsIds.has(String(evt.id).split('_')[0]);
                                             if (estEnConflit) { evtBgColor = '#dc2626'; }
-                                            evtBorderColor = isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'; evtTextColor = getContrastYIQ(evtBgColor);
+                                            evtBorderColor = isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'; 
+                                            evtTextColor = getContrastYIQ(evtBgColor);
                                             evtTitle = (estEnConflit ? '⚠️ ' : '') + (evt.extendedProps?.posteNom || 'Poste');
                                             extInfo = evt.extendedProps?.note || null;
                                           }
                                           
                                           return (
                                             <SafeTimelineEvent 
-                                              key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={false} 
+                                              key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={isLocked} 
                                               bgColor={evtBgColor} borderColor={evtBorderColor} textColor={evtTextColor} 
                                               title={evtTitle} subtitle={agent.nom} extInfo={extInfo} conflit={!evt.extendedProps?.isAbsence && conflitsIds.has(String(evt.id).split('_')[0])} snapPoints={allLineSnapPoints}
                                               isCopied={copiedEvents.some(c => c.id === evt.id)}
@@ -2777,7 +2914,6 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
                                                 const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
                                                 sauvegarderEtatPrecedent();
                                                 if (evt.extendedProps?.isAbsence) {
-                                                  // CORRECTION : Nettoyage de abs_visuel_ et utilisation de 'prev' pour la mémoire instantanée
                                                   const cleanId = String(evt.id).replace('abs_visuel_', '').replace('abs_', '').split('_')[0];
                                                   setAbsences(prev => prev.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(min)}:00`, end: `${dateStr}T${formatTime(max)}:00` } : a));
                                                 } else {
@@ -2816,7 +2952,8 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
         {/* 4. VUE BILAN EQUIPE */}
         {vueActive === 'dashboard' && (() => {
           const todayStr = new Date().toISOString().split('T')[0];
-          const totalETP = Math.round(agents.filter(a => !a.remplacement?.agentId).reduce((sum, a) => sum + Number(getActiveContract(a, todayStr).quotite), 0)) / 100;          return (
+          const totalETP = Math.round(agents.filter(a => !a.remplacement?.agentId).reduce((sum, a) => sum + Number(getActiveContract(a, todayStr).quotite), 0)) / 100;
+          return (
             <div className={`flex-1 p-8 overflow-auto ${t.bgMain} print-dashboard-table`}>
               <div className="flex justify-between items-end mb-6">
                 <h2 className={`text-2xl font-bold ${t.header}`}>Bilan Annuel Global ({baseYear}-{baseYear+1})</h2>
@@ -2877,7 +3014,7 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
         })()}
 
         {/* 5. VUE ABSENCES & RETARDS */}
-{vueActive === 'absences' && (() => {
+        {vueActive === 'absences' && (() => {
           const absencesGroupees = [];
           const groupesVus = new Set();
           
@@ -3204,7 +3341,7 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
               <div className="flex gap-4 items-center">
                 <select value={agentConsulte} onChange={(e) => setAgentConsulte(Number(e.target.value))} className={`bg-transparent ${t.headerText} border ${t.borderLight} font-bold p-2 rounded outline-none cursor-pointer`}>
                   {agents.map(a => (
-                    <option key={a.id} value={a.id} className="text-black bg-white">
+                    <option key={a.id} value={a.id} className="text-black dark:text-white bg-white dark:bg-gray-800">
                       {a.nom} ({a.quotite}%)
                     </option>
                   ))}
@@ -3214,7 +3351,7 @@ const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).redu
               <div className={`hidden print:block text-xl font-bold ${t.headerText}`}>Bilan Annuel : {agents.find(a=>a.id===agentConsulte)?.nom} ({baseYear}-{baseYear+1})</div>
               <div className={`flex gap-6 ${t.bgLight} p-2 rounded border ${t.borderLight} print:border-none`}>
                 
-<div className="flex flex-col items-center">
+                <div className="flex flex-col items-center">
                   <span className={`text-xs ${t.textMenuMuted} print:text-black`}>H. Contrat {statsAgents.find(a=>a.id===agentConsulte)?.isRemplacant ? '(CDD)' : ''}</span>
                   <span className={`font-mono font-bold ${t.header}`}>
                     {formatHeureTableau(statsAgents.find(a=>a.id===agentConsulte)?.hContratEffectif, true)}
@@ -3545,6 +3682,7 @@ export default function App() {
         .fc-timegrid-event { background: transparent !important; border: none !important; box-shadow: none !important; overflow: visible !important; }
 
         @media screen {
+          body, #root { color: ${isDarkMode ? (t.hexText || '#f3f4f6') : '#111827'}; transition: color 0.3s ease; }
           ${t.isDark ? `
             .fc, table { color: ${t.hexText} !important; }
             .fc-theme-standard td, .fc-theme-standard th, .fc-scrollgrid { border-color: ${t.hexBorder} !important; }

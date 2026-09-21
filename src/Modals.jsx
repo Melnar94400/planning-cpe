@@ -276,6 +276,7 @@ export const ModalPoste = ({ modalPoste, setModalPoste, validerPosteModal, t }) 
 
 export const ModalBesoinMulti = ({ modalBesoinMulti, setModalBesoinMulti, validerBesoinMultiModal, postes, t }) => {
   if (!modalBesoinMulti.isOpen) return null;
+
   return (
     <div className="fixed inset-0 bg-black/50 z-[99999] flex items-center justify-center p-4 no-print">
       <div className={`${t.cardBg} rounded-xl shadow-2xl w-full max-w-lg overflow-visible animate-in zoom-in duration-200 flex flex-col max-h-[90vh] border ${t.borderLight}`}>
@@ -299,7 +300,10 @@ export const ModalBesoinMulti = ({ modalBesoinMulti, setModalBesoinMulti, valide
             <div className="border border-red-500/30 rounded p-3 bg-red-900/10">
               <div className="flex justify-between items-center mb-3">
                 <p className="text-sm font-bold text-red-600">Créez vos plages horaires et cochez les jours :</p>
-                <button type="button" onClick={() => setModalBesoinMulti({...modalBesoinMulti, slots: [...modalBesoinMulti.slots, { id: Date.now(), start: '08:00', end: '10:00', days: { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 7: false } }]})} className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 font-semibold shadow">➕ Plage</button>
+                <button type="button" onClick={() => {
+                  const defaultDays = { 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 7: false };
+                  setModalBesoinMulti({...modalBesoinMulti, slots: [...modalBesoinMulti.slots, { id: Date.now(), start: '08:00', end: '10:00', days: defaultDays }]})
+                }} className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 font-semibold shadow">➕ Plage</button>
               </div>
               <div className="flex flex-col gap-3">
                 {modalBesoinMulti.slots.map((slot, idx) => (
@@ -452,6 +456,7 @@ export const ModalAgent = ({ modalAgent, setModalAgent, validerAgentModal, handl
               )}
             </div>
           </div>
+          {/* --- SECTION REMPLACEMENT --- */}
         <div className={`mt-4 p-3 border ${t.borderLight} rounded-lg bg-black/5 dark:bg-white/5`}>
           <label className="flex items-center gap-2 font-bold text-sm cursor-pointer">
             <input 
@@ -542,7 +547,7 @@ export const ModalParametres = ({
   handleSonneriesBlur, formPeriode, setFormPeriode, ajouterPeriodeFeriee, periodesFeriees,
   supprimerPeriodeFeriee, isDarkMode, toggleDarkMode, themeId, changeTheme, customColors, updateCustomColor, 
   handleExport, handleImport, setPeriodesFeriees, baseYear, t,
-  etablissement, setEtablissement, hasInternat, setHasInternat
+  etablissement, setEtablissement, hasInternat, setHasInternat, pauseLegale, setPauseLegale, deduirePause, setDeduirePause // <--- AJOUT ICI
 }) => {
   const [zone, setZone] = useState("Zone C");
   const [isFetchingDates, setIsFetchingDates] = useState(false);
@@ -618,11 +623,27 @@ export const ModalParametres = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-7 flex flex-col gap-6">
 
+              {/* --- IDENTITÉ ET FONCTIONNALITÉS --- */}
               <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm`}>
-                <h4 className={`font-bold text-lg ${t.header} mb-4`}>🏫 Établissement</h4>
+                <h4 className={`font-bold text-lg ${t.header} mb-4`}>🏫 Établissement & Règles</h4>
                 <div className="mb-4">
                   <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Nom de l'établissement (Affiché sur les impressions)</label>
                   <input type="text" value={etablissement || ''} onChange={e => setEtablissement(e.target.value)} placeholder="Ex: Lycée Jean Moulin" className={`w-full border ${t.borderLight} rounded-lg p-2 text-sm bg-transparent font-bold`} />
+                </div>
+                <div className="mb-4">
+                  <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Temps de pause légale (min)</label>
+                  <input type="number" min="20" value={pauseLegale || 20} onChange={e => setPauseLegale(Number(e.target.value))} className={`w-32 border ${t.borderLight} rounded-lg p-2 text-sm bg-transparent font-bold`} />
+                  <p className="text-[10px] text-gray-500 mt-1 leading-tight">Définit la durée minimale de la pause obligatoire après 6h de travail (Utilisé pour les alertes Droit du Travail).</p>
+                </div>
+                <div className={`p-3 rounded-lg border ${t.borderLight} bg-black/5 dark:bg-white/5 mb-4`}>
+                  <label className="flex items-center gap-2 font-bold text-sm cursor-pointer">
+                    <input type="checkbox" checked={deduirePause || false} onChange={e => setDeduirePause(e.target.checked)} className="w-4 h-4 accent-blue-600 rounded" />
+                    Retirer le temps de pause du temps de travail
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1 ml-6 leading-tight">
+                    Si décoché (défaut) : la pause s'AJOUTE au temps de travail si l'AED fait plus de 6h sans coupure.<br/>
+                    Si coché : le temps de pause est DÉDUIT du créneau saisi sur le planning.
+                  </p>
                 </div>
                 <div className={`p-3 rounded-lg border ${t.borderLight} bg-black/5 dark:bg-white/5`}>
                   <label className="flex items-center gap-2 font-bold text-sm cursor-pointer">
@@ -663,6 +684,7 @@ export const ModalParametres = ({
               <div className={`${t.cardBg} p-5 rounded-xl border ${t.borderLight} shadow-sm flex-1 flex flex-col`}>
                 <h4 className={`font-bold text-lg ${t.header} mb-4`}>🏖️ Périodes de Vacances & Fériés</h4>
                 
+                {/* --- BLOC API EDUCATION NATIONALE --- */}
                 <div className={`p-4 rounded-lg border border-blue-500/30 bg-blue-500/10 mb-4`}>
                   <div className="flex justify-between items-center mb-2">
                     <span className={`text-xs font-bold ${isDarkMode ? 'text-blue-300' : 'text-blue-800'} uppercase tracking-wider`}>⚡ Importation Automatique (Éduc. Nat.)</span>
@@ -727,7 +749,7 @@ export const ModalParametres = ({
                   {Object.entries(THEMES).filter(([id]) => id !== 'personnalise').map(([id, theme]) => {
                     const currentMode = isDarkMode ? theme.dark : theme.light;
                     return (
-                      <button type="button" key={id} onClick={() => changeTheme(id)} className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all ${themeId === id ? `border-[${theme.fcPrimary}] shadow-md ${currentMode.cardBg}` : `border-transparent hover:${t.bgLight} ${t.bgMain}`}`}>
+                      <button type="button" key={id} onClick={() => changeTheme(id)} className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all ${themeId === id ? `border-[${theme.fcPrimary}] shadow-md${currentMode.cardBg}` : `border-transparent hover:${t.bgLight}${t.bgMain}`}`}>
                         <div className={`flex shrink-0 overflow-hidden rounded-full w-10 h-10 border border-black/10 dark:border-white/10 shadow-inner ${currentMode.cardBg}`}>
                           <div className={`w-1/2 h-full ${currentMode.sidebar.split(' ')[0]}`}></div>
                           <div className={`w-1/2 h-full ${theme.btnPrimary.split(' ')[0]}`}></div>
@@ -749,7 +771,7 @@ export const ModalParametres = ({
                       Accent
                       <input type="color" value={customColors.accent} onChange={(e) => updateCustomColor('accent', e.target.value)} className="w-12 h-10 mt-1 cursor-pointer border-0 rounded p-0 bg-transparent" />
                     </label>
-                    <button type="button" onClick={() => changeTheme('personnalise')} className={`flex-1 px-3 h-10 text-xs font-bold rounded shadow transition-all ${themeId === 'personnalise' ? 'bg-blue-600 text-white' : `${t.bgLight} ${t.header} hover:opacity-80`}`}>
+                    <button type="button" onClick={() => changeTheme('personnalise')} className={`flex-1 px-3 h-10 text-xs font-bold rounded shadow transition-all ${themeId === 'personnalise' ? 'bg-blue-600 text-white' : `${t.bgLight}${t.header} hover:opacity-80`}`}>
                       {themeId === 'personnalise' ? '✅ Actif' : 'Activer'}
                     </button>
                   </div>
@@ -773,6 +795,7 @@ export const ModalParametres = ({
                   </button>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
@@ -894,7 +917,8 @@ export const ModalCreation = ({
                   />
                 </div>
                 
-                {hasInternat && (
+                {/* --- CASE À COCHER NUIT (POUR L'INTERNAT) --- */}
+                {hasInternat && formTypeEvent === 'affectation' && (
                   <div className="mt-2 mb-2 animate-in fade-in">
                     <label className={`flex items-center gap-2 text-sm font-bold cursor-pointer ${t.header}`}>
                       <input type="checkbox" checked={formIsNuit || false} onChange={e => setFormIsNuit(e.target.checked)} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" />
