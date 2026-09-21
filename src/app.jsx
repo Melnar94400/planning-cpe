@@ -23,6 +23,7 @@ import {
 // WRAPPERS DE SÉCURITÉ POUR TIMELINE TRACK
 // Empêche TimelineTrack de faire crasher le rendu React
 // =========================================================================
+
 const SafeTimelineTrack = (props) => {
   const safeProps = { ...props };
   if (props.onAddCopy) safeProps.onAddCopy = (...args) => setTimeout(() => props.onAddCopy(...args), 0);
@@ -63,7 +64,10 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const pad = n => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   });
-  
+    const [etablissement, setEtablissement] = useState('');
+  const [hasInternat, setHasInternat] = useState(false);
+  const joursTravailles = hasInternat ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5];
+
   // -- ÉTATS VIDES AU DÉMARRAGE (Remontés par IndexedDB) --
   const [agents, setAgents] = useState([]);
   const [postes, setPostes] = useState([]);
@@ -155,6 +159,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
           setSonneries(data.sonneries);
           setSonneriesText(data.sonneries.join(', '));
         }
+        if (data.etablissement) setEtablissement(data.etablissement);
+        if (data.hasInternat) setHasInternat(data.hasInternat);
         if (data.templateVersions && data.templateVersions.length > 0) {
           setTemplateVersions(data.templateVersions.map(p => ({ ...p, statut: p.statut || 'valide' })));
           setActiveTemplateId(data.templateVersions[0].id);
@@ -176,7 +182,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   useEffect(() => {
     if (!isDataLoaded) return;
     const timer = setTimeout(() => {
-      saveAppData({ agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, amplitude, sonneries });
+      saveAppData({ agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, amplitude, sonneries, etablissement, hasInternat });
     }, 1500); 
     return () => clearTimeout(timer);
   }, [agents, postes, periodesFeriees, templateVersions, customWeeks, exceptions, absences, dotation, amplitude, sonneries, isDataLoaded]);
@@ -201,7 +207,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     const newBesoins = [];
     slots.forEach(slot => {
       if (slot.start && slot.end) {
-        [1, 2, 3, 4, 5].forEach(dayIndex => {
+        joursTravailles.forEach(dayIndex => {
           if (slot.days[dayIndex]) {
             const d = new Date(baseMonday);
             d.setDate(d.getDate() + dayIndex - 1);
@@ -281,7 +287,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [formNote, setFormNote] = useState('');
 
   const [modalTemplate, setModalTemplate] = useState({ isOpen: false, id: null, nom: '', dateDebut: '', typeModele: 'standard', rythme: 'toutes', baseTemplateId: null });
-  const [modalPrint, setModalPrint] = useState({ isOpen: false, type: 'template', jours: [1, 2, 3, 4, 5], format: 'A4' });
+  const [modalPrint, setModalPrint] = useState({ isOpen: false, type: 'template', jours: joursTravailles, format: 'A4' });
 
   const [modalException, setModalException] = useState({ isOpen: false, agentId: null, dateStr: null, h: '0h00', note: '' });
 
@@ -316,10 +322,9 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const [showNotificationMenu, setShowNotificationMenu] = useState(false);
   const isInitialMount = useRef(true);
   const [needsBackup, setNeedsBackup] = useState(false);
-  
   const [copiedEvents, setCopiedEvents] = useState([]);
 
-  const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
+  const nomsJours = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
 
   const currentTemplate = templateVersions.find(v => v.id === activeTemplateId) || templateVersions[0] || { id: 1, nom: 'Chargement...', dateDebut: `${baseYear}-09-01`, statut: 'brouillon', events: [], besoins: [], objectifsHebdo: {} }; 
 
@@ -726,79 +731,111 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
 
   const activeAlerts = useMemo(() => {
     const alerts = [];
-    const nomsJoursAlert = ['DIM', 'LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM'];
     const nomsJoursComplets = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']; 
     
-    const targetMon = (vueActive === 'template') 
-      ? getMondayStr(currentTemplate?.dateDebut || new Date())
-      : (currentViewMonday || getMondayStr(new Date()));
-
+    const targetMon = (vueActive === 'template') ? getMondayStr(currentTemplate?.dateDebut || new Date()) : (currentViewMonday || getMondayStr(new Date()));
     const applicableT = getApplicableTemplate(targetMon, templateVersions);
     
-    // On sépare le modèle de base (théorique) de la semaine réelle
     const baseTplEvts = applicableT ? applicableT.events.map(e => shiftEventToWeek(e, targetMon)) : [];
     const realEvts = customWeeks[targetMon] ? customWeeks[targetMon] : baseTplEvts;
     const besoins = applicableT ? (applicableT.besoins || []).map(b => shiftEventToWeek(b, targetMon)) : [];
 
+    // --- ALERTE SOUS-EFFECTIFS ---
     besoins.forEach(b => {
-      // Test 1 : La réalité (avec les absences de la semaine)
       const { isSousEffectif, minCount, missingAgents } = checkCoverage(b, realEvts, absences);
-      
       if (isSousEffectif) {
-        const dStart = new Date(b.start);
-        const dEnd = new Date(b.end);
+        const dStart = new Date(b.start), dEnd = new Date(b.end);
         const hStart = `${dStart.getHours()}h${String(dStart.getMinutes()).padStart(2,'0')}`;
         const hEnd = `${dEnd.getHours()}h${String(dEnd.getMinutes()).padStart(2,'0')}`;
         const pad = n => String(n).padStart(2, '0');
-        
         const rmp = missingAgents?.length > 0 ? ` (Absent(s) : ${missingAgents.join(', ')})` : '';
-        
-        // Test 2 : Théorique (sans absence, sur le modèle pur)
         const checkStructurel = checkCoverage(b, baseTplEvts, []);
-        const estStructurel = checkStructurel.isSousEffectif;
-
+        
         let messageAlerte = '';
-        if (estStructurel || vueActive === 'template') {
-          // L'alerte est un problème de conception du modèle (récurrent)
+        if (checkStructurel.isSousEffectif || vueActive === 'template') {
           messageAlerte = `Tous les ${nomsJoursComplets[dStart.getDay()]}s de ${hStart} à ${hEnd} (${minCount} / ${b.extendedProps?.qte} pers.)${rmp}`;
         } else {
-          // L'alerte est ponctuelle (absence ou modif manuelle de cette semaine précise)
-          const dateStr = `${pad(dStart.getDate())}/${pad(dStart.getMonth() + 1)}`;
-          messageAlerte = `Le ${nomsJoursComplets[dStart.getDay()]} ${dateStr} de ${hStart} à ${hEnd} (${minCount} / ${b.extendedProps?.qte} pers.)${rmp}`;
+          messageAlerte = `Le ${nomsJoursComplets[dStart.getDay()]} ${pad(dStart.getDate())}/${pad(dStart.getMonth() + 1)} de ${hStart} à ${hEnd} (${minCount} / ${b.extendedProps?.qte} pers.)${rmp}`;
         }
-
-        alerts.push({
-          title: `Sous-effectif : ${b.extendedProps?.posteNom || 'Poste'}`,
-          message: messageAlerte
-        });
+        alerts.push({ title: `Sous-effectif : ${b.extendedProps?.posteNom || 'Poste'}`, message: messageAlerte });
       }
     });
 
     const affectationsSemaine = realEvts.filter(e => !e.extendedProps?.isBesoin && !e.extendedProps?.isAbsence && e.extendedProps?.agentId);
-    for (let i = 0; i < affectationsSemaine.length; i++) {
-      for (let j = i + 1; j < affectationsSemaine.length; j++) {
-        const e1 = affectationsSemaine[i];
-        const e2 = affectationsSemaine[j];
-        if (Number(e1.extendedProps.agentId) === Number(e2.extendedProps.agentId)) {
-          const start1 = new Date(e1.start).getTime();
-          const end1 = new Date(e1.end).getTime();
-          const start2 = new Date(e2.start).getTime();
-          const end2 = new Date(e2.end).getTime();
+    
+    // --- MOTEUR DROIT DU TRAVAIL & DOUBLONS ---
+    const agentEvents = {};
+    affectationsSemaine.forEach(e => {
+        if (!agentEvents[e.extendedProps.agentId]) agentEvents[e.extendedProps.agentId] = [];
+        agentEvents[e.extendedProps.agentId].push(e);
+    });
 
-          if (start1 < end2 && start2 < end1) {
-            const agentNom = e1.extendedProps.agentNom || 'Agent';
-            const d = new Date(e1.start);
-            const pad = n => String(n).padStart(2, '0');
-            const dateStr = vueActive === 'template' ? '' : ` ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+    Object.keys(agentEvents).forEach(agentId => {
+        const evts = agentEvents[agentId].sort((a, b) => new Date(a.start) - new Date(b.start));
+        const agentNom = evts[0].extendedProps.agentNom || 'Agent';
+        let totalHebdo = 0;
+        const dayTotals = {};
+        
+        let currentBlockStart = null;
+        let currentBlockEnd = null;
+        let continuousWork = 0;
+
+        for (let i = 0; i < evts.length; i++) {
+            const e = evts[i];
+            const eStart = new Date(e.start);
+            const eEnd = new Date(e.end);
             
-            alerts.push({
-              title: `Double affectation : ${agentNom}`,
-              message: `${agentNom} est affecté(e) sur 2 postes en même temps le ${nomsJoursComplets[d.getDay()]}${dateStr} !`
-            });
-          }
+            // Forfait Nuit : 3h, sinon durée réelle
+            const dureeHours = e.extendedProps?.isNuit ? 3 : (eEnd - eStart) / 3600000;
+            
+            totalHebdo += dureeHours;
+            const dateStr = e.start.split('T')[0];
+            dayTotals[dateStr] = (dayTotals[dateStr] || 0) + dureeHours;
+
+            // Règle 4 : Pause légale (6h max sans pause de 20min)
+            if (!currentBlockStart) {
+                currentBlockStart = eStart; currentBlockEnd = eEnd; continuousWork = dureeHours;
+            } else {
+                const gapMins = (eStart - currentBlockEnd) / 60000;
+                if (gapMins >= 20) {
+                    currentBlockStart = eStart; currentBlockEnd = eEnd; continuousWork = dureeHours; // Reset après une vraie pause
+                } else {
+                    continuousWork += dureeHours; currentBlockEnd = eEnd;
+                    if (continuousWork > 6 && !e.extendedProps?.isNuit) {
+                        alerts.push({ title: `Droit du Travail : Pause (${agentNom})`, message: `Plus de 6h consécutives sans pause de 20min le ${dateStr}.` });
+                        continuousWork = 0; // On reset pour ne pas spammer
+                    }
+                }
+            }
+
+            // Règle 2 : Repos quotidien de 11h
+            if (i > 0) {
+                const prevE = evts[i-1];
+                const prevEnd = new Date(prevE.end);
+                const gapHours = (eStart - prevEnd) / 3600000;
+                // Un écart entre 4h et 11h est une tentative de nuit de repos illégale (moins de 4h est considéré comme un simple service coupé)
+                if (gapHours > 4 && gapHours < 11) {
+                    alerts.push({ title: `Droit du Travail : Repos (${agentNom})`, message: `Seulement ${gapHours.toFixed(1)}h de repos avant la reprise le ${dateStr} (11h minimum légal).` });
+                }
+            }
+
+            // Vérification des doublons (Chevauchement strict)
+            for (let j = i + 1; j < evts.length; j++) {
+                const e2 = evts[j];
+                if (new Date(e.start).getTime() < new Date(e2.end).getTime() && new Date(e2.start).getTime() < new Date(e.end).getTime()) {
+                    alerts.push({ title: `Double affectation : ${agentNom}`, message: `${agentNom} est affecté(e) sur 2 postes en même temps le ${dateStr} !` });
+                }
+            }
         }
-      }
-    }
+
+        // Règle 3 : Max 10h par jour
+        Object.entries(dayTotals).forEach(([dStr, tot]) => {
+            if (tot > 10) alerts.push({ title: `Droit du Travail : 10h max (${agentNom})`, message: `${tot.toFixed(1)}h de travail planifiées le ${dStr.split('-').reverse().join('/')} (Dépassement des 10h/jour).` });
+        });
+
+        // Règle 5 : Max 48h hebdo
+        if (totalHebdo > 48) alerts.push({ title: `Droit du Travail : 48h max (${agentNom})`, message: `Volume de ${totalHebdo.toFixed(1)}h sur cette semaine (Maximum légal 48h).` });
+    });
 
     return alerts;
   }, [currentTemplate, currentViewMonday, customWeeks, absences, templateVersions, vueActive, getApplicableTemplate]);
@@ -1043,6 +1080,8 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
     setSonneries(arr); setSonneriesText(arr.join(', '));
   };
 
+  const [formIsNuit, setFormIsNuit] = useState(false);
+
   const limitesHeures = (() => {
     const [hS, mS] = (amplitude.start || '07:30').split(':').map(Number);
     const [hE, mE] = (amplitude.end || '18:00').split(':').map(Number);
@@ -1065,7 +1104,7 @@ const MainApp = ({ t, themeId, changeTheme, isDarkMode, toggleDarkMode, customCo
   const declencherImpression = (e) => {
     if (e) e.preventDefault();
     if (vueActive === 'template' || vueActive === 'planning') {
-      setModalPrint({ isOpen: true, type: vueActive, jours: [1, 2, 3, 4, 5], format: 'A4' });
+      setModalPrint({ isOpen: true, type: vueActive, jours: joursTravailles, format: 'A4' });
       return;
     }
     setPrintFilter({ type: 'all', id: null }); 
@@ -1593,7 +1632,8 @@ const validerCreationModal = (e) => {
         posteId: poste.id,
         posteNom: poste.nom,
         posteCouleur: poste.couleur,
-        note: formNote
+        note: formNote,
+        isNuit: formIsNuit // <--- NOUVEAU
       }
     };
 
@@ -1700,56 +1740,30 @@ const validerCreationModal = (e) => {
       {/* -------------------- MODALES -------------------- */}
       <ModalConfirm dialog={confirmDialog} closeDialog={closeConfirm} t={t} />
 
-      <ModalPrint modalPrint={modalPrint} setModalPrint={setModalPrint} modeImpression={modeImpression} setModeImpression={setModeImpression} setIsPrinting={setIsPrinting} t={t} />
+      <ModalPrint modalPrint={modalPrint} setModalPrint={setModalPrint} modeImpression={modeImpression} setModeImpression={setModeImpression} setIsPrinting={setIsPrinting} hasInternat={hasInternat} t={t} />
       
       <ModalTemplateProps modalTemplate={modalTemplate} setModalTemplate={setModalTemplate} validerTemplateModal={validerTemplateModal} templateVersions={templateVersions} t={t} />
       
-      <ModalPoste modalPoste={modalPoste} setModalPoste={setModalPoste} validerPosteModal={validerPosteModal} t={t} />
+      <ModalPoste modalPoste={modalPoste} setModalPoste={setModalPoste} validerPosteModal={validerPosteModal} hasInternat={hasInternat} t={t} />
       
       <ModalException modalException={modalException} setModalException={setModalException} validerExceptionJourModal={validerExceptionJourModal} supprimerExceptionJour={supprimerExceptionJour} t={t} />
       
       <ModalParametres 
-        modalParametres={modalParametres} 
-        setModalParametres={setModalParametres} 
-        setModalBasculement={setModalBasculement}
-        amplitude={amplitude} 
-        setAmplitude={setAmplitude} 
-        sonneriesText={sonneriesText} 
-        setSonneriesText={setSonneriesText} 
-        handleSonneriesBlur={handleSonneriesBlur} 
-        formPeriode={formPeriode} 
-        setFormPeriode={setFormPeriode} 
-        ajouterPeriodeFeriee={ajouterPeriodeFeriee} 
-        periodesFeriees={periodesFeriees} 
-        supprimerPeriodeFeriee={supprimerPeriodeFeriee} 
-        isDarkMode={isDarkMode} 
-        toggleDarkMode={toggleDarkMode} 
-        themeId={themeId} 
-        changeTheme={changeTheme} 
-        customColors={customColors} 
-        updateCustomColor={updateCustomColor} 
-        handleExport={handleExport} 
-        handleImport={handleImport} 
-        setPeriodesFeriees={setPeriodesFeriees}
-        baseYear={baseYear}
-        t={t} 
+        modalParametres={modalParametres} setModalParametres={setModalParametres} setModalBasculement={setModalBasculement}
+        amplitude={amplitude} setAmplitude={setAmplitude} sonneriesText={sonneriesText} setSonneriesText={setSonneriesText}
+        handleSonneriesBlur={handleSonneriesBlur} formPeriode={formPeriode} setFormPeriode={setFormPeriode}
+        ajouterPeriodeFeriee={ajouterPeriodeFeriee} periodesFeriees={periodesFeriees} supprimerPeriodeFeriee={supprimerPeriodeFeriee}
+        isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} themeId={themeId} changeTheme={changeTheme} customColors={customColors} updateCustomColor={updateCustomColor} 
+        handleExport={handleExport} handleImport={handleImport} setPeriodesFeriees={setPeriodesFeriees} baseYear={baseYear}
+        etablissement={etablissement} setEtablissement={setEtablissement} hasInternat={hasInternat} setHasInternat={setHasInternat} t={t} 
       />
 
-      <ModalBasculement 
-        modalBasculement={modalBasculement} 
-        setModalBasculement={setModalBasculement} 
-        baseYear={baseYear} 
-        postes={postes} 
-        agents={agents} 
-        currentTemplate={currentTemplate}
-        t={t} 
-        onComplete={() => window.location.reload()} 
-      />
+      <ModalBasculement modalBasculement={modalBasculement} setModalBasculement={setModalBasculement} baseYear={baseYear} postes={postes} agents={agents} currentTemplate={currentTemplate} t={t} onComplete={() => window.location.reload()} />
 
-      <ModalCreation modalCreation={modalCreation} setModalCreation={setModalCreation} validerCreationModal={validerCreationModal} formTypeEvent={formTypeEvent} setFormTypeEvent={setFormTypeEvent} formTypeAbsence={formTypeAbsence} setFormTypeAbsence={setFormTypeAbsence} formAbsImpact={formAbsImpact} setFormAbsImpact={setFormAbsImpact} formAgent={formAgent} setFormAgent={setFormAgent} formPoste={formPoste} setFormPoste={setFormPoste} formNote={formNote} setFormNote={setFormNote} agents={agents} postes={postes} posteActif={posteActif} t={t} vueActive={vueActive} supprimerAbsence={supprimerAbsence} applyAction={applyAction} />
+      <ModalCreation modalCreation={modalCreation} setModalCreation={setModalCreation} validerCreationModal={validerCreationModal} formTypeEvent={formTypeEvent} setFormTypeEvent={setFormTypeEvent} formTypeAbsence={formTypeAbsence} setFormTypeAbsence={setFormTypeAbsence} formAbsImpact={formAbsImpact} setFormAbsImpact={setFormAbsImpact} formAgent={formAgent} setFormAgent={setFormAgent} formPoste={formPoste} setFormPoste={setFormPoste} formNote={formNote} setFormNote={setFormNote} agents={agents} postes={postes} posteActif={posteActif} t={t} vueActive={vueActive} supprimerAbsence={supprimerAbsence} applyAction={applyAction} hasInternat={hasInternat} formIsNuit={formIsNuit} setFormIsNuit={setFormIsNuit} />
       
-      <ModalBesoinMulti modalBesoinMulti={modalBesoinMulti} setModalBesoinMulti={setModalBesoinMulti} validerBesoinMultiModal={validerBesoinMultiModal} postes={postes} t={t} />
-      
+      <ModalBesoinMulti modalBesoinMulti={modalBesoinMulti} setModalBesoinMulti={setModalBesoinMulti} validerBesoinMultiModal={validerBesoinMultiModal} postes={postes} hasInternat={hasInternat} t={t} />
+
       <ModalEditBesoin modalEditBesoin={modalEditBesoin} setModalEditBesoin={setModalEditBesoin} validerEditBesoin={validerEditBesoin} updateCurrentTemplate={updateCurrentTemplate} currentTemplate={currentTemplate} t={t} />
       
       <ModalAgent modalAgent={modalAgent} setModalAgent={setModalAgent} validerAgentModal={validerAgentModal} handleEditAgentChange={handleEditAgentChange} baseYear={baseYear} agents={agents} t={t} />
@@ -1807,7 +1821,7 @@ const validerCreationModal = (e) => {
 
               <button onClick={toggleDarkMode} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Mode Sombre / Clair">{isDarkMode ? '☀️' : '🌙'}</button>
               <button onClick={() => setModalParametres(true)} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Paramètres">⚙️</button>
-              <button onClick={() => setModalPrint({ isOpen: true, type: vueActive, jours: [1, 2, 3, 4, 5], format: 'A4' })} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Imprimer le planning">🖨️</button>
+              <button onClick={() => setModalPrint({ isOpen: true, type: vueActive, jours: joursTravailles, format: 'A4' })} className={`${t.sidebarIconBtn} p-2 rounded text-xs shadow border transition-colors flex-1 flex justify-center hover:scale-105`} title="Imprimer le planning">🖨️</button>
               <button onClick={handleResetAll} className="bg-red-700 hover:bg-red-800 p-2 rounded text-xs font-bold border border-red-500 text-white flex-1 flex justify-center shadow-sm hover:scale-105 transition-transform" title="Tout réinitialiser">🗑️</button>
             </div>
 
@@ -1849,7 +1863,7 @@ const validerCreationModal = (e) => {
                     <ul className="space-y-1">
                     {statsAgents.map((agent) => {
                         const weekEvents = applyReplacements(vueActive === 'template' ? (currentTemplate?.events || []) : getEventsForWeek(targetMonday));
-                        const agentWeekMins = weekEvents.filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                        const agentWeekMins = weekEvents.filter(e => e.extendedProps?.agentId === agent.id && !e.extendedProps?.isAbsence).reduce((acc, evt) => evt.extendedProps?.isNuit ? acc + 180 : acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                         const agentWeekHours = agentWeekMins / 60;
                         const activeContract = getActiveContract(agent, targetMonday);
                         const hContratVirtuelActif = calculerContratBetty(activeContract.quotite, activeContract.estEtudiant);                        
@@ -2089,9 +2103,8 @@ const validerCreationModal = (e) => {
                             const mondayStr = getMondayStr(jourConsulte);
                             const allEvents = [...applyReplacements(getEventsForWeek(mondayStr)), ...absencesVisuelles];
                             const eventsDuJour = allEvents.filter(e => e.extendedProps?.agentId === agent.id && e.start.startsWith(jourConsulte));
-                            const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => {
-                              return acc + (new Date(evt.end) - new Date(evt.start)) / 60000;
-                            }, 0);
+
+const totalMinsJour = eventsDuJour.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => evt.extendedProps?.isNuit ? acc + 180 : acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
                             const amplitudeStr = getAmplitudeStr(eventsDuJour);
 
@@ -2166,26 +2179,19 @@ const validerCreationModal = (e) => {
                                     }
                                   }}
                                 >
+
                                   {eventsDuJour.map(evt => {
                                     const startD = new Date(evt.start); const endD = new Date(evt.end);
                                     const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
+                                    
+                                    let evtBgColor, evtTextColor, evtBorderColor, evtTitle, extInfo;
                                     const posteCouleur = evt.extendedProps?.posteCouleur || '#3b82f6';
                                     
-                                    return (
-                                      <SafeTimelineEvent 
-                                        key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={false} 
-                                        bgColor={posteCouleur} borderColor={isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'} textColor={getContrastYIQ(posteCouleur)} 
-                                        title={evt.extendedProps?.posteNom || 'Poste'} subtitle={agent.nom} extInfo={null} conflit={false} snapPoints={allLineSnapPoints}
-                                        isCopied={copiedEvents.some(c => c.id === evt.id)}
-                                        onUpdate={(min, max) => {
-                                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
-                                          sauvegarderEtatPrecedent();
-                                          if (evt.extendedProps?.isAbsence) {
+                                    if (evt.extendedProps?.isAbsence) {
                                         const typeAbs = evt.extendedProps.typeAbsence;
                                         evtBgColor = typeAbs === 'absence' ? '#ef4444' : typeAbs === 'retard' ? '#f59e0b' : '#10b981';
                                         evtBorderColor = 'rgba(0,0,0,0.2)'; evtTextColor = '#ffffff';
                                         evtTitle = typeAbs === 'absence' ? '🚫 ABS' : typeAbs === 'retard' ? '⏰ RET' : '🟢 SUPP';
-                                        // Si c'est un rattrapage assigné à un poste
                                         if (typeAbs === 'heures_supp' && evt.extendedProps.posteId && evt.extendedProps.posteId !== 'abs') {
                                             const p = postes.find(pos => String(pos.id) === String(evt.extendedProps.posteId));
                                             if (p) {
@@ -2193,9 +2199,31 @@ const validerCreationModal = (e) => {
                                                 evtBgColor = `repeating-linear-gradient(45deg, #10b981, #10b981 10px, ${p.couleur} 10px, ${p.couleur} 20px)`;
                                             }
                                         }
-
                                         extInfo = evt.extendedProps?.motif;
-                                      } else {
+                                    } else {
+                                        evtBgColor = posteCouleur;
+                                        const estEnConflit = conflitsIds.has(String(evt.id).split('_')[0]);
+                                        if (estEnConflit) { evtBgColor = '#dc2626'; }
+                                        evtBorderColor = isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'; 
+                                        evtTextColor = getContrastYIQ(evtBgColor);
+                                        evtTitle = (estEnConflit ? '⚠️ ' : '') + (evt.extendedProps?.posteNom || 'Poste');
+                                        extInfo = evt.extendedProps?.note || null;
+                                    }
+                                    
+                                    return (
+                                      <SafeTimelineEvent 
+                                        key={evt.id} startMins={startMins} endMins={endMins} limitesHeures={limitesHeures} isLocked={false} 
+                                        bgColor={evtBgColor} borderColor={evtBorderColor} textColor={evtTextColor} 
+                                        title={evtTitle} subtitle={agent.nom} extInfo={extInfo} conflit={!evt.extendedProps?.isAbsence && conflitsIds.has(String(evt.id).split('_')[0])} snapPoints={allLineSnapPoints}
+                                        isCopied={copiedEvents.some(c => c.id === evt.id)}
+                                        onUpdate={(min, max) => {
+                                          const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+                                          sauvegarderEtatPrecedent();
+                                          if (evt.extendedProps?.isAbsence) {
+                                            // SÉCURITÉ : Nettoyage propre de l'ID visuel
+                                            const cleanId = String(evt.id).replace('abs_visuel_', '').replace('abs_', '').split('_')[0];
+                                            setAbsences(prev => prev.map(a => String(a.id) === cleanId ? { ...a, start: `${jourConsulte}T${formatTime(min)}:00`, end: `${jourConsulte}T${formatTime(max)}:00` } : a));
+                                          } else {
                                             applyAction('update', { id: evt.id, start: `${jourConsulte}T${formatTime(min)}:00`, end: `${jourConsulte}T${formatTime(max)}:00` });
                                           }
                                         }}
@@ -2205,7 +2233,7 @@ const validerCreationModal = (e) => {
                                             const isDifferentLine = prev.length > 0 && prev[0].extendedProps?.agentId !== agent.id;
                                             const base = isDifferentLine ? [] : prev;
                                             if (base.some(p => p.id === evt.id)) return base.filter(p => p.id !== evt.id);
-                                            return [...base, { id: evt.id, title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: dur, startMins: startM }];
+                                            return [...base, { id: evt.id, title: evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: dur, startMins: startM }];
                                           });
                                         }}
                                       />
@@ -2298,7 +2326,7 @@ const validerCreationModal = (e) => {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3 items-center">
-                  {[1, 2, 3, 4, 5].map(d => (
+                  {joursTravailles.map(d => (
                     <button key={d} onClick={() => setJourTemplate(d)} className={`px-5 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${jourTemplate === d ? t.activeTab : `${t.cardBg} ${t.textMenuMuted} border border-transparent hover:border-black/10 dark:hover:border-white/10`}`}>{['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][d - 1]}</button>
                   ))}
                   <div className="ml-auto text-xs font-bold px-3 py-1.5 rounded-full border border-black/10 dark:border-white/10 shadow-inner bg-black/5 dark:bg-white/5">Lignes : {isBesoinsMode ? '🎯 Postes (Besoins structurels)' : '👤 Agents (Affectations nominatives)'}</div>
@@ -2355,7 +2383,7 @@ const validerCreationModal = (e) => {
                             });
 
                             const rowBgColor = isBesoinsMode ? item.couleur : item.couleurFond;
-                            const totalMinsJour = eventsDeLaLigne.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                            const totalMinsJour = eventsDeLaLigne.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => evt.extendedProps?.isNuit ? acc + 180 : acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                             const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
                             const amplitudeStr = getAmplitudeStr(eventsDeLaLigne);
 
@@ -2621,7 +2649,7 @@ const validerCreationModal = (e) => {
                             </div>
                           )}
 
-                          {[1, 2, 3, 4, 5].map(dayIndex => {
+                          {joursTravailles.map(dayIndex => {
                             const dateDuJour = new Date(activeMonday);
                             dateDuJour.setDate(dateDuJour.getDate() + dayIndex - 1);
                             const pad = n => String(n).padStart(2, '0');
@@ -2634,7 +2662,7 @@ const validerCreationModal = (e) => {
                                 
                                 {agents.map(agent => {
                                   const eventsDeLaLigne = displayEvents.filter(e => e.start.startsWith(dateStr) && e.extendedProps?.agentId === agent.id);
-                                  const totalMinsJour = eventsDeLaLigne.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
+                                  const totalMinsJour = eventsDeLaLigne.filter(e => !e.extendedProps?.isAbsence).reduce((acc, evt) => evt.extendedProps?.isNuit ? acc + 180 : acc + (new Date(evt.end) - new Date(evt.start)) / 60000, 0);
                                   const heuresJourStr = formatHeureTableau(totalMinsJour / 60, true);
                                   const amplitudeStr = getAmplitudeStr(eventsDeLaLigne);
 
@@ -2709,7 +2737,7 @@ const validerCreationModal = (e) => {
                                           }
                                         }}
                                       >
-                                        {eventsDeLaLigne.map(evt => {
+                                      {eventsDeLaLigne.map(evt => {
                                           const startD = new Date(evt.start); const endD = new Date(evt.end);
                                           const startMins = startD.getHours() * 60 + startD.getMinutes(); const endMins = endD.getHours() * 60 + endD.getMinutes();
                                           
@@ -2725,13 +2753,13 @@ const validerCreationModal = (e) => {
                                                 const p = postes.find(pos => String(pos.id) === String(evt.extendedProps.posteId));
                                                 if (p) {
                                                     evtTitle = `🟢 ${p.nom}`;
-                                                    // NOUVEAU : Application des hachures
+                                                    // Application des hachures
                                                     evtBgColor = `repeating-linear-gradient(45deg, #10b981, #10b981 10px, ${p.couleur} 10px, ${p.couleur} 20px)`;
                                                 }
                                             }
                                             extInfo = evt.extendedProps?.motif;
                                           } else {
-                                            evtBgColor = evt.extendedProps?.posteCouleur || '#3b82f6';
+                                            evtBgColor = posteCouleur;
                                             const estEnConflit = conflitsIds.has(String(evt.id).split('_')[0]);
                                             if (estEnConflit) { evtBgColor = '#dc2626'; }
                                             evtBorderColor = isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'; evtTextColor = getContrastYIQ(evtBgColor);
@@ -2749,8 +2777,9 @@ const validerCreationModal = (e) => {
                                                 const formatTime = (m) => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
                                                 sauvegarderEtatPrecedent();
                                                 if (evt.extendedProps?.isAbsence) {
-                                                  const cleanId = String(evt.id).replace('abs_', '').split('_')[0];
-                                                  setAbsences(absences.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(min)}:00`, end: `${dateStr}T${formatTime(max)}:00` } : a));
+                                                  // CORRECTION : Nettoyage de abs_visuel_ et utilisation de 'prev' pour la mémoire instantanée
+                                                  const cleanId = String(evt.id).replace('abs_visuel_', '').replace('abs_', '').split('_')[0];
+                                                  setAbsences(prev => prev.map(a => String(a.id) === cleanId ? { ...a, start: `${dateStr}T${formatTime(min)}:00`, end: `${dateStr}T${formatTime(max)}:00` } : a));
                                                 } else {
                                                   applyAction('update', { id: evt.id, start: `${dateStr}T${formatTime(min)}:00`, end: `${dateStr}T${formatTime(max)}:00` });
                                                 }
@@ -2761,7 +2790,7 @@ const validerCreationModal = (e) => {
                                                   const isDifferentLine = prev.length > 0 && prev[0].extendedProps?.agentId !== agent.id;
                                                   const base = isDifferentLine ? [] : prev;
                                                   if (base.some(p => p.id === evt.id)) return base.filter(p => p.id !== evt.id);
-                                                  return [...base, { id: evt.id, title: evt.extendedProps?.posteNom || 'Poste', backgroundColor: posteCouleur, borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)', extendedProps: { ...evt.extendedProps }, durationMins: dur, startMins: startM }];
+                                                  return [...base, { id: evt.id, title: evtTitle, backgroundColor: evtBgColor, borderColor: evtBorderColor, extendedProps: { ...evt.extendedProps }, durationMins: dur, startMins: startM }];
                                                 });
                                               }}
                                             />
@@ -2893,7 +2922,7 @@ const validerCreationModal = (e) => {
                 Récapitulatif des Événements & Rattrapages AED
               </h1>
               <div className="flex justify-between text-xs text-black mt-2 font-mono">
-                <span>Établissement : Collège / Lycée</span>
+                <span>Établissement : {etablissement || 'Non renseigné'}</span>
                 <span>Document édité le : {new Date().toLocaleDateString('fr-FR')}</span>
               </div>
               <div className="text-xs text-black mt-1">
